@@ -26,6 +26,14 @@ actions!(app, [
     PanDown,
     PanLeft,
     PanRight,
+    PanUpFast,
+    PanDownFast,
+    PanLeftFast,
+    PanRightFast,
+    PanUpSlow,
+    PanDownSlow,
+    PanLeftSlow,
+    PanRightSlow,
 ]);
 
 struct App {
@@ -98,25 +106,75 @@ impl App {
     }
     
     fn handle_pan_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, 10.0);  // Pan up = positive Y
+        self.viewer.pan(0.0, -10.0);  // Pan up = move image down (negative Y)
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, -10.0);  // Pan down = negative Y
+        self.viewer.pan(0.0, 10.0);  // Pan down = move image up (positive Y)
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_left(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(10.0, 0.0);  // Pan left = positive X
+        self.viewer.pan(-10.0, 0.0);  // Pan left = move image right (negative X)
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_right(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(-10.0, 0.0);  // Pan right = negative X
+        self.viewer.pan(10.0, 0.0);  // Pan right = move image left (positive X)
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    // Fast pan (3x speed = 30px) with Shift modifier
+    fn handle_pan_up_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.pan(0.0, -30.0);
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_pan_down_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.pan(0.0, 30.0);
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_pan_left_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.pan(-30.0, 0.0);
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_pan_right_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.pan(30.0, 0.0);
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    // Slow pan (1px) with Ctrl/Cmd modifier
+    fn handle_pan_up_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.pan(0.0, -1.0);
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_pan_down_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.pan(0.0, 1.0);
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_pan_left_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.pan(-1.0, 0.0);
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_pan_right_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.pan(1.0, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
@@ -213,6 +271,30 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &PanRight, window, cx| {
                 this.handle_pan_right(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &PanUpFast, window, cx| {
+                this.handle_pan_up_fast(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PanDownFast, window, cx| {
+                this.handle_pan_down_fast(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PanLeftFast, window, cx| {
+                this.handle_pan_left_fast(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PanRightFast, window, cx| {
+                this.handle_pan_right_fast(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PanUpSlow, window, cx| {
+                this.handle_pan_up_slow(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PanDownSlow, window, cx| {
+                this.handle_pan_down_slow(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PanLeftSlow, window, cx| {
+                this.handle_pan_left_slow(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PanRightSlow, window, cx| {
+                this.handle_pan_right_slow(window, cx);
+            }))
     }
 }
 
@@ -280,16 +362,34 @@ fn main() {
             KeyBinding::new("+", ZoomIn, None),
             KeyBinding::new("-", ZoomOut, None),
             KeyBinding::new("0", ZoomReset, None),
-            // Pan controls with WASD
+            // Pan controls with WASD (base speed: 10px)
             KeyBinding::new("w", PanUp, None),
             KeyBinding::new("a", PanLeft, None),
             KeyBinding::new("s", PanDown, None),
             KeyBinding::new("d", PanRight, None),
-            // Pan controls with IJKL
+            // Pan controls with IJKL (base speed: 10px)
             KeyBinding::new("i", PanUp, None),
             KeyBinding::new("j", PanLeft, None),
             KeyBinding::new("k", PanDown, None),
             KeyBinding::new("l", PanRight, None),
+            // Fast pan with Shift (3x speed: 30px)
+            KeyBinding::new("shift-w", PanUpFast, None),
+            KeyBinding::new("shift-a", PanLeftFast, None),
+            KeyBinding::new("shift-s", PanDownFast, None),
+            KeyBinding::new("shift-d", PanRightFast, None),
+            KeyBinding::new("shift-i", PanUpFast, None),
+            KeyBinding::new("shift-j", PanLeftFast, None),
+            KeyBinding::new("shift-k", PanDownFast, None),
+            KeyBinding::new("shift-l", PanRightFast, None),
+            // Slow pan with Ctrl/Cmd (1px)
+            KeyBinding::new("cmd-w", PanUpSlow, None),
+            KeyBinding::new("cmd-a", PanLeftSlow, None),
+            KeyBinding::new("cmd-s", PanDownSlow, None),
+            KeyBinding::new("cmd-d", PanRightSlow, None),
+            KeyBinding::new("cmd-i", PanUpSlow, None),
+            KeyBinding::new("cmd-j", PanLeftSlow, None),
+            KeyBinding::new("cmd-k", PanDownSlow, None),
+            KeyBinding::new("cmd-l", PanRightSlow, None),
         ]);
         
         cx.on_action(|_: &Quit, cx| {
