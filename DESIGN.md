@@ -81,7 +81,7 @@ App (root)
 - WASD/IJKL keyboard panning: 10px base speed
 - Modifier keys affect pan speed:
   - Shift: 3x speed (30px)
-  - Ctrl (Windows/Linux) / Cmd (macOS): 0.3x speed (3px)
+  - Ctrl (Windows/Linux) / Cmd (macOS): 1px (precise positioning)
 
 **State Persistence:**
 - Zoom and pan settings retained per image
