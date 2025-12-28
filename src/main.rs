@@ -1,6 +1,16 @@
 use gpui::*;
 use std::time::{Duration, Instant};
 
+mod cli;
+mod components;
+mod error;
+mod state;
+mod utils;
+
+use cli::Cli;
+use state::AppState;
+use utils::style::Colors;
+
 actions!(app, [CloseWindow, Quit, EscapePressed]);
 
 struct HelloWorld {
@@ -31,12 +41,12 @@ impl Render for HelloWorld {
         div()
             .track_focus(&self.focus_handle)
             .flex()
-            .bg(rgb(0x2e7d32))
+            .bg(Colors::background())
             .size_full()
             .justify_center()
             .items_center()
             .text_xl()
-            .text_color(rgb(0xffffff))
+            .text_color(Colors::text())
             .child(format!("Hello, {}!", &self.text))
             .on_action(|_: &CloseWindow, window, _| {
                 window.remove_window();
@@ -48,6 +58,25 @@ impl Render for HelloWorld {
 }
 
 fn main() {
+    // Parse command-line arguments to get image paths
+    let image_paths = match Cli::parse_image_paths() {
+        Ok(paths) => paths,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    };
+    
+    // Initialize application state
+    let app_state = AppState::new(image_paths.clone());
+    
+    // Print startup info
+    println!("rpview-gpui starting...");
+    println!("Loaded {} image(s)", app_state.image_paths.len());
+    if let Some(first_image) = app_state.current_image() {
+        println!("Current image: {}", first_image.display());
+    }
+    
     Application::new().run(|cx: &mut App| {
         cx.on_window_closed(|cx| {
             if cx.windows().is_empty() {

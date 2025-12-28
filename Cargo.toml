@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 gpui = "0.2.2"
+clap = { version = "4.5", features = ["derive"] }
 # smallvec is included here for convenience, it is used by gpui when creating
 # components that can have children. uncomment this line or
 # use `cargo add smallvec` to add it to your project
