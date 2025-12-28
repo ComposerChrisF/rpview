@@ -40,9 +40,20 @@ pub struct AppState {
 impl AppState {
     /// Create a new AppState
     pub fn new(image_paths: Vec<PathBuf>) -> Self {
+        Self::new_with_index(image_paths, 0)
+    }
+    
+    /// Create a new AppState with a specific starting index
+    pub fn new_with_index(image_paths: Vec<PathBuf>, start_index: usize) -> Self {
+        let current_index = if start_index < image_paths.len() {
+            start_index
+        } else {
+            0
+        };
+        
         Self {
             image_paths,
-            current_index: 0,
+            current_index,
             sort_mode: SortMode::default(),
             image_states: HashMap::new(),
             max_cache_size: 1000,
