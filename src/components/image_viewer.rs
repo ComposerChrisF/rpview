@@ -1,6 +1,5 @@
 use gpui::*;
 use std::path::PathBuf;
-use std::sync::Arc;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::utils::image_loader;
 use crate::components::error_display::ErrorDisplay;
@@ -8,11 +7,13 @@ use crate::components::error_display::ErrorDisplay;
 /// Loaded image data
 #[derive(Clone)]
 pub struct LoadedImage {
-    pub data: Arc<image::RgbaImage>,
     pub path: PathBuf,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Component for viewing images
+#[derive(Clone)]
 pub struct ImageViewer {
     /// Currently loaded image
     pub current_image: Option<LoadedImage>,
@@ -32,12 +33,14 @@ impl ImageViewer {
     }
     
     /// Load an image from a path
-    pub fn load_image(&mut self, path: PathBuf, _cx: &mut Context<Self>) {
-        match image_loader::load_image_rgba(&path) {
-            Ok(img) => {
+    pub fn load_image(&mut self, path: PathBuf) {
+        // Get dimensions to validate the image can be loaded
+        match image_loader::get_image_dimensions(&path) {
+            Ok((width, height)) => {
                 self.current_image = Some(LoadedImage {
-                    data: Arc::new(img),
                     path: path.clone(),
+                    width,
+                    height,
                 });
                 self.error_message = None;
             }
@@ -64,44 +67,50 @@ impl Render for ImageViewer {
                 .child(cx.new(|_cx| ErrorDisplay::new(error.clone())))
                 .into_any_element()
         } else if let Some(ref loaded) = self.current_image {
-            // Show image info (actual rendering will come in a future update)
-            let image_data = &loaded.data;
-            let width = image_data.width();
-            let height = image_data.height();
+            // Render the actual image using GPUI's img() function
+            let width = loaded.width;
+            let height = loaded.height;
             let path = &loaded.path;
             
-            // For now, display image information
-            // TODO: Implement actual image rendering in future phase
             div()
                 .flex()
                 .flex_col()
                 .size_full()
-                .justify_center()
-                .items_center()
-                .gap(Spacing::md())
                 .child(
+                    // Main image area
                     div()
-                        .text_size(TextSize::xl())
-                        .text_color(Colors::info())
-                        .child("✓ Image Loaded")
+                        .flex_1()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .bg(Colors::background())
+                        .child(
+                            img(path.clone())
+                                .object_fit(ObjectFit::Contain)
+                                .w_full()
+                                .h_full()
+                        )
                 )
                 .child(
+                    // Info panel at bottom
                     div()
-                        .text_size(TextSize::md())
-                        .text_color(Colors::text())
-                        .child(format!("File: {}", path.file_name().unwrap_or_default().to_string_lossy()))
-                )
-                .child(
-                    div()
-                        .text_size(TextSize::md())
-                        .text_color(Colors::text())
-                        .child(format!("Dimensions: {}x{}", width, height))
-                )
-                .child(
-                    div()
-                        .text_size(TextSize::sm())
-                        .text_color(Colors::text())
-                        .child("(Image rendering coming in next update)")
+                        .flex()
+                        .flex_col()
+                        .gap(Spacing::sm())
+                        .p(Spacing::md())
+                        .bg(rgb(0x2d2d2d))
+                        .child(
+                            div()
+                                .text_size(TextSize::sm())
+                                .text_color(Colors::text())
+                                .child(format!("File: {}", path.file_name().unwrap_or_default().to_string_lossy()))
+                        )
+                        .child(
+                            div()
+                                .text_size(TextSize::sm())
+                                .text_color(Colors::text())
+                                .child(format!("Dimensions: {}x{}", width, height))
+                        )
                 )
                 .into_any_element()
         } else {

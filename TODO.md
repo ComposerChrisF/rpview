@@ -66,7 +66,9 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Display image information (dimensions, filename)
 - [x] Handle missing/invalid image gracefully
 - [x] Show loading state messages
-- [~] Implement actual image rendering with GPUI (deferred - GPUI API complexities)
+- [x] Implement actual image rendering with GPUI using img() function
+- [x] Implement fit-to-window display using ObjectFit::Contain
+- [x] Add info panel showing filename and dimensions
 
 ### Application State
 - [x] Create AppState structure  
@@ -74,6 +76,7 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Track current image index
 - [x] Implement state initialization from CLI args
 - [x] Connect state to ImageViewer component
+- [x] Load first image on startup
 
 ### Error Display
 - [x] Create basic error message display
@@ -456,6 +459,17 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 
 ---
 
-**Current Focus**: Phase 2 - Basic Image Display ✅ COMPLETE
+**Current Focus**: Phase 3 - Navigation & Sorting
 
-**Next Milestone**: Phase 3 - Navigation & Sorting
+**Last Completed**: Phase 2 - Basic Image Display ✅
+
+### Phase 2 Summary
+Phase 2 has been successfully completed! The application now:
+- Loads and displays images using GPUI's `img()` function
+- Automatically handles format conversion (RGBA to BGRA for GPU)
+- Displays images with fit-to-window scaling using `ObjectFit::Contain`
+- Shows image information (filename and dimensions) in an info panel
+- Loads the first image automatically on startup
+- Handles errors gracefully with informative error messages
+
+The implementation uses the recommended Approach 1 from the research documentation, leveraging GPUI's built-in image loading, caching, and format conversion.

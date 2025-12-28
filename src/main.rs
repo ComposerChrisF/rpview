@@ -38,76 +38,11 @@ impl App {
 
 impl Render for App {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Render the viewer content directly
-        let content = if let Some(ref error) = self.viewer.error_message {
-            cx.new(|_cx| components::ErrorDisplay::new(error.clone()))
-                .into_any_element()
-        } else if let Some(ref loaded) = self.viewer.current_image {
-            let image_data = &loaded.data;
-            let width = image_data.width();
-            let height = image_data.height();
-            let path = &loaded.path;
-            
-            div()
-                .flex()
-                .flex_col()
-                .size_full()
-                .justify_center()
-                .items_center()
-                .gap(utils::style::Spacing::md())
-                .child(
-                    div()
-                        .text_size(utils::style::TextSize::xl())
-                        .text_color(utils::style::Colors::info())
-                        .child("✓ Image Loaded")
-                )
-                .child(
-                    div()
-                        .text_size(utils::style::TextSize::md())
-                        .text_color(utils::style::Colors::text())
-                        .child(format!("File: {}", path.file_name().unwrap_or_default().to_string_lossy()))
-                )
-                .child(
-                    div()
-                        .text_size(utils::style::TextSize::md())
-                        .text_color(utils::style::Colors::text())
-                        .child(format!("Dimensions: {}x{}", width, height))
-                )
-                .child(
-                    div()
-                        .text_size(utils::style::TextSize::sm())
-                        .text_color(utils::style::Colors::text())
-                        .child("(Image rendering coming in next update)")
-                )
-                .into_any_element()
-        } else {
-            div()
-                .flex()
-                .flex_col()
-                .size_full()
-                .justify_center()
-                .items_center()
-                .gap(utils::style::Spacing::md())
-                .child(
-                    div()
-                        .text_size(utils::style::TextSize::xl())
-                        .text_color(utils::style::Colors::text())
-                        .child("No image loaded")
-                )
-                .child(
-                    div()
-                        .text_size(utils::style::TextSize::sm())
-                        .text_color(utils::style::Colors::text())
-                        .child("Use arrow keys to navigate (coming in Phase 3)")
-                )
-                .into_any_element()
-        };
-        
         div()
             .track_focus(&self.focus_handle)
             .size_full()
             .bg(utils::style::Colors::background())
-            .child(content)
+            .child(cx.new(|_cx| self.viewer.clone()))
             .on_action(|_: &CloseWindow, window, _| {
                 window.remove_window();
             })
@@ -169,14 +104,21 @@ fn main() {
                     let focus_handle = inner_cx.focus_handle();
                     focus_handle.focus(window);
                     
-                    // Create the app with an empty viewer
-                    // Image loading will be added in Phase 3 (Navigation)
+                    // Create the viewer and load the first image if available
+                    let mut viewer = ImageViewer {
+                        current_image: None,
+                        error_message: None,
+                        focus_handle: inner_cx.focus_handle(),
+                    };
+                    
+                    if let Some(ref path) = first_image_path {
+                        viewer.load_image(path.clone());
+                    } else {
+                        viewer.error_message = Some("No images found. Please provide image paths as arguments.".to_string());
+                    }
+                    
                     App {
-                        viewer: ImageViewer {
-                            current_image: None,
-                            error_message: None,
-                            focus_handle: inner_cx.focus_handle(),
-                        },
+                        viewer,
                         focus_handle,
                         escape_presses: Vec::new(),
                     }
