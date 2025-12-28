@@ -6,8 +6,8 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 
 - **Phase 1** (Foundation): ✅ Complete
 - **Phase 2** (Basic Viewing): ✅ Complete
-- **Phase 3** (Navigation): 🎯 Next Priority
-- **Phase 4** (Zoom & Pan): ⏳ Planned
+- **Phase 3** (Navigation): ✅ Complete
+- **Phase 4** (Zoom & Pan): 🎯 Next Priority
 - **Phase 5** (State Management): ⏳ Planned
 - **Phase 6-15**: ⏳ Planned
 
@@ -85,38 +85,38 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Show "no images found" message
 - [x] Show image loading errors
 
-## Phase 3: Navigation & Sorting
+## Phase 3: Navigation & Sorting ✅
 
 ### Basic Navigation
-- [ ] Implement arrow key event handling (← →)
-- [ ] Add next_image() method to AppState
-- [ ] Add previous_image() method to AppState
-- [ ] Implement wrap-around navigation
-- [ ] Update ImageViewer when navigation occurs
+- [x] Implement arrow key event handling (← →)
+- [x] Add next_image() method to AppState
+- [x] Add previous_image() method to AppState
+- [x] Implement wrap-around navigation
+- [x] Update ImageViewer when navigation occurs
 
 ### File List Management
-- [ ] Implement alphabetical sorting (case-insensitive)
-- [ ] Implement modified date sorting (newest first)
-- [ ] Track current sort mode in AppState
-- [ ] Default to alphabetical sort
+- [x] Implement alphabetical sorting (case-insensitive)
+- [x] Implement modified date sorting (newest first)
+- [x] Track current sort mode in AppState
+- [x] Default to alphabetical sort
 
 ### Sort Mode Switching
-- [ ] Add sort mode toggle keyboard shortcuts
-- [ ] Implement Shift+Ctrl+A for alphabetical (Shift+Cmd+A on macOS)
-- [ ] Implement Shift+Ctrl+M for modified date (Shift+Cmd+M on macOS)
-- [ ] Maintain current image when switching sort modes
-- [ ] Update display to show current sort mode
+- [x] Add sort mode toggle keyboard shortcuts
+- [x] Implement Shift+Cmd+A for alphabetical (Shift+Cmd+A on macOS)
+- [x] Implement Shift+Cmd+M for modified date (Shift+Cmd+M on macOS)
+- [x] Maintain current image when switching sort modes
+- [x] Update display to show current sort mode
 
 ### Window Title
-- [ ] Update window title with current image name
-- [ ] Show position in list (e.g., "image.png (3/10)")
-- [ ] Update title on navigation
+- [x] Update window title with current image name
+- [x] Show position in list (e.g., "image.png (3/10)")
+- [x] Update title on navigation
 
 ### Additional Image Formats
-- [ ] Add TIFF/TIF support
-- [ ] Add ICO support
-- [ ] Add WEBP support (static images only initially)
-- [ ] Add GIF support (static - first frame only initially)
+- [x] Add TIFF/TIF support
+- [x] Add ICO support
+- [x] Add WEBP support (static images only initially)
+- [x] Add GIF support (static - first frame only initially)
 
 ## Phase 4: Zoom & Pan Fundamentals
 
@@ -459,9 +459,28 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 
 ---
 
-**Current Focus**: Phase 3 - Navigation & Sorting
+**Current Focus**: Phase 4 - Zoom & Pan Fundamentals
 
-**Last Completed**: Phase 2 - Basic Image Display ✅
+**Last Completed**: Phase 3 - Navigation & Sorting ✅
+
+### Phase 3 Summary
+Phase 3 has been successfully completed! The application now:
+- Supports arrow key navigation (← → to navigate between images)
+- Implements wrap-around navigation (loops from last to first image)
+- Provides two sort modes: Alphabetical (case-insensitive) and Modified Date (newest first)
+- Allows switching sort modes with keyboard shortcuts (Shift+Cmd+A and Shift+Cmd+M)
+- Updates window title dynamically with current image name and position (e.g., "banana.png (2/7)")
+- Maintains current image context when switching sort modes
+- Supports additional image formats: TIFF, ICO, WEBP, and GIF (all formats supported by the image crate)
+- Re-sorts image list when sort mode changes
+
+Key implementation details:
+- Navigation methods (`next_image()` and `previous_image()`) added to AppState (src/state/app_state.rs:60)
+- Sort mode enumeration and sorting logic in AppState (src/state/app_state.rs:6)
+- Action handlers for navigation and sorting in main.rs (src/main.rs:38)
+- Keyboard bindings configured for navigation and sort mode switching (src/main.rs:171)
+- Window title updates on every navigation or sort change (src/main.rs:67)
+- Image format support expanded in Cargo.toml with explicit feature flags
 
 ### Phase 2 Summary
 Phase 2 has been successfully completed! The application now:
