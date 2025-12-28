@@ -19,6 +19,8 @@ pub struct ImageViewer {
     pub current_image: Option<LoadedImage>,
     /// Error message if image failed to load
     pub error_message: Option<String>,
+    /// Path of the image that failed to load (for full path display)
+    pub error_path: Option<PathBuf>,
     /// Focus handle for keyboard events
     pub focus_handle: FocusHandle,
 }
@@ -28,6 +30,7 @@ impl ImageViewer {
         Self {
             current_image: None,
             error_message: None,
+            error_path: None,
             focus_handle: cx.focus_handle(),
         }
     }
@@ -43,10 +46,12 @@ impl ImageViewer {
                     height,
                 });
                 self.error_message = None;
+                self.error_path = None;
             }
             Err(e) => {
                 self.current_image = None;
                 self.error_message = Some(e.to_string());
+                self.error_path = Some(path);
             }
         }
     }
@@ -55,16 +60,26 @@ impl ImageViewer {
     pub fn clear(&mut self) {
         self.current_image = None;
         self.error_message = None;
+        self.error_path = None;
     }
 }
 
 impl Render for ImageViewer {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let content = if let Some(ref error) = self.error_message {
-            // Show error message
+            // Show error message with full canonical path if available
+            let full_message = if let Some(ref path) = self.error_path {
+                let canonical_path = path.canonicalize()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|_| path.display().to_string());
+                format!("{}\n\nFull path: {}", error, canonical_path)
+            } else {
+                error.clone()
+            };
+            
             div()
                 .size_full()
-                .child(cx.new(|_cx| ErrorDisplay::new(error.clone())))
+                .child(cx.new(|_cx| ErrorDisplay::new(full_message)))
                 .into_any_element()
         } else if let Some(ref loaded) = self.current_image {
             // Render the actual image using GPUI's img() function
@@ -87,8 +102,8 @@ impl Render for ImageViewer {
                         .child(
                             img(path.clone())
                                 .object_fit(ObjectFit::Contain)
-                                .w_full()
-                                .h_full()
+                                .max_w_full()
+                                .max_h_full()
                         )
                 )
                 .child(

@@ -11,9 +11,10 @@ use cli::Cli;
 use components::ImageViewer;
 use state::AppState;
 
-actions!(app, [CloseWindow, Quit, EscapePressed]);
+actions!(app, [CloseWindow, Quit, EscapePressed, NextImage, PreviousImage, SortAlphabetical, SortByModified]);
 
 struct App {
+    app_state: AppState,
     viewer: ImageViewer,
     focus_handle: FocusHandle,
     escape_presses: Vec<Instant>,
@@ -34,6 +35,58 @@ impl App {
             cx.quit();
         }
     }
+    
+    fn handle_next_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.app_state.next_image();
+        self.update_viewer();
+        self.update_window_title(window);
+        cx.notify();
+    }
+    
+    fn handle_previous_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.app_state.previous_image();
+        self.update_viewer();
+        self.update_window_title(window);
+        cx.notify();
+    }
+    
+    fn handle_sort_alphabetical(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.app_state.set_sort_mode(state::SortMode::Alphabetical);
+        self.update_viewer();
+        self.update_window_title(window);
+        cx.notify();
+    }
+    
+    fn handle_sort_by_modified(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.app_state.set_sort_mode(state::SortMode::ModifiedDate);
+        self.update_viewer();
+        self.update_window_title(window);
+        cx.notify();
+    }
+    
+    fn update_viewer(&mut self) {
+        if let Some(path) = self.app_state.current_image().cloned() {
+            self.viewer.load_image(path);
+        } else {
+            self.viewer.clear();
+        }
+    }
+    
+    fn update_window_title(&mut self, window: &mut Window) {
+        if let Some(path) = self.app_state.current_image() {
+            let filename = path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Unknown");
+            
+            let position = self.app_state.current_index + 1;
+            let total = self.app_state.image_paths.len();
+            
+            let title = format!("{} ({}/{})", filename, position, total);
+            window.set_window_title(&title);
+        } else {
+            window.set_window_title("rpview-gpui");
+        }
+    }
 }
 
 impl Render for App {
@@ -48,6 +101,18 @@ impl Render for App {
             })
             .on_action(cx.listener(|this, _: &EscapePressed, _window, cx| {
                 this.handle_escape(cx);
+            }))
+            .on_action(cx.listener(|this, _: &NextImage, window, cx| {
+                this.handle_next_image(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PreviousImage, window, cx| {
+                this.handle_previous_image(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SortAlphabetical, window, cx| {
+                this.handle_sort_alphabetical(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SortByModified, window, cx| {
+                this.handle_sort_by_modified(window, cx);
             }))
     }
 }
@@ -87,6 +152,10 @@ fn main() {
             KeyBinding::new("cmd-w", CloseWindow, None),
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("escape", EscapePressed, None),
+            KeyBinding::new("right", NextImage, None),
+            KeyBinding::new("left", PreviousImage, None),
+            KeyBinding::new("shift-cmd-a", SortAlphabetical, None),
+            KeyBinding::new("shift-cmd-m", SortByModified, None),
         ]);
         
         cx.on_action(|_: &Quit, cx| {
@@ -108,6 +177,7 @@ fn main() {
                     let mut viewer = ImageViewer {
                         current_image: None,
                         error_message: None,
+                        error_path: None,
                         focus_handle: inner_cx.focus_handle(),
                     };
                     
@@ -115,9 +185,24 @@ fn main() {
                         viewer.load_image(path.clone());
                     } else {
                         viewer.error_message = Some("No images found. Please provide image paths as arguments.".to_string());
+                        viewer.error_path = None;
+                    }
+                    
+                    // Set initial window title
+                    if let Some(path) = app_state.current_image() {
+                        let filename = path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("Unknown");
+                        let position = app_state.current_index + 1;
+                        let total = app_state.image_paths.len();
+                        let title = format!("{} ({}/{})", filename, position, total);
+                        window.set_window_title(&title);
+                    } else {
+                        window.set_window_title("rpview-gpui");
                     }
                     
                     App {
+                        app_state,
                         viewer,
                         focus_handle,
                         escape_presses: Vec::new(),

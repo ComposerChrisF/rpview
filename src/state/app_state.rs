@@ -19,7 +19,7 @@ impl Default for SortMode {
 }
 
 /// Application-wide state
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AppState {
     /// List of image file paths
     pub image_paths: Vec<PathBuf>,
