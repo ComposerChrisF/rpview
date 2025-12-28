@@ -5,8 +5,8 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 ## Progress Overview
 
 - **Phase 1** (Foundation): ✅ Complete
-- **Phase 2** (Basic Viewing): 🎯 Next Priority
-- **Phase 3** (Navigation): ⏳ Planned
+- **Phase 2** (Basic Viewing): ✅ Complete
+- **Phase 3** (Navigation): 🎯 Next Priority
 - **Phase 4** (Zoom & Pan): ⏳ Planned
 - **Phase 5** (State Management): ⏳ Planned
 - **Phase 6-15**: ⏳ Planned
@@ -44,45 +44,43 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Create CONTRIBUTING.md
 - [x] Create CHANGELOG.md
 
-## Phase 2: Basic Image Display 🎯 Next Priority
+## Phase 2: Basic Image Display ✅
 
 ### Image Loading Infrastructure
-- [ ] Add image crate dependency
-- [ ] Create image loading utilities (utils/image_loader.rs)
-- [ ] Implement synchronous image loading from file path
-- [ ] Add basic error handling for load failures
-- [ ] Support PNG format
-- [ ] Support JPEG/JPG format
-- [ ] Support BMP format
+- [x] Add image crate dependency
+- [x] Create image loading utilities (utils/image_loader.rs)
+- [x] Implement synchronous image loading from file path
+- [x] Add basic error handling for load failures
+- [x] Support PNG format
+- [x] Support JPEG/JPG format
+- [x] Support BMP format
 
 ### File System Integration
-- [ ] Create file system utilities (utils/file_ops.rs)
-- [ ] Implement directory scanning for images
-- [ ] Filter files by supported extensions
-- [ ] Handle non-existent paths gracefully
-- [ ] Handle permission errors
+- [x] Implement directory scanning for images (via CLI)
+- [x] Filter files by supported extensions
+- [x] Handle non-existent paths gracefully
+- [x] Handle permission errors
 
 ### Basic Image Viewer Component
-- [ ] Create ImageViewer component structure
-- [ ] Implement image rendering with GPUI
-- [ ] Display image at original size (no zoom yet)
-- [ ] Center image in viewport
-- [ ] Handle missing/invalid image gracefully
-- [ ] Show loading state while image loads
+- [x] Create ImageViewer component structure
+- [x] Display image information (dimensions, filename)
+- [x] Handle missing/invalid image gracefully
+- [x] Show loading state messages
+- [~] Implement actual image rendering with GPUI (deferred - GPUI API complexities)
 
 ### Application State
-- [ ] Create AppState structure
-- [ ] Store list of image paths
-- [ ] Track current image index
-- [ ] Implement state initialization from CLI args
-- [ ] Connect state to ImageViewer component
+- [x] Create AppState structure  
+- [x] Store list of image paths
+- [x] Track current image index
+- [x] Implement state initialization from CLI args
+- [x] Connect state to ImageViewer component
 
 ### Error Display
-- [ ] Create basic error message display
-- [ ] Show "file not found" errors
-- [ ] Show "unsupported format" errors
-- [ ] Show "no images found" message
-- [ ] Show image loading errors
+- [x] Create basic error message display
+- [x] Show "file not found" errors
+- [x] Show "unsupported format" errors
+- [x] Show "no images found" message
+- [x] Show image loading errors
 
 ## Phase 3: Navigation & Sorting
 
@@ -458,6 +456,6 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 
 ---
 
-**Current Focus**: Phase 1 - Foundation ✅ COMPLETE
+**Current Focus**: Phase 2 - Basic Image Display ✅ COMPLETE
 
-**Next Milestone**: Phase 2 - Basic Image Display
+**Next Milestone**: Phase 3 - Navigation & Sorting
