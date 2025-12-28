@@ -25,18 +25,60 @@ const SUPPORTED_EXTENSIONS: &[&str] = &[
 ];
 
 impl Cli {
-    /// Parse command-line arguments and return a list of image paths
-    pub fn parse_image_paths() -> AppResult<Vec<PathBuf>> {
+    /// Parse command-line arguments and return a list of image paths and the starting index
+    pub fn parse_image_paths() -> AppResult<(Vec<PathBuf>, usize)> {
         let cli = Cli::parse();
         
         let paths = if cli.paths.is_empty() {
             // No arguments: default to current directory
-            vec![std::env::current_dir()?]
+            return Ok((Self::collect_image_paths(&[std::env::current_dir()?])?, 0));
         } else {
             cli.paths
         };
         
-        Self::collect_image_paths(&paths)
+        // Special case: single file specified
+        if paths.len() == 1 && paths[0].is_file() {
+            let specified_file = paths[0].clone();
+            
+            // Check if it's a supported image
+            if !Self::is_supported_image(&specified_file) {
+                return Err(AppError::InvalidFormat(
+                    specified_file,
+                    "Unsupported image format".to_string(),
+                ));
+            }
+            
+            // Get the parent directory
+            if let Some(parent_dir) = specified_file.parent() {
+                // Scan the directory for all images
+                let mut all_images = Self::scan_directory(parent_dir)?;
+                
+                // Even if empty, return the result - the app will display a message
+                if all_images.is_empty() {
+                    return Ok((vec![], 0));
+                }
+                
+                // Sort alphabetically (case-insensitive)
+                all_images.sort_by(|a, b| {
+                    a.to_string_lossy()
+                        .to_lowercase()
+                        .cmp(&b.to_string_lossy().to_lowercase())
+                });
+                
+                // Find the index of the specified file
+                let start_index = all_images.iter()
+                    .position(|p| p == &specified_file)
+                    .unwrap_or(0);
+                
+                return Ok((all_images, start_index));
+            } else {
+                // File has no parent (shouldn't happen, but handle gracefully)
+                return Ok((vec![specified_file], 0));
+            }
+        }
+        
+        // Multiple files or directories: use the existing logic
+        Ok((Self::collect_image_paths(&paths)?, 0))
     }
     
     /// Collect all image paths from the given list of files/directories
@@ -65,15 +107,6 @@ impl Cli {
             }
         }
         
-        if image_paths.is_empty() {
-            // Determine the best error message
-            if paths.len() == 1 && paths[0].is_dir() {
-                return Err(AppError::NoImagesFound(paths[0].clone()));
-            } else {
-                return Err(AppError::Generic("No valid images found".to_string()));
-            }
-        }
-        
         // Sort alphabetically by default (case-insensitive)
         image_paths.sort_by(|a, b| {
             a.to_string_lossy()
@@ -81,6 +114,7 @@ impl Cli {
                 .cmp(&b.to_string_lossy().to_lowercase())
         });
         
+        // Return empty list if no images found - app will display a message
         Ok(image_paths)
     }
     

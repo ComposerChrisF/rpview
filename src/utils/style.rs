@@ -1,5 +1,21 @@
 use gpui::*;
 
+/// Get the modifier key name for the current platform
+/// Returns "Cmd" on macOS, "Ctrl" on Windows/Linux
+pub fn modifier_key() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Cmd"
+    } else {
+        "Ctrl"
+    }
+}
+
+/// Format a keyboard shortcut for the current platform
+/// Example: format_shortcut("O") returns "Cmd+O" on macOS, "Ctrl+O" on Windows/Linux
+pub fn format_shortcut(key: &str) -> String {
+    format!("{}+{}", modifier_key(), key)
+}
+
 /// Common color palette
 pub struct Colors;
 

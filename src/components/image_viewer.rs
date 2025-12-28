@@ -2,7 +2,10 @@ use gpui::*;
 use std::path::PathBuf;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::utils::image_loader;
+use crate::utils::zoom;
 use crate::components::error_display::ErrorDisplay;
+use crate::components::zoom_indicator::ZoomIndicator;
+use crate::state::ImageState;
 
 /// Loaded image data
 #[derive(Clone)]
@@ -23,6 +26,10 @@ pub struct ImageViewer {
     pub error_path: Option<PathBuf>,
     /// Focus handle for keyboard events
     pub focus_handle: FocusHandle,
+    /// Current image state (zoom, pan, etc.)
+    pub image_state: ImageState,
+    /// Last known viewport size (for fit-to-window calculations)
+    pub viewport_size: Option<Size<Pixels>>,
 }
 
 impl ImageViewer {
@@ -32,7 +39,167 @@ impl ImageViewer {
             error_message: None,
             error_path: None,
             focus_handle: cx.focus_handle(),
+            image_state: ImageState::new(),
+            viewport_size: None,
         }
+    }
+    
+    /// Set the image state
+    pub fn set_image_state(&mut self, state: ImageState) {
+        self.image_state = state;
+    }
+    
+    /// Get the current image state
+    pub fn get_image_state(&self) -> ImageState {
+        self.image_state.clone()
+    }
+    
+    /// Calculate and set fit-to-window zoom for the current image
+    pub fn fit_to_window(&mut self) {
+        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+            let viewport_width: f32 = viewport.width.into();
+            let viewport_height: f32 = viewport.height.into();
+            
+            let fit_zoom = zoom::calculate_fit_to_window(
+                img.width,
+                img.height,
+                viewport_width,
+                viewport_height,
+            );
+            
+            // Calculate pan to center the image in the viewing area
+            let zoomed_width = img.width as f32 * fit_zoom;
+            let zoomed_height = img.height as f32 * fit_zoom;
+            let pan_x = (viewport_width - zoomed_width) / 2.0;
+            let pan_y = (viewport_height - zoomed_height) / 2.0;
+            
+            self.image_state.zoom = fit_zoom;
+            self.image_state.is_fit_to_window = true;
+            self.image_state.pan = (pan_x, pan_y);
+        }
+    }
+    
+    /// Update viewport size and recalculate fit-to-window if needed
+    pub fn update_viewport_size(&mut self, size: Size<Pixels>) {
+        let size_changed = self.viewport_size
+            .map(|old| {
+                let width_diff: f32 = (old.width - size.width).into();
+                let height_diff: f32 = (old.height - size.height).into();
+                width_diff.abs() > 1.0 || height_diff.abs() > 1.0
+            })
+            .unwrap_or(true);
+        
+        if size_changed {
+            self.viewport_size = Some(size);
+            
+            // If we're in fit-to-window mode, recalculate
+            if self.image_state.is_fit_to_window {
+                self.fit_to_window();
+            }
+        }
+    }
+    
+    /// Update viewport from window bounds, accounting for info panel
+    pub fn update_viewport_from_window(&mut self, window_size: Size<Pixels>) {
+        // Calculate the info panel height from actual spacing values
+        let info_panel_height: f32 = {
+            let md_spacing: f32 = Spacing::md().into();
+            let sm_spacing: f32 = Spacing::sm().into();
+            let sm_text: f32 = TextSize::sm().into();
+            let line_height_multiplier = 1.5;
+            
+            md_spacing * 2.0 + (sm_text * line_height_multiplier) * 2.0 + sm_spacing
+        };
+        
+        let viewport_width: f32 = window_size.width.into();
+        let viewport_height: f32 = window_size.height.into();
+        let actual_viewport_height = viewport_height - info_panel_height;
+        
+        let new_size = Size {
+            width: px(viewport_width),
+            height: px(actual_viewport_height),
+        };
+        
+        self.update_viewport_size(new_size);
+    }
+    
+    /// Zoom in, keeping the center of the image at the same screen location
+    pub fn zoom_in(&mut self, step: f32) {
+        let old_zoom = self.image_state.zoom;
+        let new_zoom = zoom::zoom_in(old_zoom, step);
+        
+        // Adjust pan to keep center of image at same screen location (if we have the data)
+        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+            self.adjust_pan_for_zoom(img.width, img.height, viewport, old_zoom, new_zoom);
+        }
+        
+        self.image_state.zoom = new_zoom;
+        self.image_state.is_fit_to_window = false;
+    }
+    
+    /// Zoom out, keeping the center of the image at the same screen location
+    pub fn zoom_out(&mut self, step: f32) {
+        let old_zoom = self.image_state.zoom;
+        let new_zoom = zoom::zoom_out(old_zoom, step);
+        
+        // Adjust pan to keep center of image at same screen location (if we have the data)
+        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+            self.adjust_pan_for_zoom(img.width, img.height, viewport, old_zoom, new_zoom);
+        }
+        
+        self.image_state.zoom = new_zoom;
+        self.image_state.is_fit_to_window = false;
+    }
+    
+    /// Adjust pan offset to keep the center of the image at the same screen location when zooming
+    fn adjust_pan_for_zoom(&mut self, img_width: u32, img_height: u32, _viewport: Size<Pixels>, old_zoom: f32, new_zoom: f32) {
+        let (pan_x, pan_y) = self.image_state.pan;
+        
+        // Calculate the center of the image in screen coordinates (before zoom)
+        let old_img_width = img_width as f32 * old_zoom;
+        let old_img_height = img_height as f32 * old_zoom;
+        let old_img_center_x = pan_x + old_img_width / 2.0;
+        let old_img_center_y = pan_y + old_img_height / 2.0;
+        
+        // Calculate the new image dimensions
+        let new_img_width = img_width as f32 * new_zoom;
+        let new_img_height = img_height as f32 * new_zoom;
+        
+        // Calculate the offset needed to keep the image center at the same position
+        let new_pan_x = old_img_center_x - new_img_width / 2.0;
+        let new_pan_y = old_img_center_y - new_img_height / 2.0;
+        
+        self.image_state.pan = (new_pan_x, new_pan_y);
+    }
+    
+    /// Toggle between fit-to-window and 100% zoom
+    pub fn reset_zoom(&mut self) {
+        if self.image_state.is_fit_to_window {
+            // Currently at fit-to-window, switch to 100%
+            if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+                let viewport_width: f32 = viewport.width.into();
+                let viewport_height: f32 = viewport.height.into();
+                
+                // Calculate pan to center the image at 100% zoom
+                let zoomed_width = img.width as f32;
+                let zoomed_height = img.height as f32;
+                let pan_x = (viewport_width - zoomed_width) / 2.0;
+                let pan_y = (viewport_height - zoomed_height) / 2.0;
+                
+                self.image_state.zoom = 1.0;
+                self.image_state.pan = (pan_x, pan_y);
+                self.image_state.is_fit_to_window = false;
+            }
+        } else {
+            // Currently at custom zoom, switch to fit-to-window
+            self.fit_to_window();
+        }
+    }
+    
+    /// Pan the image
+    pub fn pan(&mut self, delta_x: f32, delta_y: f32) {
+        let (pan_x, pan_y) = self.image_state.pan;
+        self.image_state.pan = (pan_x + delta_x, pan_y + delta_y);
     }
     
     /// Load an image from a path
@@ -47,6 +214,9 @@ impl ImageViewer {
                 });
                 self.error_message = None;
                 self.error_path = None;
+                
+                // Fit to window on load (if viewport size is known)
+                self.fit_to_window();
             }
             Err(e) => {
                 self.current_image = None;
@@ -66,6 +236,8 @@ impl ImageViewer {
 
 impl Render for ImageViewer {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Note: viewport size is now updated in App::render() before ImageViewer is cloned
+        
         let content = if let Some(ref error) = self.error_message {
             // Show error message with full canonical path if available
             let full_message = if let Some(ref path) = self.error_path {
@@ -87,25 +259,40 @@ impl Render for ImageViewer {
             let height = loaded.height;
             let path = &loaded.path;
             
+            // Apply zoom to image dimensions
+            let zoomed_width = (width as f32 * self.image_state.zoom) as u32;
+            let zoomed_height = (height as f32 * self.image_state.zoom) as u32;
+            
+            // Get pan offset
+            let (pan_x, pan_y) = self.image_state.pan;
+            
             div()
                 .flex()
                 .flex_col()
                 .size_full()
-                .child(
-                    // Main image area
+                .child({
+                    // Main image area with zoom indicator overlay
+                    let zoom_level = self.image_state.zoom;
+                    let is_fit = self.image_state.is_fit_to_window;
+                    
                     div()
                         .flex_1()
-                        .flex()
-                        .items_center()
-                        .justify_center()
                         .bg(Colors::background())
+                        .overflow_hidden()
+                        .relative()
                         .child(
                             img(path.clone())
-                                .object_fit(ObjectFit::Contain)
-                                .max_w_full()
-                                .max_h_full()
+                                .w(px(zoomed_width as f32))
+                                .h(px(zoomed_height as f32))
+                                .absolute()
+                                .left(px(pan_x))
+                                .top(px(pan_y))
                         )
-                )
+                        .child(
+                            // Zoom indicator overlay
+                            cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit))
+                        )
+                })
                 .child(
                     // Info panel at bottom
                     div()
@@ -147,7 +334,7 @@ impl Render for ImageViewer {
                     div()
                         .text_size(TextSize::sm())
                         .text_color(Colors::text())
-                        .child("Use arrow keys to navigate (coming in Phase 3)")
+                        .child(format!("Press {} to open an image", crate::utils::style::format_shortcut("O")))
                 )
                 .into_any_element()
         };

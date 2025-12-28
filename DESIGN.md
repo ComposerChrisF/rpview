@@ -249,6 +249,33 @@ App (root)
 - Window manager compatibility
 - Desktop file creation
 
+## Cross-Platform Utilities
+
+### Platform-Specific Keyboard Shortcuts
+
+**Utility Functions** (in `src/utils/style.rs`):
+
+```rust
+// Get the modifier key name for the current platform
+modifier_key() -> &'static str
+// Returns: "Cmd" on macOS, "Ctrl" on Windows/Linux
+
+// Format a keyboard shortcut for the current platform
+format_shortcut(key: &str) -> String
+// Example: format_shortcut("O") returns "Cmd+O" on macOS, "Ctrl+O" on Windows/Linux
+```
+
+**Usage:**
+- Use these functions whenever displaying keyboard shortcuts to users
+- Ensures consistent platform-appropriate messaging
+- Automatically adapts at compile time based on target OS
+- Examples:
+  - Help text: `format_shortcut("O")` → "Cmd+O" or "Ctrl+O"
+  - Error messages: `format!("Press {} to open", format_shortcut("O"))`
+  - UI labels: `modifier_key()` → "Cmd" or "Ctrl"
+
+**Important:** Always use these utilities instead of hardcoding "Cmd" or "Ctrl" in user-facing text to maintain cross-platform consistency.
+
 ## Performance Considerations
 
 **Image Loading:**
