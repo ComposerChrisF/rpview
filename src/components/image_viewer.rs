@@ -35,6 +35,10 @@ pub struct ImageViewer {
     /// - zoom_center_x, zoom_center_y: Initial click position that zoom is centered on
     /// - Sentinel value (0,0,0,0) indicates Z key held but not actively dragging
     pub z_drag_state: Option<(f32, f32, f32, f32)>,
+    /// Spacebar drag pan state: (last_mouse_x, last_mouse_y)
+    /// - Tracks previous mouse position for 1:1 pixel movement panning
+    /// - Sentinel value (0,0) indicates spacebar held but not actively dragging
+    pub spacebar_drag_state: Option<(f32, f32)>,
 }
 
 impl ImageViewer {
@@ -47,6 +51,7 @@ impl ImageViewer {
             image_state: ImageState::new(),
             viewport_size: None,
             z_drag_state: None,
+            spacebar_drag_state: None,
         }
     }
     
@@ -175,7 +180,8 @@ impl ImageViewer {
         let new_pan_x = old_img_center_x - new_img_width / 2.0;
         let new_pan_y = old_img_center_y - new_img_height / 2.0;
         
-        self.image_state.pan = (new_pan_x, new_pan_y);
+        // Apply pan constraints
+        self.image_state.pan = self.constrain_pan(new_pan_x, new_pan_y);
     }
     
     /// Toggle between fit-to-window and 100% zoom
@@ -202,10 +208,48 @@ impl ImageViewer {
         }
     }
     
-    /// Pan the image
+    /// Pan the image with constraints to prevent panning completely off-screen
     pub fn pan(&mut self, delta_x: f32, delta_y: f32) {
         let (pan_x, pan_y) = self.image_state.pan;
-        self.image_state.pan = (pan_x + delta_x, pan_y + delta_y);
+        let new_pan_x = pan_x + delta_x;
+        let new_pan_y = pan_y + delta_y;
+        self.image_state.pan = self.constrain_pan(new_pan_x, new_pan_y);
+    }
+    
+    /// Constrain pan to prevent the image from going completely off-screen
+    /// Ensures at least a small portion of the image remains visible
+    fn constrain_pan(&self, pan_x: f32, pan_y: f32) -> (f32, f32) {
+        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+            let viewport_width: f32 = viewport.width.into();
+            let viewport_height: f32 = viewport.height.into();
+            
+            let zoomed_width = img.width as f32 * self.image_state.zoom;
+            let zoomed_height = img.height as f32 * self.image_state.zoom;
+            
+            // Define minimum visible portion (e.g., 50 pixels or 10% of image, whichever is smaller)
+            let min_visible_x = (zoomed_width * 0.1).min(50.0);
+            let min_visible_y = (zoomed_height * 0.1).min(50.0);
+            
+            // Calculate allowed pan range
+            // Image can be panned right until only min_visible_x pixels show on the left
+            let max_pan_x = viewport_width - min_visible_x;
+            // Image can be panned left until only min_visible_x pixels show on the right
+            let min_pan_x = -(zoomed_width - min_visible_x);
+            
+            // Image can be panned down until only min_visible_y pixels show on the top
+            let max_pan_y = viewport_height - min_visible_y;
+            // Image can be panned up until only min_visible_y pixels show on the bottom
+            let min_pan_y = -(zoomed_height - min_visible_y);
+            
+            // Clamp pan values to allowed range
+            let constrained_x = pan_x.max(min_pan_x).min(max_pan_x);
+            let constrained_y = pan_y.max(min_pan_y).min(max_pan_y);
+            
+            (constrained_x, constrained_y)
+        } else {
+            // No image or viewport, return unconstrained values
+            (pan_x, pan_y)
+        }
     }
     
     /// Zoom toward a specific point (cursor position)
@@ -231,8 +275,9 @@ impl ImageViewer {
         let new_pan_x = cursor_x - cursor_in_image_x * new_zoom;
         let new_pan_y = cursor_y - cursor_in_image_y * new_zoom;
         
+        // Update zoom first, then constrain pan
         self.image_state.zoom = new_zoom;
-        self.image_state.pan = (new_pan_x, new_pan_y);
+        self.image_state.pan = self.constrain_pan(new_pan_x, new_pan_y);
         self.image_state.is_fit_to_window = false;
     }
     

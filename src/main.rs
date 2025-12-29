@@ -49,6 +49,8 @@ struct App {
     escape_presses: Vec<Instant>,
     /// Tracks if Z key is currently held down (for Z+drag zoom mode)
     z_key_held: bool,
+    /// Tracks if spacebar is currently held down (for spacebar+drag pan mode)
+    spacebar_held: bool,
     /// Tracks if left mouse button is currently pressed
     /// Used with MouseMoveEvent.pressed_button for robust button state tracking
     mouse_button_down: bool,
@@ -210,27 +212,27 @@ impl App {
         cx.notify();
     }
     
-    // Slow pan (1px) with Ctrl/Cmd modifier
+    // Slow pan (3px) with Ctrl/Cmd modifier (0.3x speed)
     fn handle_pan_up_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, -1.0);
+        self.viewer.pan(0.0, -3.0);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_down_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, 1.0);
+        self.viewer.pan(0.0, 3.0);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_left_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(-1.0, 0.0);
+        self.viewer.pan(-3.0, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_right_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(1.0, 0.0);
+        self.viewer.pan(3.0, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
@@ -290,14 +292,30 @@ impl Render for App {
             self.viewer.z_drag_state = None;
         }
         
+        // Update spacebar-drag state based on spacebar_held
+        if self.spacebar_held && self.viewer.spacebar_drag_state.is_none() {
+            self.viewer.spacebar_drag_state = Some((0.0, 0.0));
+        } else if !self.spacebar_held && self.viewer.spacebar_drag_state.is_some() {
+            self.viewer.spacebar_drag_state = None;
+        }
+        
         div()
             .track_focus(&self.focus_handle)
             .size_full()
             .bg(utils::style::Colors::background())
             .on_mouse_down(MouseButton::Left, cx.listener(|this, event: &MouseDownEvent, _window, cx| {
                 this.mouse_button_down = true;
-                // Start Z-drag zoom if Z key is being held
-                if this.viewer.z_drag_state.is_some() {
+                
+                // Start spacebar-drag pan if spacebar is being held
+                if this.viewer.spacebar_drag_state.is_some() {
+                    let x: f32 = event.position.x.into();
+                    let y: f32 = event.position.y.into();
+                    // Store: (last_x, last_y) for 1:1 pixel movement
+                    this.viewer.spacebar_drag_state = Some((x, y));
+                    cx.notify();
+                }
+                // Start Z-drag zoom if Z key is being held (and spacebar is not)
+                else if this.viewer.z_drag_state.is_some() {
                     let y: f32 = event.position.y.into();
                     let x: f32 = event.position.x.into();
                     // Store: (last_x, last_y, center_x, center_y) for zoom centering
@@ -307,8 +325,17 @@ impl Render for App {
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
                 this.mouse_button_down = false;
+                
+                // End spacebar-drag pan (but keep spacebar state active if still held)
+                if let Some((_, _)) = this.viewer.spacebar_drag_state {
+                    // Save state after panning
+                    this.save_current_image_state();
+                    // Reset to sentinel value to indicate spacebar is held but not dragging
+                    this.viewer.spacebar_drag_state = Some((0.0, 0.0));
+                    cx.notify();
+                }
                 // End Z-drag zoom (but keep Z key state active if still held)
-                if let Some((_, _, _, _)) = this.viewer.z_drag_state {
+                else if let Some((_, _, _, _)) = this.viewer.z_drag_state {
                     // Reset to sentinel value to indicate Z is held but not dragging
                     this.viewer.z_drag_state = Some((0.0, 0.0, 0.0, 0.0));
                     cx.notify();
@@ -321,9 +348,37 @@ impl Render for App {
                 // If we think the button is down but the event says it's not, correct our state
                 if this.mouse_button_down && !button_actually_pressed {
                     this.mouse_button_down = false;
+                    // End spacebar-drag pan if active
+                    if this.viewer.spacebar_drag_state.is_some() {
+                        this.viewer.spacebar_drag_state = Some((0.0, 0.0));
+                    }
                     // End Z-drag zoom if active
                     if this.viewer.z_drag_state.is_some() {
                         this.viewer.z_drag_state = Some((0.0, 0.0, 0.0, 0.0));
+                    }
+                }
+                
+                // Handle spacebar-drag pan (only if mouse button is down and we have valid drag data)
+                if this.mouse_button_down && button_actually_pressed {
+                    if let Some((last_x, last_y)) = this.viewer.spacebar_drag_state {
+                        // Check if this is actual drag data (not the sentinel 0,0)
+                        if last_x != 0.0 || last_y != 0.0 {
+                            let current_x: f32 = event.position.x.into();
+                            let current_y: f32 = event.position.y.into();
+                            
+                            // Calculate 1:1 pixel movement delta
+                            let delta_x = current_x - last_x;
+                            let delta_y = current_y - last_y;
+                            
+                            // Apply pan directly (1:1 pixel movement)
+                            this.viewer.pan(delta_x, delta_y);
+                            
+                            // Update last position for next delta calculation
+                            this.viewer.spacebar_drag_state = Some((current_x, current_y));
+                            
+                            cx.notify();
+                            return; // Don't process Z-drag if we're spacebar-dragging
+                        }
                     }
                 }
                 
@@ -394,8 +449,18 @@ impl Render for App {
                 }
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
+                // Check for spacebar press (without modifiers)
+                if event.keystroke.key.as_str() == "space" 
+                    && !event.keystroke.modifiers.shift 
+                    && !event.keystroke.modifiers.control 
+                    && !event.keystroke.modifiers.platform 
+                    && !event.keystroke.modifiers.alt {
+                    // Enable spacebar-drag pan mode
+                    this.spacebar_held = true;
+                    cx.notify();
+                }
                 // Check for Z key press (without modifiers)
-                if event.keystroke.key.as_str() == "z" 
+                else if event.keystroke.key.as_str() == "z" 
                     && !event.keystroke.modifiers.shift 
                     && !event.keystroke.modifiers.control 
                     && !event.keystroke.modifiers.platform 
@@ -406,8 +471,17 @@ impl Render for App {
                 }
             }))
             .on_key_up(cx.listener(|this, event: &KeyUpEvent, _window, cx| {
+                // Check for spacebar release
+                if event.keystroke.key.as_str() == "space" {
+                    // Disable spacebar-drag pan mode and save state
+                    if this.spacebar_held {
+                        this.spacebar_held = false;
+                        this.save_current_image_state();
+                        cx.notify();
+                    }
+                }
                 // Check for Z key release
-                if event.keystroke.key.as_str() == "z" {
+                else if event.keystroke.key.as_str() == "z" {
                     // Disable Z-drag zoom mode and save state
                     if this.z_key_held {
                         this.z_key_held = false;
@@ -631,6 +705,7 @@ fn main() {
                         image_state: state::ImageState::new(),
                         viewport_size: None,
                         z_drag_state: None,
+                        spacebar_drag_state: None,
                     };
                     
                     if let Some(ref path) = first_image_path {
@@ -662,6 +737,7 @@ fn main() {
                         focus_handle,
                         escape_presses: Vec::new(),
                         z_key_held: false,
+                        spacebar_held: false,
                         mouse_button_down: false,
                     }
                 })
