@@ -30,6 +30,11 @@ pub struct ImageViewer {
     pub image_state: ImageState,
     /// Last known viewport size (for fit-to-window calculations)
     pub viewport_size: Option<Size<Pixels>>,
+    /// Z key drag zoom state: (last_mouse_x, last_mouse_y, zoom_center_x, zoom_center_y)
+    /// - last_mouse_x, last_mouse_y: Previous mouse position for calculating incremental delta
+    /// - zoom_center_x, zoom_center_y: Initial click position that zoom is centered on
+    /// - Sentinel value (0,0,0,0) indicates Z key held but not actively dragging
+    pub z_drag_state: Option<(f32, f32, f32, f32)>,
 }
 
 impl ImageViewer {
@@ -41,6 +46,7 @@ impl ImageViewer {
             focus_handle: cx.focus_handle(),
             image_state: ImageState::new(),
             viewport_size: None,
+            z_drag_state: None,
         }
     }
     
@@ -200,6 +206,34 @@ impl ImageViewer {
     pub fn pan(&mut self, delta_x: f32, delta_y: f32) {
         let (pan_x, pan_y) = self.image_state.pan;
         self.image_state.pan = (pan_x + delta_x, pan_y + delta_y);
+    }
+    
+    /// Zoom toward a specific point (cursor position)
+    /// cursor_x and cursor_y are in viewport coordinates (pixels from top-left of viewport)
+    pub fn zoom_toward_point(&mut self, cursor_x: f32, cursor_y: f32, zoom_in: bool, step: f32) {
+        if self.current_image.is_none() {
+            return;
+        }
+        
+        let old_zoom = self.image_state.zoom;
+        let new_zoom = if zoom_in {
+            zoom::zoom_in(old_zoom, step)
+        } else {
+            zoom::zoom_out(old_zoom, step)
+        };
+        
+        // Calculate the cursor position in image coordinates (before zoom)
+        let (pan_x, pan_y) = self.image_state.pan;
+        let cursor_in_image_x = (cursor_x - pan_x) / old_zoom;
+        let cursor_in_image_y = (cursor_y - pan_y) / old_zoom;
+        
+        // Calculate the new pan to keep the cursor at the same image location
+        let new_pan_x = cursor_x - cursor_in_image_x * new_zoom;
+        let new_pan_y = cursor_y - cursor_in_image_y * new_zoom;
+        
+        self.image_state.zoom = new_zoom;
+        self.image_state.pan = (new_pan_x, new_pan_y);
+        self.image_state.is_fit_to_window = false;
     }
     
     /// Load an image from a path

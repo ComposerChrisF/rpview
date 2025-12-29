@@ -9,8 +9,9 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - **Phase 3** (Navigation): ✅ Complete
 - **Phase 4** (Zoom & Pan): ✅ Complete
 - **Phase 5** (State Management): ✅ Complete
-- **Phase 6** (Advanced Zoom): 🎯 Next Priority
-- **Phase 7-15**: ⏳ Planned
+- **Phase 6** (Advanced Zoom): ✅ Complete
+- **Phase 7** (Advanced Pan): 🎯 Next Priority
+- **Phase 8-15**: ⏳ Planned
 
 ## Phase 1: Project Foundation & Basic Structure ✅
 
@@ -184,30 +185,30 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Maintain state cache across navigation
 - [x] Store state in ImageViewer for per-image persistence
 
-## Phase 6: Advanced Zoom Features
+## Phase 6: Advanced Zoom Features ✅
 
 ### Mouse Wheel Zoom
-- [ ] Detect mouse wheel events
-- [ ] Implement Ctrl/Cmd modifier detection
-- [ ] Calculate cursor position in image coordinates
-- [ ] Implement cursor-centered zoom
-- [ ] Use 1.1x zoom factor per scroll notch
-- [ ] Prevent default scroll behavior when Ctrl/Cmd held
+- [x] Detect mouse wheel events
+- [x] Implement Ctrl/Cmd modifier detection
+- [x] Calculate cursor position in image coordinates
+- [x] Implement cursor-centered zoom
+- [x] Use 1.1x zoom factor per scroll notch
+- [x] Prevent default scroll behavior when Ctrl/Cmd held
 
 ### Zoom Modifiers (Keyboard)
-- [ ] Detect Shift modifier (faster zoom)
-- [ ] Detect Ctrl/Cmd modifier (slower zoom)
-- [ ] Detect Shift+Ctrl/Cmd (incremental 1% zoom)
-- [ ] Adjust zoom step based on modifiers
-- [ ] Apply modifier detection to +/- keys
+- [x] Detect Shift modifier (faster zoom - 1.5x step)
+- [x] Detect Ctrl/Cmd modifier (slower zoom - 1.05x step)
+- [x] Detect Shift+Ctrl/Cmd (incremental 1% zoom)
+- [x] Adjust zoom step based on modifiers
+- [x] Apply modifier detection to +/- keys
 
 ### Z+Mouse Drag Zoom
-- [ ] Detect Z key press
-- [ ] Detect left mouse button down while Z held
-- [ ] Track mouse movement during drag
-- [ ] Calculate zoom change from movement (1% per 2px)
-- [ ] Apply zoom centered on initial click position
-- [ ] Handle mouse release to end zoom
+- [x] Detect Z key press
+- [x] Detect left mouse button down while Z held
+- [x] Track mouse movement during drag
+- [x] Calculate zoom change from movement (1% per 2px)
+- [x] Apply zoom centered on initial click position
+- [x] Handle mouse release to end zoom
 
 ## Phase 7: Advanced Pan Features
 
@@ -542,3 +543,33 @@ Key implementation details:
 - Save/load methods (src/state/app_state.rs:120) for state persistence
 - State integration in navigation handlers (src/main.rs:45) to preserve user preferences
 - Default trait implementation for initial fit-to-window state
+
+### Phase 6 Summary
+Phase 6 has been successfully completed! The application now:
+- Implements mouse wheel zoom with Ctrl/Cmd modifier for cursor-centered zooming
+- Uses 1.1x zoom factor per scroll notch for smooth scrolling
+- Provides keyboard zoom modifiers for different zoom speeds:
+  - Shift + +/- for fast zoom (1.5x step)
+  - Cmd/Ctrl + +/- for slow zoom (1.05x step)
+  - Shift + Cmd/Ctrl + +/- for incremental zoom (1% per step)
+- Implements Z+Mouse drag zoom with dynamic sensitivity based on current zoom level
+- Uses incremental mouse movement (delta from last frame) to prevent continuous zooming when mouse stops
+- Combines both vertical (up/down) and horizontal (left/right) mouse movement for zoom control
+- Zoom sensitivity scales proportionally with current zoom level (faster when zoomed in, slower when zoomed out)
+- Centers zoom operations on cursor position (mouse wheel) or initial click position (Z+drag)
+- Detects mouse button release outside window using MouseMoveEvent.pressed_button field
+- Tracks Z key state and mouse button state independently for robust drag handling
+
+Key implementation details:
+- Mouse event handlers moved to App level (src/main.rs:292-370) for proper event capture
+- Mouse wheel zoom handler (src/main.rs:351-367) with platform modifier detection
+- Cursor-centered zoom method (src/components/image_viewer.rs:207) for zooming toward a specific point
+- Zoom modifier constants (src/utils/zoom.rs:14-23) for different zoom speeds
+- Keyboard zoom handlers (src/main.rs:114-156) for fast, slow, and incremental zoom
+- Z+drag zoom state tracking (src/components/image_viewer.rs:34) stores (last_x, last_y, center_x, center_y)
+- Incremental delta calculation (src/main.rs:333-343) using last mouse position instead of initial position
+- Dynamic zoom sensitivity (src/main.rs:345-346) scales with current zoom level (combined_delta * 0.01 * current_zoom)
+- Mouse button state tracking (src/main.rs:48) and safety check (src/main.rs:314-322) prevents zooming after button release
+- Key event handlers (src/main.rs:372-391) for detecting Z key press/release
+- Zoom step key bindings (src/main.rs:456-471) for all modifier combinations
+- State persistence after all zoom operations to maintain per-image zoom levels

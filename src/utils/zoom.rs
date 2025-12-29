@@ -18,6 +18,9 @@ pub const ZOOM_STEP_SLOW: f32 = 1.05;
 /// Incremental zoom step (with Shift+Ctrl/Cmd) - 1% per step
 pub const ZOOM_STEP_INCREMENTAL: f32 = 0.01;
 
+/// Mouse wheel zoom step (smaller for smoother scrolling)
+pub const ZOOM_STEP_WHEEL: f32 = 1.1;
+
 /// Clamp zoom level to valid range
 pub fn clamp_zoom(zoom: f32) -> f32 {
     zoom.max(MIN_ZOOM).min(MAX_ZOOM)
