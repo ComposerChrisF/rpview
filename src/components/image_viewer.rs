@@ -110,30 +110,6 @@ impl ImageViewer {
         }
     }
     
-    /// Update viewport from window bounds, accounting for info panel
-    pub fn update_viewport_from_window(&mut self, window_size: Size<Pixels>) {
-        // Calculate the info panel height from actual spacing values
-        let info_panel_height: f32 = {
-            let md_spacing: f32 = Spacing::md().into();
-            let sm_spacing: f32 = Spacing::sm().into();
-            let sm_text: f32 = TextSize::sm().into();
-            let line_height_multiplier = 1.5;
-            
-            md_spacing * 2.0 + (sm_text * line_height_multiplier) * 2.0 + sm_spacing
-        };
-        
-        let viewport_width: f32 = window_size.width.into();
-        let viewport_height: f32 = window_size.height.into();
-        let actual_viewport_height = viewport_height - info_panel_height;
-        
-        let new_size = Size {
-            width: px(viewport_width),
-            height: px(actual_viewport_height),
-        };
-        
-        self.update_viewport_size(new_size);
-    }
-    
     /// Zoom in, keeping the center of the image at the same screen location
     pub fn zoom_in(&mut self, step: f32) {
         let old_zoom = self.image_state.zoom;
@@ -345,53 +321,26 @@ impl Render for ImageViewer {
             // Get pan offset
             let (pan_x, pan_y) = self.image_state.pan;
             
+            // Main image area with zoom indicator overlay
+            let zoom_level = self.image_state.zoom;
+            let is_fit = self.image_state.is_fit_to_window;
+            
             div()
-                .flex()
-                .flex_col()
                 .size_full()
-                .child({
-                    // Main image area with zoom indicator overlay
-                    let zoom_level = self.image_state.zoom;
-                    let is_fit = self.image_state.is_fit_to_window;
-                    
-                    div()
-                        .flex_1()
-                        .bg(Colors::background())
-                        .overflow_hidden()
-                        .relative()
-                        .child(
-                            img(path.clone())
-                                .w(px(zoomed_width as f32))
-                                .h(px(zoomed_height as f32))
-                                .absolute()
-                                .left(px(pan_x))
-                                .top(px(pan_y))
-                        )
-                        .child(
-                            // Zoom indicator overlay
-                            cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit))
-                        )
-                })
+                .bg(Colors::background())
+                .overflow_hidden()
+                .relative()
                 .child(
-                    // Info panel at bottom
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(Spacing::sm())
-                        .p(Spacing::md())
-                        .bg(rgb(0x2d2d2d))
-                        .child(
-                            div()
-                                .text_size(TextSize::sm())
-                                .text_color(Colors::text())
-                                .child(format!("File: {}", path.file_name().unwrap_or_default().to_string_lossy()))
-                        )
-                        .child(
-                            div()
-                                .text_size(TextSize::sm())
-                                .text_color(Colors::text())
-                                .child(format!("Dimensions: {}x{}", width, height))
-                        )
+                    img(path.clone())
+                        .w(px(zoomed_width as f32))
+                        .h(px(zoomed_height as f32))
+                        .absolute()
+                        .left(px(pan_x))
+                        .top(px(pan_y))
+                )
+                .child(
+                    // Zoom indicator overlay
+                    cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit))
                 )
                 .into_any_element()
         } else {
