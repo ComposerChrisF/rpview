@@ -11,8 +11,9 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - **Phase 5** (State Management): ✅ Complete
 - **Phase 6** (Advanced Zoom): ✅ Complete
 - **Phase 7** (Advanced Pan): ✅ Complete
-- **Phase 8** (User Interface): 🎯 Next Priority
-- **Phase 9-15**: ⏳ Planned
+- **Phase 8** (User Interface): ✅ Complete
+- **Phase 9** (Filter System): 🎯 Next Priority
+- **Phase 10-15**: ⏳ Planned
 
 ## Phase 1: Project Foundation & Basic Structure ✅
 
@@ -71,7 +72,6 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Show loading state messages
 - [x] Implement actual image rendering with GPUI using img() function
 - [x] Implement fit-to-window display using ObjectFit::Contain
-- [x] Add info panel showing filename and dimensions
 
 ### Application State
 - [x] Create AppState structure  
@@ -133,7 +133,6 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Calculate fit-to-window zoom level
 - [x] Implement initial fit-to-window on image load
 - [x] Center image when fit-to-window
-- [x] Account for UI elements (info panel) in viewport calculation
 - [x] Update fit-to-window dynamically based on viewport
 
 ### Keyboard Zoom
@@ -238,33 +237,29 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Prevent panning completely off-screen
 - [x] Handle pan with different zoom levels
 
-## Phase 8: User Interface Overlays
+## Phase 8: User Interface Overlays ✅
 
 ### Help Overlay
-- [ ] Create HelpOverlay component
-- [ ] Design help content layout
-- [ ] List all keyboard shortcuts
-- [ ] Implement H key toggle
-- [ ] Implement ? key toggle
-- [ ] Implement F1 key toggle
-- [ ] Add click-outside-to-close functionality
-- [ ] Proper z-order management
+- [x] Create HelpOverlay component
+- [x] Design help content layout
+- [x] List all keyboard shortcuts
+- [x] Implement H key toggle
+- [x] Implement ? key toggle
+- [x] Implement F1 key toggle
+- [x] Add Escape to close functionality
+- [x] Proper z-order management
 
 ### Debug Overlay
-- [ ] Create DebugOverlay component
-- [ ] Show current image path and index
-- [ ] Show current zoom level and pan position
-- [ ] Show image dimensions
-- [ ] Show viewport dimensions
-- [ ] Implement F12 toggle
-- [ ] Format debug info clearly
+- [x] Create DebugOverlay component
+- [x] Show current image path and index
+- [x] Show current zoom level and pan position
+- [x] Show image dimensions
+- [x] Show viewport dimensions
+- [x] Implement F12 toggle
+- [x] Format debug info clearly
 
 ### Status Indicators
-- [ ] Create status bar component (optional)
-- [ ] Show current file name
-- [ ] Show position in list
-- [ ] Show sort mode indicator
-- [ ] Position at top or bottom of window
+- [x] Window title shows current file name and position (already implemented in Phase 3)
 
 ## Phase 9: Filter System
 
@@ -496,7 +491,6 @@ Phase 2 has been successfully completed! The application now:
 - Loads and displays images using GPUI's `img()` function
 - Automatically handles format conversion (RGBA to BGRA for GPU)
 - Displays images with fit-to-window scaling using `ObjectFit::Contain`
-- Shows image information (filename and dimensions) in an info panel
 - Loads the first image automatically on startup
 - Handles errors gracefully with informative error messages
 
@@ -521,7 +515,6 @@ Key implementation details:
 - Zoom utilities module created (src/utils/zoom.rs:1) with all zoom calculations
 - Zoom indicator component (src/components/zoom_indicator.rs:1) for UI feedback
 - ImageViewer updated with zoom/pan state and rendering (src/components/image_viewer.rs:30)
-- Viewport sizing accounts for info panel height (src/components/image_viewer.rs:120)
 - Centered zoom implementation using image center calculations (src/components/image_viewer.rs:85)
 - Pan handlers with correct directional logic (src/main.rs:85)
 - Cross-platform utilities for keyboard shortcuts (src/utils/style.rs:60)
@@ -601,4 +594,42 @@ Key implementation details:
 - Updated slow pan speed from 1px to 3px (src/main.rs:214-240) to match Phase 7 specification
 - Spacebar-drag pan returns early to prevent Z+drag from activating (src/main.rs:379)
 - State persistence after spacebar release (src/main.rs:330) and when pan ends (src/main.rs:477)
+
+
+### Phase 8 Summary
+Phase 8 has been successfully completed! The application now:
+- Provides an interactive help overlay showing all keyboard shortcuts
+- Includes a debug overlay displaying real-time system information
+- Supports multiple key bindings for help (H, ?, F1) and debug (F12)
+- Implements Escape key to close overlays (takes priority over quit)
+- Displays overlays with proper z-order on top of image viewer
+- Shows platform-specific keyboard shortcuts (Cmd on macOS, Ctrl on Windows/Linux)
+- Organizes shortcuts into logical sections (Navigation, Zoom, Pan, Window, Help & Debug)
+- Displays comprehensive debug information:
+  - Current image path and index
+  - Image dimensions
+  - Current zoom level and mode (fit/manual)
+  - Pan position coordinates
+  - Viewport size
+- Uses semi-transparent overlay backgrounds for better visibility
+- Styled with consistent design matching the application theme
+- Features a clean, minimal interface without status bars or info panels
+
+Key implementation details:
+- HelpOverlay component (src/components/help_overlay.rs:1) with comprehensive keyboard shortcuts list
+- DebugOverlay component (src/components/debug_overlay.rs:1) with real-time system information
+- Toggle actions (src/main.rs:42-43) for ToggleHelp and ToggleDebug
+- Overlay state flags (src/main.rs:63-65) in App struct
+- Key bindings (src/main.rs:730-734) for H, ?, F1, and F12
+- Escape handler (src/main.rs:66-80) prioritizes closing overlays before counting toward quit
+- Conditional rendering (src/main.rs:523-535) using `.when()` for proper z-order
+- FluentBuilder trait import (src/main.rs:1) required for `.when()` method
+- Platform-aware keyboard shortcut display using cfg!(target_os = "macos") detection
+- Removed info panel showing filename and dimensions for cleaner UI
+- Viewport calculation uses window.viewport_size() for accurate content area sizing (src/main.rs:312)
+
+**Phase 8 Updates**:
+1. Attempted vertical scrolling for help overlay but encountered GPUI limitations with visible scrollbars
+2. Removed the bottom info panel (filename and dimensions display) for a cleaner, more minimal interface
+3. Fixed fit-to-window viewport calculation to use `window.viewport_size()` instead of `window.bounds()`, which correctly excludes the title bar and provides accurate content area dimensions
 

@@ -1,3 +1,4 @@
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use std::time::{Duration, Instant};
 
@@ -8,7 +9,7 @@ mod state;
 mod utils;
 
 use cli::Cli;
-use components::ImageViewer;
+use components::{DebugOverlay, HelpOverlay, ImageViewer};
 use state::AppState;
 
 actions!(app, [
@@ -40,6 +41,8 @@ actions!(app, [
     PanDownSlow,
     PanLeftSlow,
     PanRightSlow,
+    ToggleHelp,
+    ToggleDebug,
 ]);
 
 struct App {
@@ -54,10 +57,26 @@ struct App {
     /// Tracks if left mouse button is currently pressed
     /// Used with MouseMoveEvent.pressed_button for robust button state tracking
     mouse_button_down: bool,
+    /// Whether help overlay is visible
+    show_help: bool,
+    /// Whether debug overlay is visible
+    show_debug: bool,
 }
  
 impl App {
     fn handle_escape(&mut self, cx: &mut Context<Self>) {
+        // If help or debug overlay is open, close it instead of counting toward quit
+        if self.show_help {
+            self.show_help = false;
+            cx.notify();
+            return;
+        }
+        if self.show_debug {
+            self.show_debug = false;
+            cx.notify();
+            return;
+        }
+        
         let now = Instant::now();
         
         // Remove presses older than 2 seconds
@@ -70,6 +89,16 @@ impl App {
         if self.escape_presses.len() >= 3 {
             cx.quit();
         }
+    }
+    
+    fn handle_toggle_help(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.show_help = !self.show_help;
+        cx.notify();
+    }
+    
+    fn handle_toggle_debug(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.show_debug = !self.show_debug;
+        cx.notify();
     }
     
     fn handle_next_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -281,9 +310,9 @@ impl App {
 
 impl Render for App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Update viewer's viewport size before rendering
-        let bounds = window.bounds();
-        self.viewer.update_viewport_from_window(bounds.size);
+        // Update viewer's viewport size from window's drawable content area
+        let viewport_size = window.viewport_size();
+        self.viewer.update_viewport_size(viewport_size);
         
         // Update Z-drag state based on z_key_held
         if self.z_key_held && self.viewer.z_drag_state.is_none() {
@@ -491,6 +520,21 @@ impl Render for App {
                 }
             }))
             .child(cx.new(|_cx| self.viewer.clone()))
+            // Render overlays on top with proper z-order
+            .when(self.show_help, |el| {
+                el.child(cx.new(|_cx| HelpOverlay::new()))
+            })
+            .when(self.show_debug, |el| {
+                let image_dimensions = self.viewer.current_image.as_ref().map(|img| (img.width, img.height));
+                el.child(cx.new(|_cx| DebugOverlay::new(
+                    self.app_state.current_image().cloned(),
+                    self.app_state.current_index,
+                    self.app_state.image_paths.len(),
+                    self.viewer.image_state.clone(),
+                    image_dimensions,
+                    self.viewer.viewport_size,
+                )))
+            })
             .on_action(|_: &CloseWindow, window, _| {
                 window.remove_window();
             })
@@ -571,6 +615,12 @@ impl Render for App {
             }))
             .on_action(cx.listener(|this, _: &PanRightSlow, window, cx| {
                 this.handle_pan_right_slow(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleHelp, window, cx| {
+                this.handle_toggle_help(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleDebug, window, cx| {
+                this.handle_toggle_debug(window, cx);
             }))
     }
 }
@@ -679,6 +729,11 @@ fn main() {
             KeyBinding::new("cmd-j", PanLeftSlow, None),
             KeyBinding::new("cmd-k", PanDownSlow, None),
             KeyBinding::new("cmd-l", PanRightSlow, None),
+            // Help and debug overlays
+            KeyBinding::new("h", ToggleHelp, None),
+            KeyBinding::new("?", ToggleHelp, None),
+            KeyBinding::new("f1", ToggleHelp, None),
+            KeyBinding::new("f12", ToggleDebug, None),
         ]);
         
         cx.on_action(|_: &Quit, cx| {
@@ -739,6 +794,8 @@ fn main() {
                         z_key_held: false,
                         spacebar_held: false,
                         mouse_button_down: false,
+                        show_help: false,
+                        show_debug: false,
                     }
                 })
         })
