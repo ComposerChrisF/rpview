@@ -85,6 +85,8 @@ struct App {
     filter_controls: Entity<FilterControls>,
     /// Last time animation frame was updated (for animation playback)
     last_frame_update: Instant,
+    /// Whether files are being dragged over the window
+    drag_over: bool,
 }
  
 impl App {
@@ -381,6 +383,76 @@ impl App {
         save_result.map_err(|e| format!("Failed to save image: {}", e))
     }
     
+    fn handle_dropped_files(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
+        let dropped_paths: Vec<&PathBuf> = paths.paths().into_iter().collect();
+        
+        // Determine the drop strategy based on what was dropped
+        // If only 1 file: scan parent directory and set index to that file
+        // If multiple files: use only those files (don't scan directories)
+        // If 1 directory: scan that directory and start at index 0
+        // If multiple items with directories: scan each directory and collect files
+        
+        let mut all_images: Vec<PathBuf> = Vec::new();
+        let mut target_index: usize = 0;
+        
+        if dropped_paths.len() == 1 {
+            // Single item dropped: use the smart scanning logic
+            let path = dropped_paths[0];
+            
+            match utils::file_scanner::process_dropped_path(path) {
+                Ok((images, index)) => {
+                    all_images = images;
+                    target_index = index;
+                }
+                Err(_e) => {
+                    // Error processing dropped path - continue to check if we have any images
+                }
+            }
+        } else {
+            // Multiple items dropped: collect only the specific files/directories dropped
+            for path in dropped_paths {
+                if path.is_file() {
+                    // For files: verify they're valid images and add them
+                    if utils::file_scanner::is_supported_image(path) {
+                        all_images.push(path.to_path_buf());
+                    }
+                } else if path.is_dir() {
+                    // For directories: scan and add all images from that directory
+                    if let Ok(dir_images) = utils::file_scanner::scan_directory(path) {
+                        all_images.extend(dir_images);
+                    }
+                }
+            }
+            
+            // Remove duplicates
+            all_images.sort();
+            all_images.dedup();
+            
+            // Sort alphabetically (case-insensitive)
+            utils::file_scanner::sort_alphabetically(&mut all_images);
+            
+            // Start at the first image
+            target_index = 0;
+        }
+        
+        // Only update if we found at least one image
+        if !all_images.is_empty() {
+            // Update app state with new image list
+            self.app_state.image_paths = all_images;
+            self.app_state.current_index = target_index;
+            
+            // Update viewer and window title
+            self.update_viewer(window, cx);
+            self.update_window_title(window);
+            
+            // Refocus the window to ensure render triggers
+            self.focus_handle.focus(window);
+            
+            // Force a re-render
+            cx.notify();
+        }
+    }
+    
     fn handle_next_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.app_state.next_image();
         self.update_viewer(window, cx);
@@ -616,6 +688,10 @@ impl App {
     
     fn update_viewer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(path) = self.app_state.current_image().cloned() {
+            // Ensure viewport size is set before loading
+            let viewport_size = window.viewport_size();
+            self.viewer.update_viewport_size(viewport_size);
+            
             // Load the image first (this will call fit_to_window)
             self.viewer.load_image(path.clone());
             
@@ -749,6 +825,11 @@ impl Render for App {
             .track_focus(&self.focus_handle)
             .size_full()
             .bg(utils::style::Colors::background())
+            .when(self.drag_over, |div| {
+                // Show highlighted border when dragging files over the window
+                div.border_4()
+                    .border_color(gpui::rgb(0x50fa7b)) // Green highlight
+            })
             .on_mouse_down(MouseButton::Left, cx.listener(|this, event: &MouseDownEvent, _window, cx| {
                 this.mouse_button_down = true;
                 
@@ -935,6 +1016,18 @@ impl Render for App {
                         cx.notify();
                     }
                 }
+            }))
+            .on_drag_move(cx.listener(|this, _event: &DragMoveEvent<ExternalPaths>, _window, cx| {
+                // Set drag-over state to show visual feedback
+                if !this.drag_over {
+                    this.drag_over = true;
+                    cx.notify();
+                }
+            }))
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                // Clear drag-over state
+                this.drag_over = false;
+                this.handle_dropped_files(paths, window, cx);
             }))
             .child(cx.new(|_cx| self.viewer.clone()))
             // Render overlays on top with proper z-order
@@ -1291,6 +1384,7 @@ fn main() {
                         show_filters: false,
                         filter_controls,
                         last_frame_update: Instant::now(),
+                        drag_over: false,
                     }
                 })
         })
