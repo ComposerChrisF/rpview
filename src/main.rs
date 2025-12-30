@@ -1,5 +1,6 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 mod cli;
@@ -53,6 +54,9 @@ actions!(app, [
     ContrastDown,
     GammaUp,
     GammaDown,
+    OpenFile,
+    SaveFile,
+    SaveFileToDownloads,
 ]);
 
 struct App {
@@ -207,6 +211,168 @@ impl App {
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
+    }
+    
+    fn handle_open_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Open native file dialog for image selection
+        let mut file_dialog = rfd::FileDialog::new()
+            .add_filter("Images", &["png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp"])
+            .set_title("Open Image");
+        
+        // Set default directory to current image's parent directory if available
+        if let Some(current_path) = self.app_state.current_image() {
+            if let Some(parent) = current_path.parent() {
+                file_dialog = file_dialog.set_directory(parent);
+            }
+        }
+        
+        // Get selected files (supports multiple selection)
+        if let Some(files) = file_dialog.pick_files() {
+            if !files.is_empty() {
+                // Convert to PathBuf vector
+                let new_paths: Vec<PathBuf> = files.into_iter().collect();
+                
+                // Replace the current image list with the new selection
+                self.app_state.image_paths = new_paths;
+                self.app_state.current_index = 0;
+                
+                // Update viewer with first image from new selection
+                self.update_viewer();
+                self.update_window_title(window);
+                cx.notify();
+            }
+        }
+    }
+    
+    fn handle_save_file(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.handle_save_file_impl(None, cx);
+    }
+    
+    fn handle_save_file_to_downloads(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // Get the Downloads directory
+        let downloads_dir = dirs::download_dir();
+        self.handle_save_file_impl(downloads_dir, cx);
+    }
+    
+    fn handle_save_file_impl(&mut self, default_dir: Option<PathBuf>, cx: &mut Context<Self>) {
+        // Only save if we have a current image
+        if let Some(current_path) = self.app_state.current_image() {
+            // Get original filename without extension
+            let original_stem = current_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("image");
+            
+            // Get original extension (default to png if none)
+            let original_ext = current_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("png");
+            
+            // Generate suggested filename with _filtered suffix if filters are enabled
+            let suggested_name = if self.viewer.image_state.filters_enabled {
+                format!("{}_filtered.{}", original_stem, original_ext)
+            } else {
+                format!("{}.{}", original_stem, original_ext)
+            };
+            
+            // Open save dialog
+            let mut file_dialog = rfd::FileDialog::new()
+                .add_filter("PNG", &["png"])
+                .add_filter("JPEG", &["jpg", "jpeg"])
+                .add_filter("BMP", &["bmp"])
+                .add_filter("TIFF", &["tiff", "tif"])
+                .add_filter("WEBP", &["webp"])
+                .set_file_name(&suggested_name)
+                .set_title("Save Image");
+            
+            // Set default directory based on parameter
+            if let Some(dir) = default_dir {
+                file_dialog = file_dialog.set_directory(dir);
+            } else if let Some(parent) = current_path.parent() {
+                // Default to current image's parent directory
+                file_dialog = file_dialog.set_directory(parent);
+            }
+            
+            if let Some(save_path) = file_dialog.save_file() {
+                // Determine what to save based on filter state
+                let save_result = if self.viewer.image_state.filters_enabled {
+                    // Save the filtered image if filters are enabled and cached
+                    if let Some(loaded_image) = &self.viewer.current_image {
+                        if let Some(ref filtered_path) = loaded_image.filtered_path {
+                            // Copy the cached filtered image to the save location
+                            std::fs::copy(filtered_path, &save_path)
+                                .map(|_| ())
+                                .map_err(|e| format!("Failed to copy filtered image: {}", e))
+                        } else {
+                            // Filters enabled but no cache - load original and apply filters
+                            if let Ok(original_img) = image::open(&loaded_image.path) {
+                                let filters = &self.viewer.image_state.filters;
+                                let filtered_img = utils::filters::apply_filters(
+                                    &original_img,
+                                    filters.brightness,
+                                    filters.contrast,
+                                    filters.gamma,
+                                );
+                                self.save_dynamic_image_to_path(&filtered_img, &save_path)
+                            } else {
+                                Err("Failed to load original image".to_string())
+                            }
+                        }
+                    } else {
+                        Err("No image loaded".to_string())
+                    }
+                } else {
+                    // Save original image without filters
+                    if let Some(loaded_image) = &self.viewer.current_image {
+                        std::fs::copy(&loaded_image.path, &save_path)
+                            .map(|_| ())
+                            .map_err(|e| format!("Failed to copy image: {}", e))
+                    } else {
+                        Err("No image loaded".to_string())
+                    }
+                };
+                
+                // Handle save result
+                match save_result {
+                    Ok(()) => {
+                        println!("Image saved to: {}", save_path.display());
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to save image: {}", e);
+                    }
+                }
+            }
+        }
+        
+        cx.notify();
+    }
+    
+    fn save_dynamic_image_to_path(&self, image_data: &image::DynamicImage, save_path: &PathBuf) -> Result<(), String> {
+        // Determine output format from file extension
+        let extension = save_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("png")
+            .to_lowercase();
+        
+        let save_result = match extension.as_str() {
+            "png" => image_data.save_with_format(save_path, image::ImageFormat::Png),
+            "jpg" | "jpeg" => {
+                // Convert to RGB for JPEG (no alpha channel)
+                let rgb_image = image_data.to_rgb8();
+                rgb_image.save_with_format(save_path, image::ImageFormat::Jpeg)
+            }
+            "bmp" => image_data.save_with_format(save_path, image::ImageFormat::Bmp),
+            "tiff" | "tif" => image_data.save_with_format(save_path, image::ImageFormat::Tiff),
+            "webp" => image_data.save_with_format(save_path, image::ImageFormat::WebP),
+            _ => {
+                // Default to PNG for unknown extensions
+                image_data.save_with_format(save_path, image::ImageFormat::Png)
+            }
+        };
+        
+        save_result.map_err(|e| format!("Failed to save image: {}", e))
     }
     
     fn handle_next_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -786,6 +952,15 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &GammaDown, window, cx| {
                 this.handle_gamma_down(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &OpenFile, window, cx| {
+                this.handle_open_file(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SaveFile, window, cx| {
+                this.handle_save_file(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SaveFileToDownloads, window, cx| {
+                this.handle_save_file_to_downloads(window, cx);
+            }))
     }
 }
 
@@ -853,6 +1028,10 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("cmd-1", DisableFilters, None),
         KeyBinding::new("cmd-2", EnableFilters, None),
         KeyBinding::new("cmd-r", ResetFilters, None),
+        // File operations
+        KeyBinding::new("cmd-o", OpenFile, None),
+        KeyBinding::new("cmd-s", SaveFile, None),
+        KeyBinding::new("cmd-alt-s", SaveFileToDownloads, None),
     ]);
 }
 
