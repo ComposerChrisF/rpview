@@ -1,4 +1,4 @@
-use adabraka_ui::{components::scrollable, layout::{Align, HStack, ScrollList}, prelude::scrollable_vertical};
+use adabraka_ui::prelude::scrollable_vertical;
 use gpui::prelude::*;
 use gpui::*;
 use crate::utils::style::{Colors, Spacing, TextSize};

@@ -35,11 +35,13 @@ impl Colors {
         rgb(0xff5555).into()
     }
 
+    #[allow(dead_code)]
     /// Success/info color
     pub fn info() -> Hsla {
         rgb(0x50fa7b).into()
     }
 
+    #[allow(dead_code)]
     /// Overlay background (semi-transparent)
     pub fn overlay_bg() -> Hsla {
         let mut color: Hsla = rgb(0x000000).into();
@@ -47,6 +49,7 @@ impl Colors {
         color
     }
 
+    #[allow(dead_code)]
     /// Border color
     pub fn border() -> Hsla {
         rgb(0x444444).into()
@@ -98,6 +101,7 @@ impl TextSize {
         px(20.0)
     }
 
+    #[allow(dead_code)]
     pub fn xxl() -> Pixels {
         px(24.0)
     }

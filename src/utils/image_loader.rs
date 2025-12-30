@@ -18,12 +18,6 @@ pub fn load_image(path: &Path) -> AppResult<DynamicImage> {
     })
 }
 
-/// Load an image and convert it to RGBA8 format
-pub fn load_image_rgba(path: &Path) -> AppResult<image::RgbaImage> {
-    let img = load_image(path)?;
-    Ok(img.to_rgba8())
-}
-
 /// Get image dimensions without fully loading the image
 pub fn get_image_dimensions(path: &Path) -> AppResult<(u32, u32)> {
     let reader = image::ImageReader::open(path).map_err(|e| {
@@ -48,11 +42,6 @@ pub fn get_image_dimensions(path: &Path) -> AppResult<(u32, u32)> {
     })?;
     
     Ok(dimensions)
-}
-
-/// Check if a file can be loaded as an image
-pub fn can_load_image(path: &Path) -> bool {
-    image::open(path).is_ok()
 }
 
 #[cfg(test)]

@@ -83,20 +83,6 @@ pub struct ImageViewer {
 }
 
 impl ImageViewer {
-    pub fn new(cx: &mut Context<Self>) -> Self {
-        Self {
-            current_image: None,
-            error_message: None,
-            error_path: None,
-            focus_handle: cx.focus_handle(),
-            image_state: ImageState::new(),
-            viewport_size: None,
-            z_drag_state: None,
-            spacebar_drag_state: None,
-            preload_paths: Vec::new(),
-        }
-    }
-    
     /// Set paths to preload into GPU for smooth navigation
     pub fn set_preload_paths(&mut self, paths: Vec<PathBuf>) {
         self.preload_paths = paths;
@@ -535,34 +521,6 @@ impl ImageViewer {
         }
         
         false
-    }
-    
-    /// Get the path to display (handles animation frames)
-    /// Returns the path to the current frame for animated images, or the original/filtered path for static images
-    /// All frames are pre-cached on load, so this always returns a valid path for animations
-    pub fn get_display_path(&mut self) -> Option<PathBuf> {
-        let loaded = self.current_image.as_mut()?;
-        
-        // Check if this is an animated image
-        if let Some(anim_state) = &self.image_state.animation {
-            let frame_index = anim_state.current_frame;
-            
-            // Only return the frame if it's already cached
-            if frame_index < loaded.frame_cache_paths.len() {
-                let cached_path = &loaded.frame_cache_paths[frame_index];
-                if !cached_path.as_os_str().is_empty() && cached_path.exists() {
-                    return Some(cached_path.clone());
-                }
-            }
-            
-            // Frame not cached - this shouldn't happen if preload logic is working correctly
-            // Return None to show error rather than black screen
-            eprintln!("[WARNING] Frame {} not cached yet, animation logic should prevent this", frame_index);
-            return None;
-        }
-        
-        // For static images, use filtered path if available, otherwise original
-        Some(loaded.filtered_path.as_ref().unwrap_or(&loaded.path).clone())
     }
 }
 
