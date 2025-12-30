@@ -4,8 +4,10 @@ use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::utils::image_loader;
 use crate::utils::zoom;
 use crate::utils::filters;
+use crate::utils::animation::AnimationData;
 use crate::components::error_display::ErrorDisplay;
 use crate::components::zoom_indicator::ZoomIndicator;
+use crate::components::animation_indicator::AnimationIndicator;
 use crate::state::ImageState;
 use crate::state::image_state::FilterSettings;
 
@@ -19,6 +21,10 @@ pub struct LoadedImage {
     pub filtered_path: Option<PathBuf>,
     /// Filter settings used to generate the cached filtered image
     pub cached_filter_settings: Option<FilterSettings>,
+    /// Animation data (if this is an animated image)
+    pub animation_data: Option<AnimationData>,
+    /// Cached paths for each animation frame
+    pub frame_cache_paths: Vec<PathBuf>,
 }
 
 /// Component for viewing images
@@ -268,12 +274,50 @@ impl ImageViewer {
         // Get dimensions to validate the image can be loaded
         match image_loader::get_image_dimensions(&path) {
             Ok((width, height)) => {
+                // Try to load animation data if it's an animated image
+                let animation_data = crate::utils::animation::load_animation(&path)
+                    .ok()
+                    .flatten();
+                
+                // Pre-cache first few frames for smooth initial playback
+                let mut frame_cache_paths = Vec::new();
+                if let Some(ref anim_data) = animation_data {
+                    if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
+                        let base_name = format!("rpview_{}_{}", std::process::id(), 
+                            path.file_name().and_then(|n| n.to_str()).unwrap_or("anim"));
+                        
+                        // Pre-cache first 5 frames for immediate playback
+                        let frames_to_precache = std::cmp::min(5, anim_data.frames.len());
+                        for i in 0..frames_to_precache {
+                            let temp_path = temp_dir.join(format!("{}_{}.png", base_name, i));
+                            if anim_data.frames[i].image.save(&temp_path).is_ok() {
+                                frame_cache_paths.push(temp_path);
+                            } else {
+                                frame_cache_paths.push(PathBuf::new());
+                            }
+                        }
+                    }
+                }
+                
+                // Initialize animation state if we have animation data
+                if let Some(ref anim_data) = animation_data {
+                    use crate::state::image_state::AnimationState;
+                    self.image_state.animation = Some(AnimationState::new(
+                        anim_data.frame_count,
+                        anim_data.frame_durations(),
+                    ));
+                } else {
+                    self.image_state.animation = None;
+                }
+                
                 self.current_image = Some(LoadedImage {
                     path: path.clone(),
                     width,
                     height,
                     filtered_path: None,
                     cached_filter_settings: None,
+                    animation_data,
+                    frame_cache_paths,
                 });
                 self.error_message = None;
                 self.error_path = None;
@@ -365,6 +409,56 @@ impl ImageViewer {
         self.error_message = None;
         self.error_path = None;
     }
+    
+    /// Get the path to display (handles animation frames)
+    /// Returns the path to the current frame for animated images, or the original/filtered path for static images
+    pub fn get_display_path(&mut self) -> Option<PathBuf> {
+        let loaded = self.current_image.as_mut()?;
+        
+        // Check if this is an animated image
+        if let (Some(anim_state), Some(anim_data)) = (&self.image_state.animation, &loaded.animation_data) {
+            let frame_index = anim_state.current_frame;
+            
+            // Check if frame is already cached
+            if frame_index < loaded.frame_cache_paths.len() {
+                let cached_path = &loaded.frame_cache_paths[frame_index];
+                if !cached_path.as_os_str().is_empty() {
+                    return Some(cached_path.clone());
+                }
+            }
+            
+            // Cache this frame on-demand
+            if frame_index < anim_data.frames.len() {
+                if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
+                    let base_name = format!("rpview_{}_{}", std::process::id(), loaded.path.file_name()?.to_string_lossy());
+                    let temp_path = temp_dir.join(format!("{}_{}.png", base_name, frame_index));
+                    
+                    // Check if file already exists from previous load
+                    if temp_path.exists() {
+                        // Extend cache to include this frame
+                        while loaded.frame_cache_paths.len() <= frame_index {
+                            loaded.frame_cache_paths.push(PathBuf::new());
+                        }
+                        loaded.frame_cache_paths[frame_index] = temp_path.clone();
+                        return Some(temp_path);
+                    }
+                    
+                    // Save frame to disk
+                    if anim_data.frames[frame_index].image.save(&temp_path).is_ok() {
+                        // Extend cache to include this frame
+                        while loaded.frame_cache_paths.len() <= frame_index {
+                            loaded.frame_cache_paths.push(PathBuf::new());
+                        }
+                        loaded.frame_cache_paths[frame_index] = temp_path.clone();
+                        return Some(temp_path);
+                    }
+                }
+            }
+        }
+        
+        // For static images, use filtered path if available, otherwise original
+        Some(loaded.filtered_path.as_ref().unwrap_or(&loaded.path).clone())
+    }
 }
 
 impl Render for ImageViewer {
@@ -390,8 +484,18 @@ impl Render for ImageViewer {
             // Render the actual image using GPUI's img() function
             let width = loaded.width;
             let height = loaded.height;
-            // Use filtered image if available, otherwise use original
-            let path = loaded.filtered_path.as_ref().unwrap_or(&loaded.path);
+            // Get the display path (handles animation frames and filters)
+            let display_path = self.get_display_path();
+            
+            if display_path.is_none() {
+                // Failed to get display path, show error
+                return div()
+                    .size_full()
+                    .child(cx.new(|_cx| ErrorDisplay::new("Failed to load image frame".to_string())))
+                    .into_any_element();
+            }
+            
+            let path = display_path.unwrap();
             
             // Apply zoom to image dimensions
             let zoomed_width = (width as f32 * self.image_state.zoom) as u32;
@@ -404,7 +508,7 @@ impl Render for ImageViewer {
             let zoom_level = self.image_state.zoom;
             let is_fit = self.image_state.is_fit_to_window;
             
-            div()
+            let mut container = div()
                 .size_full()
                 .bg(Colors::background())
                 .overflow_hidden()
@@ -420,8 +524,20 @@ impl Render for ImageViewer {
                 .child(
                     // Zoom indicator overlay
                     cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit))
-                )
-                .into_any_element()
+                );
+            
+            // Add animation indicator if this is an animated image
+            if let Some(ref anim_state) = self.image_state.animation {
+                container = container.child(
+                    cx.new(|_cx| AnimationIndicator::new(
+                        anim_state.current_frame,
+                        anim_state.frame_count,
+                        anim_state.is_playing,
+                    ))
+                );
+            }
+            
+            container.into_any_element()
         } else {
             // Show "no image" message
             div()
@@ -451,5 +567,6 @@ impl Render for ImageViewer {
             .size_full()
             .bg(Colors::background())
             .child(content)
+            .into_any_element()
     }
 }
