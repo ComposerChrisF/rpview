@@ -77,6 +77,9 @@ pub struct ImageViewer {
     /// - Tracks previous mouse position for 1:1 pixel movement panning
     /// - Sentinel value (0,0) indicates spacebar held but not actively dragging
     pub spacebar_drag_state: Option<(f32, f32)>,
+    /// Paths to preload into GPU (for smooth navigation)
+    /// These images are rendered invisibly to prime the GPU texture cache
+    pub preload_paths: Vec<PathBuf>,
 }
 
 impl ImageViewer {
@@ -90,7 +93,13 @@ impl ImageViewer {
             viewport_size: None,
             z_drag_state: None,
             spacebar_drag_state: None,
+            preload_paths: Vec::new(),
         }
+    }
+    
+    /// Set paths to preload into GPU for smooth navigation
+    pub fn set_preload_paths(&mut self, paths: Vec<PathBuf>) {
+        self.preload_paths = paths;
     }
     
     /// Set the image state
@@ -659,6 +668,28 @@ impl Render for ImageViewer {
                                 .opacity(0.0)  // Make invisible
                         );
                     }
+                }
+            }
+            
+            // Preload next/previous images in navigation list to avoid GPU texture loading flash
+            // Uses the EXACT same technique as animation frame preloading above:
+            // - Render off-screen at -10000px
+            // - Use opacity(0.0) to make invisible
+            // - Use full zoomed dimensions to ensure texture is loaded
+            // This forces GPUI to load textures into GPU memory before navigation
+            for preload_path in &self.preload_paths {
+                if preload_path.exists() {
+                    let preload_id = ElementId::Name(format!("preload-{}", preload_path.display()).into());
+                    container = container.child(
+                        img(preload_path.clone())
+                            .id(preload_id)
+                            .w(px(zoomed_width as f32))  // Use full size like animation preload
+                            .h(px(zoomed_height as f32))
+                            .absolute()
+                            .left(px(-10000.0))  // Position off-screen like animation preload
+                            .top(px(0.0))
+                            .opacity(0.0)  // Make invisible like animation preload
+                    );
                 }
             }
             
