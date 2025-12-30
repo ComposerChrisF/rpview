@@ -12,8 +12,9 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - **Phase 6** (Advanced Zoom): ✅ Complete
 - **Phase 7** (Advanced Pan): ✅ Complete
 - **Phase 8** (User Interface): ✅ Complete
-- **Phase 9** (Filter System): 🎯 Next Priority
-- **Phase 10-15**: ⏳ Planned
+- **Phase 9** (Filter System): ✅ Complete
+- **Phase 10** (File Operations): 🎯 Next Priority
+- **Phase 11-15**: ⏳ Planned
 
 ## Phase 1: Project Foundation & Basic Structure ✅
 
@@ -261,34 +262,38 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 ### Status Indicators
 - [x] Window title shows current file name and position (already implemented in Phase 3)
 
-## Phase 9: Filter System
+## Phase 9: Filter System ✅
 
 ### Filter Infrastructure
-- [ ] Add filter settings to ImageState
-- [ ] Create filter processing utilities
-- [ ] Implement brightness adjustment (-100 to +100)
-- [ ] Implement contrast adjustment (-100 to +100)
-- [ ] Implement gamma correction (0.1 to 10.0)
+- [x] Add filter settings to ImageState
+- [x] Create filter processing utilities
+- [x] Implement brightness adjustment (-100 to +100)
+- [x] Implement contrast adjustment (-100 to +100)
+- [x] Implement gamma correction (0.1 to 10.0)
 
 ### Filter Application
-- [ ] Apply filters during image rendering
-- [ ] Cache filtered images for performance
-- [ ] Update display when filters change
-- [ ] Handle filter state in per-image state
+- [x] Apply filters during image rendering
+- [x] Cache filtered images for performance
+- [x] Update display when filters change
+- [x] Handle filter state in per-image state
 
 ### Filter Controls UI
-- [ ] Create FilterControls component
-- [ ] Design slider UI for each filter
-- [ ] Implement real-time filter preview
-- [ ] Add numeric value display
-- [ ] Implement Ctrl/Cmd+F toggle
+- [x] Create FilterControls component (using adabraka-ui sliders)
+- [x] Design slider UI for each filter
+- [x] Implement real-time filter preview
+- [x] Add numeric value display
+- [x] Implement Ctrl/Cmd+F toggle
+- [x] Replace custom sliders with adabraka-ui Slider components
+- [x] Implement polling-based change detection
+- [x] Fix GPUI image caching with unique temp filenames
+- [x] Add proper focus management on filter panel dismiss
 
 ### Filter State Management
-- [ ] Implement Ctrl/Cmd+1 to disable filters
-- [ ] Implement Ctrl/Cmd+2 to re-enable filters
-- [ ] Preserve filter values when disabled
-- [ ] Reset filters to defaults when needed
-- [ ] Persist filters per-image
+- [x] Implement Ctrl/Cmd+1 to disable filters
+- [x] Implement Ctrl/Cmd+2 to re-enable filters
+- [x] Preserve filter values when disabled
+- [x] Reset filters to defaults when needed
+- [x] Persist filters per-image
 
 ## Phase 10: File Operations
 
@@ -632,4 +637,67 @@ Key implementation details:
 1. Attempted vertical scrolling for help overlay but encountered GPUI limitations with visible scrollbars
 2. Removed the bottom info panel (filename and dimensions display) for a cleaner, more minimal interface
 3. Fixed fit-to-window viewport calculation to use `window.viewport_size()` instead of `window.bounds()`, which correctly excludes the title bar and provides accurate content area dimensions
+
+### Phase 9 Summary
+Phase 9 has been successfully completed! The application now:
+- Implements comprehensive CPU-based image filtering system
+- Provides three adjustable filters: brightness (-100 to +100), contrast (-100 to +100), and gamma (0.1 to 10.0)
+- Features **fully interactive** filter sliders using adabraka-ui's Slider components
+- Displays real-time visual feedback with slider values and smooth dragging
+- Caches filtered images to temporary files for performance optimization
+- Supports per-image filter state persistence across navigation
+- Allows enabling/disabling filters while preserving filter values
+- Provides keyboard shortcuts for all filter operations:
+  - Cmd/Ctrl+F: Toggle filter controls overlay
+  - Cmd/Ctrl+1: Disable filters
+  - Cmd/Ctrl+2: Enable filters
+  - Cmd/Ctrl+R: Reset all filters to defaults
+- Integrates seamlessly with existing per-image state management system
+- Automatically cleans up temporary filtered image files when filters change or are disabled
+- Updates help overlay with filter keyboard shortcuts
+- Renders filtered images using GPUI's img() function with cached PNG files
+- **Properly restores focus** when dismissing filter panel (keyboard shortcuts work immediately)
+- **Solves GPUI image caching** with unique timestamped filenames for each filtered image
+
+Key implementation details:
+- **FilterControls component** (src/components/filter_controls.rs) using adabraka-ui Slider/SliderState
+  - Three Entity<SliderState> instances for brightness, contrast, and gamma
+  - Stores last known values to detect changes during polling
+  - get_filters_and_detect_change() method returns (FilterSettings, changed)
+  - update_from_filters() syncs slider values when filters reset
+- **Polling-based architecture** - App::render() polls FilterControls each frame when visible
+  - Avoids callback complexity and borrowing conflicts
+  - Detects changes by comparing current vs last slider values
+  - Updates viewer and regenerates cache only when values change
+- Filter utilities module (src/utils/filters.rs) with CPU-based image processing functions
+- FilterSettings struct (src/state/image_state.rs:54) with PartialEq for comparison
+- Filter caching in LoadedImage (src/components/image_viewer.rs:14) stores filtered image path and settings
+- **Unique timestamped filenames** solve GPUI image caching issue:
+  - Format: `rpview_filtered_{pid}_{nanos}.png`
+  - Each filter change creates new file with unique timestamp
+  - GPUI sees new path and reloads image (not cached)
+  - Old filtered files automatically cleaned up
+- update_filtered_cache() method (src/components/image_viewer.rs:293) regenerates filters when needed
+- Filter actions (src/main.rs) for toggle, enable/disable, reset
+- **Focus management** - handle_escape() and handle_toggle_filters() restore focus to main app
+- Keyboard bindings for Cmd/Ctrl+F, 1, 2, and R
+- Brightness filter uses linear adjustment (-255 to +255 mapped from -100 to +100)
+- Contrast filter uses factor-based adjustment (0.1 to 3.0 range)
+- Gamma filter uses lookup table optimization for performance
+- Filters applied in order: brightness → contrast → gamma
+
+**Implementation Notes**:
+- Replaced ~300 lines of custom slider code with adabraka-ui components
+- Polling approach is GPUI-idiomatic (reactive rendering model)
+- CPU-based filtering chosen for Phase 9 (simpler, works immediately)
+- GPU-accelerated filters deferred to Phase 13 performance optimization
+- Unique filename approach preferred over in-memory for code simplicity
+- Temp files in system temp directory with automatic cleanup
+- Filter state persists per-image through existing ImageState cache system
+
+**Architecture Decision - Polling vs Callbacks**:
+- Initial callback approach failed due to stale closures and borrowing conflicts
+- Polling in render() is the correct pattern for GPUI's reactive model
+- No performance concern - render already runs on every frame
+- Clean separation: FilterControls manages sliders, App detects changes
 

@@ -9,7 +9,7 @@ mod state;
 mod utils;
 
 use cli::Cli;
-use components::{DebugOverlay, HelpOverlay, ImageViewer};
+use components::{DebugOverlay, FilterControls, HelpOverlay, ImageViewer};
 use state::AppState;
 
 actions!(app, [
@@ -43,6 +43,16 @@ actions!(app, [
     PanRightSlow,
     ToggleHelp,
     ToggleDebug,
+    ToggleFilters,
+    DisableFilters,
+    EnableFilters,
+    ResetFilters,
+    BrightnessUp,
+    BrightnessDown,
+    ContrastUp,
+    ContrastDown,
+    GammaUp,
+    GammaDown,
 ]);
 
 struct App {
@@ -61,18 +71,30 @@ struct App {
     show_help: bool,
     /// Whether debug overlay is visible
     show_debug: bool,
+    /// Whether filter controls overlay is visible
+    show_filters: bool,
+    /// Filter controls component
+    filter_controls: Entity<FilterControls>,
 }
  
 impl App {
-    fn handle_escape(&mut self, cx: &mut Context<Self>) {
-        // If help or debug overlay is open, close it instead of counting toward quit
+    fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // If help, debug, or filter overlay is open, close it instead of counting toward quit
         if self.show_help {
             self.show_help = false;
+            self.focus_handle.focus(window);
             cx.notify();
             return;
         }
         if self.show_debug {
             self.show_debug = false;
+            self.focus_handle.focus(window);
+            cx.notify();
+            return;
+        }
+        if self.show_filters {
+            self.show_filters = false;
+            self.focus_handle.focus(window);
             cx.notify();
             return;
         }
@@ -98,6 +120,92 @@ impl App {
     
     fn handle_toggle_debug(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.show_debug = !self.show_debug;
+        cx.notify();
+    }
+    
+    fn handle_toggle_filters(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_filters = !self.show_filters;
+        
+        // Restore focus to the main app when hiding filters
+        if !self.show_filters {
+            self.focus_handle.focus(window);
+        }
+        
+        cx.notify();
+    }
+    
+    fn handle_disable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.image_state.filters_enabled = false;
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_enable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.image_state.filters_enabled = true;
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_reset_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.image_state.filters = state::image_state::FilterSettings::default();
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
+        
+        // Update the filter controls sliders to reflect the reset values
+        self.filter_controls.update(cx, |controls, cx| {
+            controls.update_from_filters(state::image_state::FilterSettings::default(), cx);
+        });
+        
+        cx.notify();
+    }
+    
+    fn handle_brightness_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.viewer.image_state.filters.brightness;
+        self.viewer.image_state.filters.brightness = (current + 5.0).min(100.0);
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_brightness_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.viewer.image_state.filters.brightness;
+        self.viewer.image_state.filters.brightness = (current - 5.0).max(-100.0);
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_contrast_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.viewer.image_state.filters.contrast;
+        self.viewer.image_state.filters.contrast = (current + 5.0).min(100.0);
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_contrast_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.viewer.image_state.filters.contrast;
+        self.viewer.image_state.filters.contrast = (current - 5.0).max(-100.0);
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_gamma_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.viewer.image_state.filters.gamma;
+        self.viewer.image_state.filters.gamma = (current + 0.1).min(10.0);
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
+    fn handle_gamma_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.viewer.image_state.filters.gamma;
+        self.viewer.image_state.filters.gamma = (current - 0.1).max(0.1);
+        self.viewer.update_filtered_cache();
+        self.save_current_image_state();
         cx.notify();
     }
     
@@ -313,6 +421,29 @@ impl Render for App {
         // Update viewer's viewport size from window's drawable content area
         let viewport_size = window.viewport_size();
         self.viewer.update_viewport_size(viewport_size);
+        
+        // Poll filter controls for changes
+        if self.show_filters {
+            eprintln!("[App::render] Polling filter controls...");
+            let (current_filters, changed) = self.filter_controls.update(cx, |fc, cx| {
+                fc.get_filters_and_detect_change(cx)
+            });
+            
+            if changed {
+                eprintln!("[App::render] Filters changed! Updating viewer with brightness={:.1}, contrast={:.1}, gamma={:.2}", 
+                    current_filters.brightness, current_filters.contrast, current_filters.gamma);
+                eprintln!("[App::render] Old viewer filters: brightness={:.1}, contrast={:.1}, gamma={:.2}",
+                    self.viewer.image_state.filters.brightness,
+                    self.viewer.image_state.filters.contrast,
+                    self.viewer.image_state.filters.gamma);
+                
+                self.viewer.image_state.filters = current_filters;
+                self.viewer.update_filtered_cache();
+                self.save_current_image_state();
+                
+                eprintln!("[App::render] Viewer filters updated, cache regenerated");
+            }
+        }
         
         // Update Z-drag state based on z_key_held
         if self.z_key_held && self.viewer.z_drag_state.is_none() {
@@ -535,11 +666,14 @@ impl Render for App {
                     self.viewer.viewport_size,
                 )))
             })
+            .when(self.show_filters, |el| {
+                el.child(self.filter_controls.clone())
+            })
             .on_action(|_: &CloseWindow, window, _| {
                 window.remove_window();
             })
-            .on_action(cx.listener(|this, _: &EscapePressed, _window, cx| {
-                this.handle_escape(cx);
+            .on_action(cx.listener(|this, _: &EscapePressed, window, cx| {
+                this.handle_escape(window, cx);
             }))
             .on_action(cx.listener(|this, _: &NextImage, window, cx| {
                 this.handle_next_image(window, cx);
@@ -622,7 +756,104 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &ToggleDebug, window, cx| {
                 this.handle_toggle_debug(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ToggleFilters, window, cx| {
+                this.handle_toggle_filters(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &DisableFilters, window, cx| {
+                this.handle_disable_filters(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &EnableFilters, window, cx| {
+                this.handle_enable_filters(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ResetFilters, window, cx| {
+                this.handle_reset_filters(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &BrightnessUp, window, cx| {
+                this.handle_brightness_up(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &BrightnessDown, window, cx| {
+                this.handle_brightness_down(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ContrastUp, window, cx| {
+                this.handle_contrast_up(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ContrastDown, window, cx| {
+                this.handle_contrast_down(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &GammaUp, window, cx| {
+                this.handle_gamma_up(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &GammaDown, window, cx| {
+                this.handle_gamma_down(window, cx);
+            }))
     }
+}
+
+fn setup_key_bindings(cx: &mut gpui::App) {
+    cx.bind_keys([
+        KeyBinding::new("cmd-w", CloseWindow, None),
+        KeyBinding::new("cmd-q", Quit, None),
+        KeyBinding::new("escape", EscapePressed, None),
+        KeyBinding::new("right", NextImage, None),
+        KeyBinding::new("left", PreviousImage, None),
+        KeyBinding::new("shift-cmd-a", SortAlphabetical, None),
+        KeyBinding::new("shift-cmd-m", SortByModified, None),
+        // Zoom controls - base (normal speed)
+        KeyBinding::new("=", ZoomIn, None),  // = key (same as +)
+        KeyBinding::new("+", ZoomIn, None),
+        KeyBinding::new("-", ZoomOut, None),
+        KeyBinding::new("0", ZoomReset, None),
+        // Zoom controls - fast (with Shift)
+        KeyBinding::new("shift-=", ZoomInFast, None),
+        KeyBinding::new("shift-+", ZoomInFast, None),
+        KeyBinding::new("shift--", ZoomOutFast, None),
+        // Zoom controls - slow (with Cmd/Ctrl)
+        KeyBinding::new("cmd-=", ZoomInSlow, None),
+        KeyBinding::new("cmd-+", ZoomInSlow, None),
+        KeyBinding::new("cmd--", ZoomOutSlow, None),
+        // Zoom controls - incremental (with Shift+Cmd/Ctrl)
+        KeyBinding::new("shift-cmd-=", ZoomInIncremental, None),
+        KeyBinding::new("shift-cmd-+", ZoomInIncremental, None),
+        KeyBinding::new("shift-cmd--", ZoomOutIncremental, None),
+        // Pan controls with WASD (base speed: 10px)
+        KeyBinding::new("w", PanUp, None),
+        KeyBinding::new("a", PanLeft, None),
+        KeyBinding::new("s", PanDown, None),
+        KeyBinding::new("d", PanRight, None),
+        // Pan controls with IJKL (base speed: 10px)
+        KeyBinding::new("i", PanUp, None),
+        KeyBinding::new("j", PanLeft, None),
+        KeyBinding::new("k", PanDown, None),
+        KeyBinding::new("l", PanRight, None),
+        // Fast pan with Shift (3x speed: 30px)
+        KeyBinding::new("shift-w", PanUpFast, None),
+        KeyBinding::new("shift-a", PanLeftFast, None),
+        KeyBinding::new("shift-s", PanDownFast, None),
+        KeyBinding::new("shift-d", PanRightFast, None),
+        KeyBinding::new("shift-i", PanUpFast, None),
+        KeyBinding::new("shift-j", PanLeftFast, None),
+        KeyBinding::new("shift-k", PanDownFast, None),
+        KeyBinding::new("shift-l", PanRightFast, None),
+        // Slow pan with Ctrl/Cmd (1px)
+        KeyBinding::new("cmd-w", PanUpSlow, None),
+        KeyBinding::new("cmd-a", PanLeftSlow, None),
+        KeyBinding::new("cmd-s", PanDownSlow, None),
+        KeyBinding::new("cmd-d", PanRightSlow, None),
+        KeyBinding::new("cmd-i", PanUpSlow, None),
+        KeyBinding::new("cmd-j", PanLeftSlow, None),
+        KeyBinding::new("cmd-k", PanDownSlow, None),
+        KeyBinding::new("cmd-l", PanRightSlow, None),
+        // Help and debug overlays
+        KeyBinding::new("h", ToggleHelp, None),
+        KeyBinding::new("?", ToggleHelp, None),
+        KeyBinding::new("f1", ToggleHelp, None),
+        KeyBinding::new("f12", ToggleDebug, None),
+        // Filter controls
+        KeyBinding::new("cmd-f", ToggleFilters, None),
+        KeyBinding::new("cmd-1", DisableFilters, None),
+        KeyBinding::new("cmd-2", EnableFilters, None),
+        KeyBinding::new("cmd-r", ResetFilters, None),
+    ]);
 }
 
 fn main() {
@@ -669,6 +900,8 @@ fn main() {
     let first_image_path = app_state.current_image().cloned();
     
     Application::new().run(move |cx: &mut gpui::App| {
+        adabraka_ui::init(cx);
+        
         cx.on_window_closed(|cx| {
             if cx.windows().is_empty() {
                 cx.quit();
@@ -676,65 +909,7 @@ fn main() {
         })
         .detach();
         
-        cx.bind_keys([
-            KeyBinding::new("cmd-w", CloseWindow, None),
-            KeyBinding::new("cmd-q", Quit, None),
-            KeyBinding::new("escape", EscapePressed, None),
-            KeyBinding::new("right", NextImage, None),
-            KeyBinding::new("left", PreviousImage, None),
-            KeyBinding::new("shift-cmd-a", SortAlphabetical, None),
-            KeyBinding::new("shift-cmd-m", SortByModified, None),
-            // Zoom controls - base (normal speed)
-            KeyBinding::new("=", ZoomIn, None),  // = key (same as +)
-            KeyBinding::new("+", ZoomIn, None),
-            KeyBinding::new("-", ZoomOut, None),
-            KeyBinding::new("0", ZoomReset, None),
-            // Zoom controls - fast (with Shift)
-            KeyBinding::new("shift-=", ZoomInFast, None),
-            KeyBinding::new("shift-+", ZoomInFast, None),
-            KeyBinding::new("shift--", ZoomOutFast, None),
-            // Zoom controls - slow (with Cmd/Ctrl)
-            KeyBinding::new("cmd-=", ZoomInSlow, None),
-            KeyBinding::new("cmd-+", ZoomInSlow, None),
-            KeyBinding::new("cmd--", ZoomOutSlow, None),
-            // Zoom controls - incremental (with Shift+Cmd/Ctrl)
-            KeyBinding::new("shift-cmd-=", ZoomInIncremental, None),
-            KeyBinding::new("shift-cmd-+", ZoomInIncremental, None),
-            KeyBinding::new("shift-cmd--", ZoomOutIncremental, None),
-            // Pan controls with WASD (base speed: 10px)
-            KeyBinding::new("w", PanUp, None),
-            KeyBinding::new("a", PanLeft, None),
-            KeyBinding::new("s", PanDown, None),
-            KeyBinding::new("d", PanRight, None),
-            // Pan controls with IJKL (base speed: 10px)
-            KeyBinding::new("i", PanUp, None),
-            KeyBinding::new("j", PanLeft, None),
-            KeyBinding::new("k", PanDown, None),
-            KeyBinding::new("l", PanRight, None),
-            // Fast pan with Shift (3x speed: 30px)
-            KeyBinding::new("shift-w", PanUpFast, None),
-            KeyBinding::new("shift-a", PanLeftFast, None),
-            KeyBinding::new("shift-s", PanDownFast, None),
-            KeyBinding::new("shift-d", PanRightFast, None),
-            KeyBinding::new("shift-i", PanUpFast, None),
-            KeyBinding::new("shift-j", PanLeftFast, None),
-            KeyBinding::new("shift-k", PanDownFast, None),
-            KeyBinding::new("shift-l", PanRightFast, None),
-            // Slow pan with Ctrl/Cmd (1px)
-            KeyBinding::new("cmd-w", PanUpSlow, None),
-            KeyBinding::new("cmd-a", PanLeftSlow, None),
-            KeyBinding::new("cmd-s", PanDownSlow, None),
-            KeyBinding::new("cmd-d", PanRightSlow, None),
-            KeyBinding::new("cmd-i", PanUpSlow, None),
-            KeyBinding::new("cmd-j", PanLeftSlow, None),
-            KeyBinding::new("cmd-k", PanDownSlow, None),
-            KeyBinding::new("cmd-l", PanRightSlow, None),
-            // Help and debug overlays
-            KeyBinding::new("h", ToggleHelp, None),
-            KeyBinding::new("?", ToggleHelp, None),
-            KeyBinding::new("f1", ToggleHelp, None),
-            KeyBinding::new("f12", ToggleDebug, None),
-        ]);
+        setup_key_bindings(cx);
         
         cx.on_action(|_: &Quit, cx| {
             cx.quit();
@@ -786,6 +961,11 @@ fn main() {
                         window.set_window_title("rpview-gpui");
                     }
                     
+                    // Create filter controls
+                    let filter_controls = inner_cx.new(|cx| {
+                        FilterControls::new(viewer.image_state.filters, cx)
+                    });
+                    
                     App {
                         app_state,
                         viewer,
@@ -796,6 +976,8 @@ fn main() {
                         mouse_button_down: false,
                         show_help: false,
                         show_debug: false,
+                        show_filters: false,
+                        filter_controls,
                     }
                 })
         })
