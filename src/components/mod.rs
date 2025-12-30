@@ -4,6 +4,7 @@ pub mod error_display;
 pub mod filter_controls;
 pub mod help_overlay;
 pub mod image_viewer;
+pub mod loading_indicator;
 pub mod zoom_indicator;
 
 pub use debug_overlay::DebugOverlay;

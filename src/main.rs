@@ -660,28 +660,16 @@ impl App {
         self.viewer.set_image_state(state);
     }
     
-    fn update_viewer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn update_viewer(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
         if let Some(path) = self.app_state.current_image().cloned() {
             // Ensure viewport size is set before loading
             let viewport_size = window.viewport_size();
             self.viewer.update_viewport_size(viewport_size);
             
-            // Load the image first (this will call fit_to_window)
-            self.viewer.load_image(path.clone());
+            // Load the image asynchronously (non-blocking)
+            self.viewer.load_image_async(path.clone());
             
-            // Only load cached state if we have previously saved state for this image
-            if self.app_state.image_states.contains_key(&path) {
-                self.load_current_image_state();
-            }
-            // Otherwise, keep the fit-to-window state that load_image set
-            
-            // Start animation if this is an animated image and it's set to play
-            if let Some(ref anim_state) = self.viewer.image_state.animation {
-                if anim_state.is_playing {
-                    self.last_frame_update = Instant::now();
-                    cx.notify();
-                }
-            }
+            // State will be loaded when async load completes (in render loop)
         } else {
             self.viewer.clear();
         }
@@ -708,6 +696,32 @@ impl App {
 
 impl Render for App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Check if async image loading has completed
+        if self.viewer.check_async_load() {
+            // Image loaded successfully or failed - load state and setup animation
+            if let Some(path) = self.app_state.current_image().cloned() {
+                // Load cached state if available
+                if self.app_state.image_states.contains_key(&path) {
+                    self.load_current_image_state();
+                }
+                
+                // Start animation if this is an animated image and it's set to play
+                if let Some(ref anim_state) = self.viewer.image_state.animation {
+                    if anim_state.is_playing {
+                        self.last_frame_update = Instant::now();
+                    }
+                }
+            }
+            
+            // Request re-render to show the loaded image
+            cx.notify();
+        }
+        
+        // If still loading, request another render to check again
+        if self.viewer.is_loading {
+            window.request_animation_frame();
+        }
+        
         // Update viewer's viewport size from window's drawable content area
         let viewport_size = window.viewport_size();
         self.viewer.update_viewport_size(viewport_size);
@@ -1015,7 +1029,7 @@ impl Render for App {
                 this.drag_over = false;
                 this.handle_dropped_files(paths, window, cx);
             }))
-            .child(cx.new(|_cx| self.viewer.clone()))
+            .child(self.viewer.render_view(cx))
             // Render overlays on top with proper z-order
             .when(self.show_help, |el| {
                 el.child(cx.new(|_cx| HelpOverlay::new()))
@@ -1328,10 +1342,12 @@ fn main() {
                         z_drag_state: None,
                         spacebar_drag_state: None,
                         preload_paths: Vec::new(),
+                        loading_handle: None,
+                        is_loading: false,
                     };
                     
                     if let Some(ref path) = first_image_path {
-                        viewer.load_image(path.clone());
+                        viewer.load_image_async(path.clone());
                     } else {
                         // No images found - show error with canonical directory path
                         let canonical_dir = search_dir.canonicalize()
