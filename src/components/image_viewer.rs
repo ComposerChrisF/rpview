@@ -54,7 +54,6 @@ pub struct LoadedImage {
 }
 
 /// Component for viewing images
-#[derive(Clone)]
 pub struct ImageViewer {
     /// Currently loaded image
     pub current_image: Option<LoadedImage>,
@@ -80,6 +79,10 @@ pub struct ImageViewer {
     /// Paths to preload into GPU (for smooth navigation)
     /// These images are rendered invisibly to prime the GPU texture cache
     pub preload_paths: Vec<PathBuf>,
+    /// Active async loading operation
+    pub loading_handle: Option<image_loader::LoaderHandle>,
+    /// Loading state indicator
+    pub is_loading: bool,
 }
 
 impl ImageViewer {
@@ -290,7 +293,7 @@ impl ImageViewer {
         self.image_state.is_fit_to_window = false;
     }
     
-    /// Load an image from a path
+    /// Load an image from a path (synchronous, legacy)
     /// 
     /// For animated images (GIF, WEBP), this implements a progressive loading strategy:
     /// 1. Cache first 3 frames immediately for instant display
@@ -301,6 +304,10 @@ impl ImageViewer {
     /// - Fast initial display (~100-200ms instead of waiting for all frames)
     /// - Smooth playback after first loop (all frames cached)
     /// - No black flashing (GPU preloading in render)
+    /// 
+    /// Note: This method is kept for testing but not used in production.
+    /// Use `load_image_async()` instead for non-blocking loading.
+    #[allow(dead_code)]
     pub fn load_image(&mut self, path: PathBuf) {
         // Get dimensions to validate the image can be loaded
         match image_loader::get_image_dimensions(&path) {
@@ -381,6 +388,94 @@ impl ImageViewer {
                 self.error_path = Some(path);
             }
         }
+    }
+    
+    /// Start loading an image asynchronously in the background
+    pub fn load_image_async(&mut self, path: PathBuf) {
+        // Cancel any previous loading operation
+        if let Some(handle) = self.loading_handle.take() {
+            handle.cancel();
+        }
+        
+        // Start new async load
+        eprintln!("[ASYNC] Starting async load for: {}", path.display());
+        self.loading_handle = Some(image_loader::load_image_async(path));
+        self.is_loading = true;
+        
+        // Clear previous image and errors
+        self.current_image = None;
+        self.error_message = None;
+        self.error_path = None;
+    }
+    
+    /// Check if async loading has completed and process the result
+    /// Returns true if an image was loaded or an error occurred
+    pub fn check_async_load(&mut self) -> bool {
+        if let Some(handle) = &self.loading_handle {
+            if let Some(msg) = handle.try_recv() {
+                // Clear the handle since loading is complete
+                self.loading_handle = None;
+                self.is_loading = false;
+                
+                match msg {
+                    image_loader::LoaderMessage::Success(data) => {
+                        eprintln!("[ASYNC] Load complete: {}", data.path.display());
+                        
+                        // Prepare frame cache paths
+                        let mut frame_cache_paths = data.initial_frame_paths.clone();
+                        if let Some(ref anim_data) = data.animation_data {
+                            // Pre-allocate empty slots for remaining frames
+                            while frame_cache_paths.len() < anim_data.frames.len() {
+                                frame_cache_paths.push(PathBuf::new());
+                            }
+                        }
+                        
+                        // Initialize animation state if we have animation data
+                        if let Some(ref anim_data) = data.animation_data {
+                            use crate::state::image_state::AnimationState;
+                            let mut anim_state = AnimationState::new(
+                                anim_data.frame_count,
+                                anim_data.frame_durations(),
+                            );
+                            let cached_count = frame_cache_paths.iter()
+                                .filter(|p| !p.as_os_str().is_empty() && p.exists())
+                                .count();
+                            anim_state.next_frame_ready = cached_count >= 2;
+                            self.image_state.animation = Some(anim_state);
+                        } else {
+                            self.image_state.animation = None;
+                        }
+                        
+                        self.current_image = Some(LoadedImage {
+                            path: data.path,
+                            width: data.width,
+                            height: data.height,
+                            filtered_path: None,
+                            cached_filter_settings: None,
+                            animation_data: data.animation_data,
+                            frame_cache_paths,
+                        });
+                        self.error_message = None;
+                        self.error_path = None;
+                        
+                        // Fit to window on load
+                        self.fit_to_window();
+                        
+                        return true;
+                    }
+                    image_loader::LoaderMessage::Error(path, msg) => {
+                        eprintln!("[ASYNC] Load failed: {}: {}", path.display(), msg);
+                        self.current_image = None;
+                        self.error_message = Some(msg);
+                        self.error_path = Some(path);
+                        
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        false
     }
     
     /// Update filtered image cache if needed
@@ -524,11 +619,168 @@ impl ImageViewer {
     }
 }
 
+impl ImageViewer {
+    /// Render the image viewer as an element (for inline rendering without cx.new())
+    pub fn render_view<V>(&self, cx: &mut Context<V>) -> impl IntoElement {
+        let content = if self.is_loading {
+            // Show loading indicator
+            use crate::components::loading_indicator::LoadingIndicator;
+            div()
+                .size_full()
+                .child(cx.new(|_cx| LoadingIndicator::new("Loading image...")))
+                .into_any_element()
+        } else if let Some(ref error) = self.error_message {
+            // Show error message with full canonical path if available
+            let full_message = if let Some(ref path) = self.error_path {
+                let canonical_path = path.canonicalize()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|_| path.display().to_string());
+                format!("{}\n\nFull path: {}", error, canonical_path)
+            } else {
+                error.clone()
+            };
+            
+            div()
+                .size_full()
+                .child(cx.new(|_cx| ErrorDisplay::new(full_message)))
+                .into_any_element()
+        } else if let Some(ref loaded) = self.current_image {
+            self.render_image(loaded, cx)
+        } else {
+            div().size_full().into_any_element()
+        };
+        
+        content
+    }
+    
+    fn render_image<V>(&self, loaded: &LoadedImage, cx: &mut Context<V>) -> AnyElement {
+        let width = loaded.width;
+        let height = loaded.height;
+        
+        // Get the display path (handles animation frames and filters)
+        let path = if let Some(ref anim_state) = self.image_state.animation {
+            let frame_index = anim_state.current_frame;
+            
+            // Get current frame path
+            if frame_index < loaded.frame_cache_paths.len() {
+                let cached_path = &loaded.frame_cache_paths[frame_index];
+                if !cached_path.as_os_str().is_empty() && cached_path.exists() {
+                    cached_path.clone()
+                } else {
+                    // Frame not cached, show error
+                    return div()
+                        .size_full()
+                        .child(cx.new(|_cx| ErrorDisplay::new("Failed to load image frame".to_string())))
+                        .into_any_element();
+                }
+            } else {
+                // Invalid frame index
+                return div()
+                    .size_full()
+                    .child(cx.new(|_cx| ErrorDisplay::new("Invalid frame index".to_string())))
+                    .into_any_element();
+            }
+        } else {
+            // Static image - use filtered path if available, otherwise original
+            loaded.filtered_path.as_ref().unwrap_or(&loaded.path).clone()
+        };
+        
+        // Apply zoom to image dimensions
+        let zoomed_width = (width as f32 * self.image_state.zoom) as u32;
+        let zoomed_height = (height as f32 * self.image_state.zoom) as u32;
+        
+        // Get pan offset
+        let (pan_x, pan_y) = self.image_state.pan;
+        
+        // Main image area with zoom indicator overlay
+        let zoom_level = self.image_state.zoom;
+        let is_fit = self.image_state.is_fit_to_window;
+        
+        // Create a unique ID for the image based on its path to force GPUI to reload when path changes
+        let image_id = ElementId::Name(format!("image-{}", path.display()).into());
+        
+        let mut container = div()
+            .size_full()
+            .bg(Colors::background())
+            .overflow_hidden()
+            .relative()
+            .child(
+                img(path.clone())
+                    .id(image_id)
+                    .w(px(zoomed_width as f32))
+                    .h(px(zoomed_height as f32))
+                    .absolute()
+                    .left(px(pan_x))
+                    .top(px(pan_y))
+            );
+        
+        // Preload next frame for animations
+        if let Some(ref anim_state) = self.image_state.animation {
+            let next_frame_index = (anim_state.current_frame + 1) % anim_state.frame_count;
+            if next_frame_index < loaded.frame_cache_paths.len() {
+                let next_frame_path = &loaded.frame_cache_paths[next_frame_index];
+                if !next_frame_path.as_os_str().is_empty() && next_frame_path.exists() {
+                    container = container.child(
+                        img(next_frame_path.clone())
+                            .w(px(zoomed_width as f32))
+                            .h(px(zoomed_height as f32))
+                            .absolute()
+                            .left(px(-10000.0))
+                            .top(px(0.0))
+                            .opacity(0.0)
+                    );
+                }
+            }
+        }
+        
+        // Preload next/previous images in navigation list
+        for preload_path in &self.preload_paths {
+            if preload_path.exists() {
+                let preload_id = ElementId::Name(format!("preload-{}", preload_path.display()).into());
+                container = container.child(
+                    img(preload_path.clone())
+                        .id(preload_id)
+                        .w(px(zoomed_width as f32))
+                        .h(px(zoomed_height as f32))
+                        .absolute()
+                        .left(px(-10000.0))
+                        .top(px(0.0))
+                        .opacity(0.0)
+                );
+            }
+        }
+        
+        container = container.child(
+            cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit))
+        );
+        
+        // Add animation indicator if this is an animated image
+        if let Some(ref anim_state) = self.image_state.animation {
+            container = container.child(
+                cx.new(|_cx| AnimationIndicator::new(
+                    anim_state.current_frame,
+                    anim_state.frame_count,
+                    anim_state.is_playing,
+                ))
+            );
+        }
+        
+        container.into_any_element()
+    }
+}
+
 impl Render for ImageViewer {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Note: viewport size is now updated in App::render() before ImageViewer is cloned
+        // Note: viewport size is now updated in App::render() before calling render
         
-        let content = if let Some(ref error) = self.error_message {
+        let content = if self.is_loading {
+            // Show loading indicator
+            use crate::components::loading_indicator::LoadingIndicator;
+            div()
+                .size_full()
+                .child(cx.new(|_cx| LoadingIndicator::new("Loading image...")))
+                .into_any_element()
+        } else if let Some(ref error) = self.error_message {
             // Show error message with full canonical path if available
             let full_message = if let Some(ref path) = self.error_path {
                 let canonical_path = path.canonicalize()
