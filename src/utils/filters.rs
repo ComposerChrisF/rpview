@@ -151,12 +151,14 @@ mod tests {
         let img = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(1, 1, Rgba([128, 128, 128, 255])));
         
         // Test extreme brightness values are clamped
-        let bright = apply_brightness(&img, 150); // Should clamp to 100
-        let pixel = bright.to_rgba8().get_pixel(0, 0);
+        let bright = apply_brightness(&img, 150.0); // Should clamp to 100
+        let bright_rgba = bright.to_rgba8();
+        let pixel = bright_rgba.get_pixel(0, 0);
         assert_eq!(pixel[0], 255); // 128 + 255 = 383, clamped to 255
         
-        let dark = apply_brightness(&img, -150); // Should clamp to -100
-        let pixel = dark.to_rgba8().get_pixel(0, 0);
+        let dark = apply_brightness(&img, -150.0); // Should clamp to -100
+        let dark_rgba = dark.to_rgba8();
+        let pixel = dark_rgba.get_pixel(0, 0);
         assert_eq!(pixel[0], 0); // 128 - 255 = -127, clamped to 0
     }
 }

@@ -38,11 +38,6 @@ impl ImageState {
             animation: None,
         }
     }
-    
-    /// Update the last accessed time
-    pub fn touch(&mut self) {
-        self.last_accessed = Instant::now();
-    }
 }
 
 impl Default for ImageState {

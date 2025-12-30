@@ -1,7 +1,6 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod cli;
@@ -477,32 +476,7 @@ impl App {
             cx.notify();
         }
     }
-    
-    fn handle_update_animation(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        // This is called by the background timer to update animation frames
-        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
-            if anim_state.is_playing && anim_state.frame_count > 0 {
-                let now = Instant::now();
-                let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
-                
-                // Get current frame duration
-                let frame_duration = anim_state.frame_durations
-                    .get(anim_state.current_frame)
-                    .copied()
-                    .unwrap_or(100);
-                
-                // Check if it's time to advance to next frame
-                if elapsed >= frame_duration {
-                    anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
-                    self.last_frame_update = now;
-                    cx.notify();
-                }
-            }
-        }
-    }
-    
 
-    
     fn handle_next_frame(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
             // Pause animation when manually navigating frames
