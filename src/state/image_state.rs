@@ -88,6 +88,9 @@ pub struct AnimationState {
     
     /// Frame durations in milliseconds
     pub frame_durations: Vec<u32>,
+    
+    /// Whether the next frame has been preloaded and is ready to display
+    pub next_frame_ready: bool,
 }
 
 impl AnimationState {
@@ -97,6 +100,7 @@ impl AnimationState {
             is_playing: true,
             frame_count,
             frame_durations,
+            next_frame_ready: false,
         }
     }
 }
