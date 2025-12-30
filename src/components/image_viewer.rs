@@ -620,6 +620,9 @@ impl Render for ImageViewer {
             let zoom_level = self.image_state.zoom;
             let is_fit = self.image_state.is_fit_to_window;
             
+            // Create a unique ID for the image based on its path to force GPUI to reload when path changes
+            let image_id = ElementId::Name(format!("image-{}", path.display()).into());
+            
             let mut container = div()
                 .size_full()
                 .bg(Colors::background())
@@ -627,6 +630,7 @@ impl Render for ImageViewer {
                 .relative()
                 .child(
                     img(path.clone())
+                        .id(image_id)
                         .w(px(zoomed_width as f32))
                         .h(px(zoomed_height as f32))
                         .absolute()
