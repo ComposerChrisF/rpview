@@ -3,9 +3,11 @@ use std::path::PathBuf;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::utils::image_loader;
 use crate::utils::zoom;
+use crate::utils::filters;
 use crate::components::error_display::ErrorDisplay;
 use crate::components::zoom_indicator::ZoomIndicator;
 use crate::state::ImageState;
+use crate::state::image_state::FilterSettings;
 
 /// Loaded image data
 #[derive(Clone)]
@@ -13,6 +15,10 @@ pub struct LoadedImage {
     pub path: PathBuf,
     pub width: u32,
     pub height: u32,
+    /// Cached filtered image path (if filters are applied)
+    pub filtered_path: Option<PathBuf>,
+    /// Filter settings used to generate the cached filtered image
+    pub cached_filter_settings: Option<FilterSettings>,
 }
 
 /// Component for viewing images
@@ -266,6 +272,8 @@ impl ImageViewer {
                     path: path.clone(),
                     width,
                     height,
+                    filtered_path: None,
+                    cached_filter_settings: None,
                 });
                 self.error_message = None;
                 self.error_path = None;
@@ -277,6 +285,76 @@ impl ImageViewer {
                 self.current_image = None;
                 self.error_message = Some(e.to_string());
                 self.error_path = Some(path);
+            }
+        }
+    }
+    
+    /// Update filtered image cache if needed
+    pub fn update_filtered_cache(&mut self) {
+        eprintln!("[ImageViewer::update_filtered_cache] Called");
+        if let Some(ref mut loaded) = self.current_image {
+            let filters = &self.image_state.filters;
+            let filters_enabled = self.image_state.filters_enabled;
+            
+            eprintln!("[ImageViewer::update_filtered_cache] Current filters: brightness={:.1}, contrast={:.1}, gamma={:.2}, enabled={}",
+                filters.brightness, filters.contrast, filters.gamma, filters_enabled);
+            eprintln!("[ImageViewer::update_filtered_cache] Cached filters: {:?}",
+                loaded.cached_filter_settings);
+            
+            // Check if we need to regenerate the filtered image
+            let needs_update = if !filters_enabled {
+                // Filters disabled, clear cache
+                loaded.filtered_path.is_some()
+            } else if filters.brightness.abs() < 0.001 && filters.contrast.abs() < 0.001 && (filters.gamma - 1.0).abs() < 0.001 {
+                // No filters applied, clear cache
+                loaded.filtered_path.is_some()
+            } else {
+                // Check if cached filters match current filters
+                loaded.cached_filter_settings.as_ref() != Some(filters)
+            };
+            
+            eprintln!("[ImageViewer::update_filtered_cache] needs_update={}", needs_update);
+            
+            if needs_update {
+                if !filters_enabled || (filters.brightness.abs() < 0.001 && filters.contrast.abs() < 0.001 && (filters.gamma - 1.0).abs() < 0.001) {
+                    // Clear filtered cache
+                    if let Some(ref filtered_path) = loaded.filtered_path {
+                        let _ = std::fs::remove_file(filtered_path);
+                    }
+                    loaded.filtered_path = None;
+                    loaded.cached_filter_settings = None;
+                } else {
+                    // Generate filtered image
+                    if let Ok(img) = image_loader::load_image(&loaded.path) {
+                        let filtered = filters::apply_filters(&img, filters.brightness, filters.contrast, filters.gamma);
+                        
+                        // Save to temp file with unique name using timestamp
+                        if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
+                            use std::time::{SystemTime, UNIX_EPOCH};
+                            let timestamp = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_nanos();
+                            let temp_path = temp_dir.join(format!("rpview_filtered_{}_{}.png", std::process::id(), timestamp));
+                            
+                            eprintln!("[ImageViewer::update_filtered_cache] Saving filtered image to: {:?}", temp_path);
+                            
+                            if filtered.save(&temp_path).is_ok() {
+                                // Clean up old filtered image
+                                if let Some(ref old_filtered_path) = loaded.filtered_path {
+                                    eprintln!("[ImageViewer::update_filtered_cache] Cleaning up old filtered image: {:?}", old_filtered_path);
+                                    let _ = std::fs::remove_file(old_filtered_path);
+                                }
+                                
+                                loaded.filtered_path = Some(temp_path);
+                                loaded.cached_filter_settings = Some(*filters);
+                                eprintln!("[ImageViewer::update_filtered_cache] Filtered image saved and path updated");
+                            } else {
+                                eprintln!("[ImageViewer::update_filtered_cache] Failed to save filtered image");
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -312,7 +390,8 @@ impl Render for ImageViewer {
             // Render the actual image using GPUI's img() function
             let width = loaded.width;
             let height = loaded.height;
-            let path = &loaded.path;
+            // Use filtered image if available, otherwise use original
+            let path = loaded.filtered_path.as_ref().unwrap_or(&loaded.path);
             
             // Apply zoom to image dimensions
             let zoomed_width = (width as f32 * self.image_state.zoom) as u32;

@@ -7,6 +7,7 @@ edition = "2024"
 gpui = "0.2.2"
 clap = { version = "4.5", features = ["derive"] }
 image = { version = "0.25", features = ["png", "jpeg", "bmp", "gif", "tiff", "ico", "webp"] }
+adabraka-ui = "0.2.3"
 # smallvec is included here for convenience, it is used by gpui when creating
 # components that can have children. uncomment this line or
 # use `cargo add smallvec` to add it to your project

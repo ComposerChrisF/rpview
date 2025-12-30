@@ -52,13 +52,13 @@ impl Default for ImageState {
 }
 
 /// Filter settings for image processing
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FilterSettings {
-    /// Brightness adjustment (-100 to +100)
-    pub brightness: i32,
+    /// Brightness adjustment (-100.0 to +100.0)
+    pub brightness: f32,
     
-    /// Contrast adjustment (-100 to +100)
-    pub contrast: i32,
+    /// Contrast adjustment (-100.0 to +100.0)
+    pub contrast: f32,
     
     /// Gamma correction (0.1 to 10.0)
     pub gamma: f32,
@@ -67,8 +67,8 @@ pub struct FilterSettings {
 impl Default for FilterSettings {
     fn default() -> Self {
         Self {
-            brightness: 0,
-            contrast: 0,
+            brightness: 0.0,
+            contrast: 0.0,
             gamma: 1.0,
         }
     }
