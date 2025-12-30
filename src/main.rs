@@ -663,8 +663,29 @@ impl Render for App {
         self.viewer.update_viewport_size(viewport_size);
         
         // Update animation frame if playing (GPUI's suggested pattern)
-        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
-            if anim_state.is_playing && anim_state.frame_count > 0 {
+        let should_update_animation = self.viewer.image_state.animation
+            .as_ref()
+            .map(|a| a.is_playing && a.frame_count > 0)
+            .unwrap_or(false);
+        
+        if should_update_animation {
+            // Progressive frame caching: cache next 3 frames ahead of playback
+            // This is part of the animation loading strategy:
+            // 1. load_image() caches first 3 frames immediately (frame 0, 1, 2)
+            // 2. This loop caches the next 3 frames while animation plays
+            // 3. By the time we reach a frame, it's already cached (smooth playback)
+            if let Some(ref anim_state) = self.viewer.image_state.animation {
+                let current = anim_state.current_frame;
+                let total = anim_state.frame_count;
+                
+                // Cache next 3 frames ahead (look-ahead caching)
+                for offset in 1..=3 {
+                    let frame_to_cache = (current + offset) % total;
+                    self.viewer.cache_frame(frame_to_cache);
+                }
+            }
+            
+            if let Some(ref mut anim_state) = self.viewer.image_state.animation {
                 let now = Instant::now();
                 let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
                 
@@ -674,15 +695,17 @@ impl Render for App {
                     .copied()
                     .unwrap_or(100);
                 
-                // Check if it's time to advance to next frame
+                // Advance to next frame when duration has elapsed
                 if elapsed >= frame_duration {
-                    anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
+                    let next_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
+                    eprintln!("[ANIMATION] Advancing from frame {} to frame {}", anim_state.current_frame, next_frame);
+                    anim_state.current_frame = next_frame;
                     self.last_frame_update = now;
                 }
-                
-                // Request next animation frame (GPUI's pattern for continuous animation)
-                window.request_animation_frame();
             }
+            
+            // Request next animation frame (GPUI's pattern for continuous animation)
+            window.request_animation_frame();
         }
         
         // Poll filter controls for changes
