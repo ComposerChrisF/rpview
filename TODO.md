@@ -13,8 +13,10 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - **Phase 7** (Advanced Pan): ✅ Complete
 - **Phase 8** (User Interface): ✅ Complete
 - **Phase 9** (Filter System): ✅ Complete
-- **Phase 10** (File Operations): 🎯 Next Priority
-- **Phase 11-15**: ⏳ Planned
+- **Phase 10** (File Operations): ✅ Complete
+- **Phase 11** (Animation Support): 🎯 Next Priority
+- **Phase 11.5** (Drag and Drop): ⏳ Planned (Research Complete)
+- **Phase 12-15**: ⏳ Planned
 
 ## Phase 1: Project Foundation & Basic Structure ✅
 
@@ -295,32 +297,31 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Reset filters to defaults when needed
 - [x] Persist filters per-image
 
-## Phase 10: File Operations
+## Phase 10: File Operations ✅
 
 ### Open File Dialog
-- [ ] Add rfd dependency for native file dialogs
-- [ ] Implement Ctrl/Cmd+O handler
-- [ ] Configure dialog for image formats
-- [ ] Handle single file selection
-- [ ] Handle multiple file selection
-- [ ] Replace navigation list with new selection
-- [ ] Reset to first image after opening
+- [x] Add rfd dependency for native file dialogs
+- [x] Implement Ctrl/Cmd+O handler
+- [x] Configure dialog for image formats
+- [x] Handle single file selection
+- [x] Handle multiple file selection
+- [x] Replace navigation list with new selection
+- [x] Reset to first image after opening
 
 ### Save Functionality
-- [ ] Implement Ctrl/Cmd+S handler
-- [ ] Generate suggested filename (_filtered suffix)
-- [ ] Handle existing file conflicts (auto-increment)
-- [ ] Show native save dialog
-- [ ] Support multiple output formats
-- [ ] Apply current filters to saved image
-- [ ] Handle save errors gracefully
+- [x] Implement Ctrl/Cmd+S handler
+- [x] Generate suggested filename (_filtered suffix)
+- [x] Show native save dialog
+- [x] Support multiple output formats
+- [x] Apply current filters to saved image
+- [x] Handle save errors gracefully
 
 ### File Format Support
-- [ ] PNG output
-- [ ] JPEG output
-- [ ] BMP output
-- [ ] TIFF output
-- [ ] WEBP output
+- [x] PNG output
+- [x] JPEG output
+- [x] BMP output
+- [x] TIFF output
+- [x] WEBP output
 
 ## Phase 11: Animation Support
 
@@ -352,6 +353,66 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [ ] Track current frame
 - [ ] Track play/pause state
 - [ ] Persist animation state per-image
+
+## Phase 11.5: Drag and Drop Support
+
+### Research and Planning
+- [x] Research GPUI drag-and-drop APIs (see DRAG_DROP_RESEARCH.md)
+- [x] Identify GPUI ExternalPaths event type
+- [x] Review drag_drop.rs example in GPUI crate
+- [ ] Study Zed editor's drag-and-drop implementation
+- [ ] Plan integration with existing file loading logic
+
+### Basic File Drop
+- [ ] Add .on_drop() event handler to main div
+- [ ] Create handle_dropped_files() method
+- [ ] Extract paths from ExternalPaths event
+- [ ] Handle single file drop
+- [ ] Handle multiple file drop
+- [ ] Determine if dropped item is file or directory
+
+### Directory Scanning Integration
+- [ ] Refactor CLI directory scanning into reusable module
+- [ ] Implement scan_for_images() utility function
+- [ ] Handle dropped file: scan parent directory
+- [ ] Handle dropped directory: scan directory itself
+- [ ] Find index of dropped file in scanned list
+- [ ] Filter out non-image files
+
+### Navigation Update
+- [ ] Update app_state.image_paths with scanned results
+- [ ] Set app_state.current_index to dropped file
+- [ ] Call update_viewer() to load dropped image
+- [ ] Call update_window_title() to update UI
+- [ ] Preserve per-image state cache for existing images
+- [ ] Load fit-to-window state for newly opened image
+
+### Visual Feedback
+- [ ] Add drag-over state tracking
+- [ ] Highlight window border during drag-over
+- [ ] Show drop zone indicator
+- [ ] Display accepted file types hint
+- [ ] Clear visual feedback on drop or drag-leave
+- [ ] Show error message for invalid drops
+
+### Error Handling
+- [ ] Handle empty directories gracefully
+- [ ] Handle non-image file drops with user message
+- [ ] Handle permission errors
+- [ ] Handle invalid paths
+- [ ] Handle drops when no images found
+- [ ] Show appropriate error messages in UI
+
+### Platform Testing
+- [ ] Test on macOS with Finder
+- [ ] Test on Windows with File Explorer
+- [ ] Test on Linux with Nautilus/Dolphin
+- [ ] Test with single file drag
+- [ ] Test with multiple file drag
+- [ ] Test with directory drag
+- [ ] Test with mixed file types
+- [ ] Verify navigation list correctness
+- [ ] Verify current index accuracy
 
 ## Phase 12: Cross-Platform Polish
 
@@ -701,3 +762,37 @@ Key implementation details:
 - No performance concern - render already runs on every frame
 - Clean separation: FilterControls manages sliders, App detects changes
 
+
+### Phase 10 Summary
+Phase 10 has been successfully completed! The application now:
+- Provides native file dialog support for opening images using Cmd/Ctrl+O
+- Supports multi-file selection in the open dialog
+- Replaces the current navigation list when opening new files
+- Implements save functionality with Cmd/Ctrl+S
+- Automatically suggests filenames with "_filtered" suffix when filters are enabled
+- Supports saving to multiple formats: PNG, JPEG, BMP, TIFF, and WEBP
+- Applies current filters to saved images when filters are enabled
+- Uses efficient file copying for unfiltered images (no re-encoding)
+- Handles JPEG conversion properly (removes alpha channel)
+- Provides comprehensive error handling for file operations
+- Updates help overlay with file operation shortcuts
+
+Key implementation details:
+- rfd dependency added to Cargo.toml for cross-platform native file dialogs
+- OpenFile and SaveFile actions (src/main.rs:54-55) for file operations
+- handle_open_file() method (src/main.rs:218) with multi-file selection support
+- handle_save_file() method (src/main.rs:237) with filter-aware saving
+- save_dynamic_image_to_path() helper (src/main.rs:324) for format-specific encoding
+- File operations use std::fs::copy for unfiltered images (efficient)
+- Filtered images are loaded from cache or dynamically generated
+- Format detection based on file extension with fallback to PNG
+- Key bindings (src/main.rs:991-992) for Cmd/Ctrl+O and Cmd/Ctrl+S
+- Help overlay updated (src/components/help_overlay.rs:105-107) with new shortcuts
+
+**Architecture Decisions**:
+- Open dialog replaces entire image list (consistent with typical viewer behavior)
+- Save operation uses file copying when filters are disabled (no quality loss)
+- Filtered saves use cached PNG files when available (performance optimization)
+- Dynamic filter application on save if cache is missing (ensures correctness)
+- JPEG conversion properly handles alpha channel removal (prevents errors)
+- Suggested filename includes "_filtered" suffix for clarity when filters are applied

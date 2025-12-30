@@ -102,6 +102,12 @@ impl HelpOverlay {
             self.render_shortcut(format!("{}-2", platform_key), "Enable filters".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-R", platform_key), "Reset all filters".to_string()).into_any_element(),
             
+            // File Operations section
+            self.render_section_header("File Operations".to_string()).into_any_element(),
+            self.render_shortcut(format!("{}-O", platform_key), "Open image file(s)".to_string()).into_any_element(),
+            self.render_shortcut(format!("{}-S", platform_key), "Save image (current folder)".to_string()).into_any_element(),
+            self.render_shortcut(format!("{}-Option-S", platform_key), "Save to Downloads folder".to_string()).into_any_element(),
+            
             // Help section
             self.render_section_header("Help & Debug".to_string()).into_any_element(),
             self.render_shortcut("H / ? / F1".to_string(), "Toggle this help overlay".to_string()).into_any_element(),
