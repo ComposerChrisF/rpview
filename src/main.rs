@@ -395,13 +395,12 @@ impl App {
         cx.notify();
     }
     
-    fn handle_toggle_animation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn handle_toggle_animation(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
             anim_state.is_playing = !anim_state.is_playing;
             if anim_state.is_playing {
                 // Reset timer when starting playback
                 self.last_frame_update = Instant::now();
-                self.start_animation_timer(window, cx);
             }
             cx.notify();
         }
@@ -430,39 +429,7 @@ impl App {
         }
     }
     
-    fn update_animation_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Update animation frame if playing
-        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
-            if anim_state.is_playing && anim_state.frame_count > 0 {
-                let now = Instant::now();
-                let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
-                
-                // Get current frame duration
-                let frame_duration = anim_state.frame_durations
-                    .get(anim_state.current_frame)
-                    .copied()
-                    .unwrap_or(100);
-                
-                // Check if it's time to advance to next frame
-                if elapsed >= frame_duration {
-                    anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
-                    self.last_frame_update = now;
-                }
-                
-                // Schedule next frame update
-                cx.on_next_frame(window, |this: &mut App, window, cx| {
-                    this.update_animation_frame(window, cx);
-                });
-                
-                cx.notify();
-            }
-        }
-    }
-    
-    fn start_animation_timer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Simply trigger the first frame update, which will schedule subsequent ones
-        self.update_animation_frame(window, cx);
-    }
+
     
     fn handle_next_frame(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
@@ -662,7 +629,7 @@ impl App {
             if let Some(ref anim_state) = self.viewer.image_state.animation {
                 if anim_state.is_playing {
                     self.last_frame_update = Instant::now();
-                    self.start_animation_timer(window, cx);
+                    cx.notify();
                 }
             }
         } else {
@@ -694,6 +661,29 @@ impl Render for App {
         // Update viewer's viewport size from window's drawable content area
         let viewport_size = window.viewport_size();
         self.viewer.update_viewport_size(viewport_size);
+        
+        // Update animation frame if playing (GPUI's suggested pattern)
+        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
+            if anim_state.is_playing && anim_state.frame_count > 0 {
+                let now = Instant::now();
+                let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
+                
+                // Get current frame duration
+                let frame_duration = anim_state.frame_durations
+                    .get(anim_state.current_frame)
+                    .copied()
+                    .unwrap_or(100);
+                
+                // Check if it's time to advance to next frame
+                if elapsed >= frame_duration {
+                    anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
+                    self.last_frame_update = now;
+                }
+                
+                // Request next animation frame (GPUI's pattern for continuous animation)
+                window.request_animation_frame();
+            }
+        }
         
         // Poll filter controls for changes
         if self.show_filters {
