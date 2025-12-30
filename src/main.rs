@@ -738,6 +738,18 @@ impl Render for App {
         let viewport_size = window.viewport_size();
         self.viewer.update_viewport_size(viewport_size);
         
+        // Set preload paths for next/previous images to prime GPU cache
+        // This must happen in render() so images are preloaded BEFORE navigation occurs
+        // This eliminates black flashing by ensuring textures are already in GPU memory
+        let mut preload_paths = Vec::new();
+        if let Some(next_path) = self.app_state.next_image_path() {
+            preload_paths.push(next_path.clone());
+        }
+        if let Some(prev_path) = self.app_state.previous_image_path() {
+            preload_paths.push(prev_path.clone());
+        }
+        self.viewer.set_preload_paths(preload_paths);
+        
         // Update animation frame if playing (GPUI's suggested pattern)
         let should_update_animation = self.viewer.image_state.animation
             .as_ref()
@@ -1341,6 +1353,7 @@ fn main() {
                         viewport_size: None,
                         z_drag_state: None,
                         spacebar_drag_state: None,
+                        preload_paths: Vec::new(),
                     };
                     
                     if let Some(ref path) = first_image_path {

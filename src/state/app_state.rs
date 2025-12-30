@@ -65,6 +65,28 @@ impl AppState {
         self.image_paths.get(self.current_index)
     }
     
+    /// Get the next image path (for preloading)
+    pub fn next_image_path(&self) -> Option<&PathBuf> {
+        if self.image_paths.is_empty() {
+            return None;
+        }
+        let next_index = (self.current_index + 1) % self.image_paths.len();
+        self.image_paths.get(next_index)
+    }
+    
+    /// Get the previous image path (for preloading)
+    pub fn previous_image_path(&self) -> Option<&PathBuf> {
+        if self.image_paths.is_empty() {
+            return None;
+        }
+        let prev_index = if self.current_index == 0 {
+            self.image_paths.len() - 1
+        } else {
+            self.current_index - 1
+        };
+        self.image_paths.get(prev_index)
+    }
+    
     /// Navigate to the next image
     pub fn next_image(&mut self) {
         if !self.image_paths.is_empty() {
