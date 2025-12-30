@@ -1,3 +1,4 @@
+pub mod animation_indicator;
 pub mod debug_overlay;
 pub mod error_display;
 pub mod filter_controls;
@@ -5,6 +6,7 @@ pub mod help_overlay;
 pub mod image_viewer;
 pub mod zoom_indicator;
 
+pub use animation_indicator::AnimationIndicator;
 pub use debug_overlay::DebugOverlay;
 pub use error_display::ErrorDisplay;
 pub use filter_controls::FilterControls;

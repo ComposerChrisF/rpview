@@ -14,7 +14,7 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - **Phase 8** (User Interface): ✅ Complete
 - **Phase 9** (Filter System): ✅ Complete
 - **Phase 10** (File Operations): ✅ Complete
-- **Phase 11** (Animation Support): 🎯 Next Priority
+- **Phase 11** (Animation Support): ✅ Complete
 - **Phase 11.5** (Drag and Drop): ⏳ Planned (Research Complete)
 - **Phase 12-15**: ⏳ Planned
 
@@ -323,36 +323,36 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] TIFF output
 - [x] WEBP output
 
-## Phase 11: Animation Support
+## Phase 11: Animation Support ✅
 
 ### GIF Animation
-- [ ] Detect GIF animation (multi-frame)
-- [ ] Extract all frames from GIF
-- [ ] Parse frame timing information
-- [ ] Create frame playback system
-- [ ] Implement O key play/pause toggle
-- [ ] Show frame counter display
-- [ ] Add play/pause status indicator
+- [x] Detect GIF animation (multi-frame)
+- [x] Extract all frames from GIF
+- [x] Parse frame timing information
+- [x] Create frame playback system
+- [x] Implement O key play/pause toggle
+- [x] Show frame counter display
+- [x] Add play/pause status indicator
 
 ### Animation Controls
-- [ ] Implement [ key for previous frame
-- [ ] Implement ] key for next frame
-- [ ] Handle animation loop
-- [ ] Pause on window focus loss
-- [ ] Add startup timer (prevent early pause)
+- [x] Implement [ key for previous frame
+- [x] Implement ] key for next frame
+- [x] Handle animation loop
+- [ ] Pause on window focus loss (deferred - not critical)
+- [ ] Add startup timer (prevent early pause) (deferred - not critical)
 
 ### WEBP Animation
-- [ ] Detect WEBP animation
-- [ ] Extract WEBP frames
-- [ ] Parse WEBP timing metadata
-- [ ] Integrate with animation system
-- [ ] Add format indicator in display
+- [x] Detect WEBP animation
+- [x] Extract WEBP frames
+- [x] Parse WEBP timing metadata
+- [x] Integrate with animation system
+- [x] Add format indicator in display
 
 ### Animation State
-- [ ] Add animation state to ImageState
-- [ ] Track current frame
-- [ ] Track play/pause state
-- [ ] Persist animation state per-image
+- [x] Add animation state to ImageState
+- [x] Track current frame
+- [x] Track play/pause state
+- [x] Persist animation state per-image
 
 ## Phase 11.5: Drag and Drop Support
 
@@ -796,3 +796,54 @@ Key implementation details:
 - Dynamic filter application on save if cache is missing (ensures correctness)
 - JPEG conversion properly handles alpha channel removal (prevents errors)
 - Suggested filename includes "_filtered" suffix for clarity when filters are applied
+
+### Phase 11 Summary
+Phase 11 has been successfully completed! The application now:
+- Automatically detects and loads animated GIF and WEBP files
+- Extracts all animation frames with proper timing information
+- Displays animations with automatic frame playback based on frame duration
+- Provides O key to toggle play/pause for animated images
+- Implements [ and ] keys for manual frame-by-frame navigation
+- Shows animation indicator overlay with play/pause status and frame counter
+- Maintains animation state per-image (current frame and play/pause state)
+- Handles animation loops seamlessly with wrap-around frame navigation
+- Pauses animation automatically when manually navigating frames
+- Persists animation state through the existing ImageState cache system
+- Updates help overlay with animation control shortcuts
+
+Key implementation details:
+- Animation utilities module (src/utils/animation.rs) for frame extraction and timing
+- AnimationData and AnimationFrame structs for managing animation data
+- is_animated_gif() and is_animated_webp() detection functions
+- load_gif_animation() and load_webp_animation() frame extraction functions
+- AnimationState added to ImageState struct (src/state/image_state.rs:77-91)
+- LoadedImage updated to store AnimationData (src/components/image_viewer.rs:24)
+- get_display_path() method handles frame rendering by saving to temp files
+- Animation playback timer in App::render() (src/main.rs:592-617)
+- Frame update logic checks elapsed time against frame duration
+- cx.notify() called continuously while animation is playing to keep rendering
+- ToggleAnimationPlayPause, NextFrame, PreviousFrame actions (src/main.rs:22-24)
+- Animation control handlers (src/main.rs:396-428) for play/pause and frame navigation
+- AnimationIndicator component (src/components/animation_indicator.rs) displays status
+- Key bindings for O, [, and ] keys (src/main.rs:1049-1051)
+- Help overlay updated with animation shortcuts (src/components/help_overlay.rs:93-95)
+
+**Architecture Decisions**:
+- Frame rendering uses temporary PNG files for GPUI compatibility (img() requires file paths)
+- **Hybrid frame caching** - first 5 frames pre-cached, rest on-demand
+- Balances instant loading with smooth initial playback
+- Eliminates UI blocking when switching between animated images
+- Animation frames stored in AnimationData within LoadedImage for efficient access
+- Cached frame paths stored in LoadedImage.frame_cache_paths for quick lookup
+- Stable filenames: rpview_{pid}_{filename}_{frame}.png
+- Playback timer integrated into render loop with cx.notify() for continuous updates
+- Manual frame navigation automatically pauses playback for precise control
+- Animation state persists per-image through existing cache system
+- Frame durations parsed from GIF/WEBP metadata for accurate timing
+- Default 100ms frame duration used if metadata is invalid or missing
+
+**Performance Optimizations**:
+- Initial implementation: Pre-cached all frames on load (blocking)
+- Optimized to: Lazy on-demand caching (non-blocking)
+- Result: Instant image switching, frames cache during playback
+- Animation updates trigger cx.notify() for continuous re-renders

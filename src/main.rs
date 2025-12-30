@@ -1,6 +1,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod cli;
@@ -18,7 +19,10 @@ actions!(app, [
     Quit, 
     EscapePressed, 
     NextImage, 
-    PreviousImage, 
+    PreviousImage,
+    ToggleAnimationPlayPause,
+    NextFrame,
+    PreviousFrame, 
     SortAlphabetical, 
     SortByModified,
     ZoomIn,
@@ -79,6 +83,8 @@ struct App {
     show_filters: bool,
     /// Filter controls component
     filter_controls: Entity<FilterControls>,
+    /// Last time animation frame was updated (for animation playback)
+    last_frame_update: Instant,
 }
  
 impl App {
@@ -237,7 +243,7 @@ impl App {
                 self.app_state.current_index = 0;
                 
                 // Update viewer with first image from new selection
-                self.update_viewer();
+                self.update_viewer(window, cx);
                 self.update_window_title(window);
                 cx.notify();
             }
@@ -377,28 +383,119 @@ impl App {
     
     fn handle_next_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.app_state.next_image();
-        self.update_viewer();
+        self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
     
     fn handle_previous_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.app_state.previous_image();
-        self.update_viewer();
+        self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
     
+    fn handle_toggle_animation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
+            anim_state.is_playing = !anim_state.is_playing;
+            if anim_state.is_playing {
+                // Reset timer when starting playback
+                self.last_frame_update = Instant::now();
+                self.start_animation_timer(window, cx);
+            }
+            cx.notify();
+        }
+    }
+    
+    fn handle_update_animation(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // This is called by the background timer to update animation frames
+        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
+            if anim_state.is_playing && anim_state.frame_count > 0 {
+                let now = Instant::now();
+                let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
+                
+                // Get current frame duration
+                let frame_duration = anim_state.frame_durations
+                    .get(anim_state.current_frame)
+                    .copied()
+                    .unwrap_or(100);
+                
+                // Check if it's time to advance to next frame
+                if elapsed >= frame_duration {
+                    anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
+                    self.last_frame_update = now;
+                    cx.notify();
+                }
+            }
+        }
+    }
+    
+    fn update_animation_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Update animation frame if playing
+        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
+            if anim_state.is_playing && anim_state.frame_count > 0 {
+                let now = Instant::now();
+                let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
+                
+                // Get current frame duration
+                let frame_duration = anim_state.frame_durations
+                    .get(anim_state.current_frame)
+                    .copied()
+                    .unwrap_or(100);
+                
+                // Check if it's time to advance to next frame
+                if elapsed >= frame_duration {
+                    anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
+                    self.last_frame_update = now;
+                }
+                
+                // Schedule next frame update
+                cx.on_next_frame(window, |this: &mut App, window, cx| {
+                    this.update_animation_frame(window, cx);
+                });
+                
+                cx.notify();
+            }
+        }
+    }
+    
+    fn start_animation_timer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Simply trigger the first frame update, which will schedule subsequent ones
+        self.update_animation_frame(window, cx);
+    }
+    
+    fn handle_next_frame(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
+            // Pause animation when manually navigating frames
+            anim_state.is_playing = false;
+            anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
+            cx.notify();
+        }
+    }
+    
+    fn handle_previous_frame(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(ref mut anim_state) = self.viewer.image_state.animation {
+            // Pause animation when manually navigating frames
+            anim_state.is_playing = false;
+            if anim_state.current_frame == 0 {
+                anim_state.current_frame = anim_state.frame_count - 1;
+            } else {
+                anim_state.current_frame -= 1;
+            }
+            cx.notify();
+        }
+    }
+    
     fn handle_sort_alphabetical(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.app_state.set_sort_mode(state::SortMode::Alphabetical);
-        self.update_viewer();
+        self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
     
     fn handle_sort_by_modified(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.app_state.set_sort_mode(state::SortMode::ModifiedDate);
-        self.update_viewer();
+        self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
@@ -550,7 +647,7 @@ impl App {
         self.viewer.set_image_state(state);
     }
     
-    fn update_viewer(&mut self) {
+    fn update_viewer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(path) = self.app_state.current_image().cloned() {
             // Load the image first (this will call fit_to_window)
             self.viewer.load_image(path.clone());
@@ -560,6 +657,14 @@ impl App {
                 self.load_current_image_state();
             }
             // Otherwise, keep the fit-to-window state that load_image set
+            
+            // Start animation if this is an animated image and it's set to play
+            if let Some(ref anim_state) = self.viewer.image_state.animation {
+                if anim_state.is_playing {
+                    self.last_frame_update = Instant::now();
+                    self.start_animation_timer(window, cx);
+                }
+            }
         } else {
             self.viewer.clear();
         }
@@ -580,6 +685,8 @@ impl App {
             window.set_window_title("rpview-gpui");
         }
     }
+    
+
 }
 
 impl Render for App {
@@ -847,6 +954,15 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &PreviousImage, window, cx| {
                 this.handle_previous_image(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ToggleAnimationPlayPause, window, cx| {
+                this.handle_toggle_animation(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NextFrame, window, cx| {
+                this.handle_next_frame(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PreviousFrame, window, cx| {
+                this.handle_previous_frame(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &SortAlphabetical, window, cx| {
                 this.handle_sort_alphabetical(window, cx);
             }))
@@ -971,6 +1087,10 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("escape", EscapePressed, None),
         KeyBinding::new("right", NextImage, None),
         KeyBinding::new("left", PreviousImage, None),
+        // Animation controls
+        KeyBinding::new("o", ToggleAnimationPlayPause, None),
+        KeyBinding::new("]", NextFrame, None),
+        KeyBinding::new("[", PreviousFrame, None),
         KeyBinding::new("shift-cmd-a", SortAlphabetical, None),
         KeyBinding::new("shift-cmd-m", SortByModified, None),
         // Zoom controls - base (normal speed)
@@ -1157,6 +1277,7 @@ fn main() {
                         show_debug: false,
                         show_filters: false,
                         filter_controls,
+                        last_frame_update: Instant::now(),
                     }
                 })
         })

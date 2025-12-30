@@ -89,6 +89,11 @@ impl HelpOverlay {
             self.render_shortcut(format!("{} + WASD/IJKL", platform_key), "Slow pan (0.3x speed)".to_string()).into_any_element(),
             self.render_shortcut("Space + Drag".to_string(), "Pan with mouse (1:1 movement)".to_string()).into_any_element(),
             
+            // Animation section
+            self.render_section_header("Animation".to_string()).into_any_element(),
+            self.render_shortcut("O".to_string(), "Play/Pause animation".to_string()).into_any_element(),
+            self.render_shortcut("[ ]".to_string(), "Previous/Next frame".to_string()).into_any_element(),
+            
             // Window section
             self.render_section_header("Window".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-W", platform_key), "Close window".to_string()).into_any_element(),
