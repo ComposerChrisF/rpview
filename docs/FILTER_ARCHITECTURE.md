@@ -500,3 +500,365 @@ The architecture you choose depends on your goals:
 - **Just better filters for image viewing**: Stick with current + optimization
 - **Adding several more filters**: Go with Hybrid approach
 - **Building an image editor**: Full trait system with progress reporting
+
+---
+
+## GPU Acceleration
+
+GPU-based filters are absolutely possible and would provide massive performance improvements for many operations. Here's how they could integrate with the trait-based architectures:
+
+### GPU vs CPU Trade-offs
+
+**GPU Advantages**:
+- Massively parallel (thousands of cores)
+- 10-100x faster for parallelizable operations
+- Excellent for: blur, sharpen, convolution, color grading, complex mathematical transforms
+- Can process 4K images in real-time
+
+**GPU Disadvantages**:
+- Data transfer overhead (CPU → GPU → CPU)
+- Not worth it for tiny images or very simple operations
+- Requires GPU programming (shaders/compute)
+- Platform-specific APIs (Metal on macOS, Vulkan/OpenGL cross-platform)
+- More complex to debug
+
+**Rule of thumb**: GPU becomes worthwhile when processing time > data transfer time
+- For 1920x1080 image: ~8MB transfer, ~1-2ms on modern GPU
+- Simple pixel operations (brightness): CPU might be faster due to transfer overhead
+- Complex operations (gaussian blur): GPU can be 50-100x faster
+
+### Architecture Option: Backend Abstraction
+
+Extend any of the previous trait designs with a backend system:
+
+```rust
+/// Filter execution backend
+pub enum FilterBackend {
+    CPU,
+    GPU,
+    Auto, // Choose based on image size and filter complexity
+}
+
+/// Core filter trait with backend support
+pub trait Filter: Send + Sync {
+    fn name(&self) -> &str;
+    
+    /// Supported backends for this filter
+    fn supported_backends(&self) -> Vec<FilterBackend> {
+        vec![FilterBackend::CPU] // Default: CPU only
+    }
+    
+    /// Apply filter on CPU
+    fn apply_cpu(&self, img: &DynamicImage) -> DynamicImage;
+    
+    /// Apply filter on GPU (optional)
+    fn apply_gpu(&self, img: &DynamicImage) -> Result<DynamicImage, String> {
+        Err("GPU backend not implemented".to_string())
+    }
+    
+    /// Auto-select best backend
+    fn apply(&self, img: &DynamicImage, backend: FilterBackend) -> DynamicImage {
+        match backend {
+            FilterBackend::CPU => self.apply_cpu(img),
+            FilterBackend::GPU => {
+                self.apply_gpu(img).unwrap_or_else(|_| {
+                    eprintln!("GPU failed for {}, falling back to CPU", self.name());
+                    self.apply_cpu(img)
+                })
+            }
+            FilterBackend::Auto => {
+                if self.should_use_gpu(img) {
+                    self.apply(img, FilterBackend::GPU)
+                } else {
+                    self.apply_cpu(img)
+                }
+            }
+        }
+    }
+    
+    /// Heuristic to decide CPU vs GPU
+    fn should_use_gpu(&self, img: &DynamicImage) -> bool {
+        let (width, height) = img.dimensions();
+        let pixel_count = width * height;
+        
+        // Use GPU for images larger than 1MP if GPU backend is available
+        pixel_count > 1_000_000 && 
+            self.supported_backends().contains(&FilterBackend::GPU)
+    }
+}
+```
+
+### GPU Implementation Options
+
+#### Option 1: GPUI Integration (Easiest for this project)
+
+Since you're already using GPUI, you could leverage its rendering pipeline:
+
+```rust
+// GPUI already handles GPU rendering of images with shaders
+// You could apply filters as shader effects during rendering
+
+pub trait ShaderFilter {
+    /// Return WGSL shader code for this filter
+    fn wgsl_shader(&self) -> &str;
+    
+    /// Shader uniforms (parameters)
+    fn uniforms(&self) -> Vec<f32>;
+}
+
+// Example: Brightness filter as shader
+impl ShaderFilter for BrightnessFilter {
+    fn wgsl_shader(&self) -> &str {
+        r#"
+        @fragment
+        fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+            let color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+            let brightness = uniforms.brightness; // From uniform buffer
+            return vec4<f32>(
+                color.r + brightness,
+                color.g + brightness,
+                color.b + brightness,
+                color.a
+            );
+        }
+        "#
+    }
+    
+    fn uniforms(&self) -> Vec<f32> {
+        vec![self.brightness / 255.0]
+    }
+}
+```
+
+**Advantages**:
+- Already have GPU context from GPUI
+- Can apply filters during rendering (zero copy)
+- Cross-platform via WGPU
+- Shaders are relatively simple to write
+
+**Disadvantages**:
+- Filters only work during display, not for saving filtered images
+- Need to manage shader compilation and uniform buffers
+- More complex than pure CPU approach
+
+#### Option 2: wgpu-based Compute Shaders (Most Flexible)
+
+Use WGPU compute shaders for off-screen GPU processing:
+
+```rust
+use wgpu;
+
+pub struct GpuFilterContext {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+}
+
+impl GpuFilterContext {
+    pub fn apply_filter(&self, img: &DynamicImage, shader: &str) -> DynamicImage {
+        // 1. Upload image to GPU as texture
+        // 2. Create compute pipeline with shader
+        // 3. Dispatch compute shader
+        // 4. Download result back to CPU
+        // Returns filtered image
+    }
+}
+
+// Example: Gaussian blur as compute shader
+const BLUR_SHADER: &str = r#"
+@group(0) @binding(0) var input_texture: texture_2d<f32>;
+@group(0) @binding(1) var output_texture: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(2) var<uniform> params: BlurParams;
+
+struct BlurParams {
+    radius: f32,
+};
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let coords = vec2<i32>(global_id.xy);
+    let dims = textureDimensions(input_texture);
+    
+    if (coords.x >= dims.x || coords.y >= dims.y) {
+        return;
+    }
+    
+    // Gaussian blur kernel
+    var sum = vec4<f32>(0.0);
+    let r = i32(params.radius);
+    for (var dy = -r; dy <= r; dy++) {
+        for (var dx = -r; dx <= r; dx++) {
+            let sample_coords = coords + vec2<i32>(dx, dy);
+            let color = textureLoad(input_texture, sample_coords, 0);
+            let weight = exp(-(f32(dx*dx + dy*dy) / (2.0 * params.radius * params.radius)));
+            sum += color * weight;
+        }
+    }
+    
+    textureStore(output_texture, coords, sum / sum.a);
+}
+"#;
+```
+
+**Advantages**:
+- Full control over GPU processing
+- Can save filtered results to disk
+- Very high performance for complex filters
+- Cross-platform via WGPU
+
+**Disadvantages**:
+- Need to manage GPU context, buffers, pipelines
+- Data transfer overhead
+- More complex implementation
+- Shader debugging is harder
+
+#### Option 3: Metal Shaders (macOS only, Maximum Performance)
+
+Direct Metal integration for native macOS performance:
+
+```rust
+use metal;
+
+pub struct MetalFilterContext {
+    device: metal::Device,
+    command_queue: metal::CommandQueue,
+}
+
+impl Filter for GpuBrightnessFilter {
+    fn apply_gpu(&self, img: &DynamicImage) -> Result<DynamicImage, String> {
+        // Metal shader language (MSL)
+        let shader_source = r#"
+        #include <metal_stdlib>
+        using namespace metal;
+        
+        kernel void brightness_filter(
+            texture2d<float, access::read> input [[texture(0)]],
+            texture2d<float, access::write> output [[texture(1)]],
+            constant float &brightness [[buffer(0)]],
+            uint2 gid [[thread_position_in_grid]]
+        ) {
+            float4 color = input.read(gid);
+            color.rgb += brightness;
+            output.write(color, gid);
+        }
+        "#;
+        
+        // Compile and execute Metal shader
+        // ...
+    }
+}
+```
+
+**Advantages**:
+- Absolute best performance on macOS
+- Native integration
+- Can leverage Metal Performance Shaders (MPS) for common operations
+
+**Disadvantages**:
+- macOS only (not cross-platform)
+- Requires objective-C/Metal interop
+- Most complex implementation
+
+### Recommended GPU Strategy
+
+For your project, I'd recommend a **phased approach**:
+
+#### Phase 1: CPU Optimization (Do First)
+- Implement single-pass pixel filtering
+- This alone gives 2-3x speedup
+- No GPU complexity yet
+- Validates the architecture
+
+#### Phase 2: GPUI Shader Integration (Medium Term)
+- Leverage existing GPUI rendering pipeline
+- Implement filters as WGSL shaders
+- Apply during display rendering
+- Pros: Zero-copy, cross-platform, already have GPU context
+- Cons: Display-only (not for saving)
+
+```rust
+// Pseudo-code for GPUI shader integration
+impl ImageViewer {
+    fn render_with_shader_filters(&self, cx: &mut Context) -> impl IntoElement {
+        let mut shader_chain = ShaderChain::new();
+        
+        if self.filters_enabled {
+            shader_chain.add(BrightnessShader::new(self.filters.brightness));
+            shader_chain.add(ContrastShader::new(self.filters.contrast));
+            shader_chain.add(GammaShader::new(self.filters.gamma));
+        }
+        
+        img(path)
+            .with_shader_chain(shader_chain) // Hypothetical API
+            .render(cx)
+    }
+}
+```
+
+#### Phase 3: Dual-Path Architecture (Long Term)
+- Keep CPU path for saving
+- Add GPU path for real-time preview
+- Let filters declare GPU capability
+
+```rust
+pub trait DualPathFilter {
+    // Fast GPU path for preview
+    fn preview_gpu(&self, img: &DynamicImage) -> DynamicImage;
+    
+    // High-quality CPU path for saving
+    fn process_cpu(&self, img: &DynamicImage) -> DynamicImage;
+}
+```
+
+### Performance Comparison (Estimated)
+
+For a 1920x1080 image with 3 filters (brightness, contrast, gamma):
+
+| Implementation | Time | Notes |
+|---------------|------|-------|
+| Current (multi-pass CPU) | ~50ms | 3 full passes |
+| Optimized (single-pass CPU) | ~15ms | 1 pass, cache-friendly |
+| GPUI Shader (display only) | ~2ms | Zero-copy, GPU-accelerated |
+| WGPU Compute | ~5ms | Includes transfer overhead |
+| Metal Compute | ~3ms | Native, minimal overhead |
+
+For a 4K image (3840x2160) with complex filters (blur):
+
+| Implementation | Time | Notes |
+|---------------|------|-------|
+| CPU Gaussian Blur | ~500ms | Even optimized |
+| GPU Compute Blur | ~10ms | 50x faster! |
+
+### GPU Libraries to Consider
+
+**Cross-platform**:
+- `wgpu` - Already used by GPUI, good integration
+- `vulkano` - Vulkan wrapper, very fast
+- `gfx-rs` - Lower-level, more control
+
+**macOS-specific**:
+- `metal-rs` - Direct Metal bindings
+- Core Image (via `cocoa` crate) - Apple's built-in filters
+
+**Abstraction layers**:
+- `image-gpu` - Higher-level GPU image processing (if it exists)
+- Roll your own on top of WGPU
+
+### Recommendation
+
+Start with **CPU optimization** (Phase 1), then when you need GPU:
+
+1. **For display-only filters**: Integrate with GPUI's shader system
+   - Minimal code changes
+   - Leverages existing GPU context
+   - Real-time preview performance
+
+2. **For saving filtered images**: Add WGPU compute path
+   - Can process and save
+   - Cross-platform
+   - Good performance
+
+3. **For maximum performance**: Consider Metal on macOS
+   - Only if WGPU isn't fast enough
+   - Native optimization
+
+The trait-based architecture supports all of these - you just need to add GPU backend implementations alongside CPU ones.
