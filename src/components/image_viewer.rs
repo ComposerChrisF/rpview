@@ -751,7 +751,7 @@ impl ImageViewer {
         }
         
         container = container.child(
-            cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit))
+            cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit, Some((width, height))))
         );
         
         // Add animation indicator if this is an animated image
@@ -905,7 +905,7 @@ impl Render for ImageViewer {
             
             container = container.child(
                 // Zoom indicator overlay
-                cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit))
+                cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit, Some((width, height))))
             );
             
             // Add animation indicator if this is an animated image
