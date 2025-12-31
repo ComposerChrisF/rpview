@@ -86,6 +86,8 @@ pub struct ImageViewer {
     pub is_loading: bool,
     /// Filter processing state
     pub is_processing_filters: bool,
+    /// Handle for async filter processing
+    pub filter_processing_handle: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
 }
 
 impl ImageViewer {
@@ -481,9 +483,18 @@ impl ImageViewer {
         false
     }
     
-    /// Update filtered image cache if needed
+    /// Update filtered image cache if needed (async)
     pub fn update_filtered_cache(&mut self) {
         eprintln!("[ImageViewer::update_filtered_cache] Called");
+        
+        // Cancel any previous filter processing when starting new one
+        // This allows rapid slider changes to cancel old processing
+        if self.is_processing_filters {
+            eprintln!("[ImageViewer::update_filtered_cache] Canceling previous processing");
+            self.filter_processing_handle = None;
+            self.is_processing_filters = false;
+        }
+        
         if let Some(ref mut loaded) = self.current_image {
             let filters = &self.image_state.filters;
             let filters_enabled = self.image_state.filters_enabled;
@@ -517,15 +528,33 @@ impl ImageViewer {
                     loaded.filtered_path = None;
                     loaded.cached_filter_settings = None;
                 } else {
-                    // Start filter processing
+                    // Start async filter processing
                     self.is_processing_filters = true;
                     
-                    // Generate filtered image
-                    if let Ok(img) = image_loader::load_image(&loaded.path) {
-                        let filtered = filters::apply_filters(&img, filters.brightness, filters.contrast, filters.gamma);
+                    let image_path = loaded.path.clone();
+                    let brightness = filters.brightness;
+                    let contrast = filters.contrast;
+                    let gamma = filters.gamma;
+                    
+                    let (sender, receiver) = std::sync::mpsc::channel();
+                    self.filter_processing_handle = Some(receiver);
+                    
+                    // Spawn background thread to process filters
+                    std::thread::spawn(move || {
+                        eprintln!("[FILTER_THREAD] Starting filter processing");
                         
-                        // Save to temp file with unique name using timestamp
-                        if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
+                        let result = (|| {
+                            // Load image
+                            let img = image_loader::load_image(&image_path)
+                                .map_err(|e| format!("Failed to load image: {}", e))?;
+                            
+                            // Apply filters
+                            let filtered = filters::apply_filters(&img, brightness, contrast, gamma);
+                            
+                            // Save to temp file
+                            let temp_dir = std::env::temp_dir().canonicalize()
+                                .map_err(|e| format!("Failed to get temp dir: {}", e))?;
+                            
                             use std::time::{SystemTime, UNIX_EPOCH};
                             let timestamp = SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
@@ -533,34 +562,55 @@ impl ImageViewer {
                                 .as_nanos();
                             let temp_path = temp_dir.join(format!("rpview_filtered_{}_{}.png", std::process::id(), timestamp));
                             
-                            eprintln!("[ImageViewer::update_filtered_cache] Saving filtered image to: {:?}", temp_path);
+                            eprintln!("[FILTER_THREAD] Saving filtered image to: {:?}", temp_path);
+                            filtered.save(&temp_path)
+                                .map_err(|e| format!("Failed to save filtered image: {}", e))?;
                             
-                            if filtered.save(&temp_path).is_ok() {
-                                // Only clean up old filtered image AFTER new one is ready
-                                if let Some(ref old_filtered_path) = loaded.filtered_path {
-                                    eprintln!("[ImageViewer::update_filtered_cache] Cleaning up old filtered image: {:?}", old_filtered_path);
-                                    let _ = std::fs::remove_file(old_filtered_path);
-                                }
-                                
-                                loaded.filtered_path = Some(temp_path);
-                                loaded.cached_filter_settings = Some(*filters);
-                                self.is_processing_filters = false;
-                                eprintln!("[ImageViewer::update_filtered_cache] Filtered image saved and path updated");
-                            } else {
-                                self.is_processing_filters = false;
-                                eprintln!("[ImageViewer::update_filtered_cache] Failed to save filtered image");
-                            }
-                        } else {
-                            self.is_processing_filters = false;
-                        }
-                    } else {
-                        self.is_processing_filters = false;
-                    }
+                            Ok(temp_path)
+                        })();
+                        
+                        eprintln!("[FILTER_THREAD] Filter processing complete: {:?}", result.is_ok());
+                        let _ = sender.send(result);
+                    });
                 }
             } else {
                 self.is_processing_filters = false;
             }
         }
+    }
+    
+    /// Check for completed filter processing and update the image
+    pub fn check_filter_processing(&mut self) -> bool {
+        if let Some(receiver) = &self.filter_processing_handle {
+            if let Ok(result) = receiver.try_recv() {
+                eprintln!("[ImageViewer::check_filter_processing] Received result: {:?}", result.is_ok());
+                
+                match result {
+                    Ok(new_filtered_path) => {
+                        if let Some(ref mut loaded) = self.current_image {
+                            // Clean up old filtered image
+                            if let Some(ref old_filtered_path) = loaded.filtered_path {
+                                eprintln!("[ImageViewer::check_filter_processing] Cleaning up old filtered image: {:?}", old_filtered_path);
+                                let _ = std::fs::remove_file(old_filtered_path);
+                            }
+                            
+                            // Update to new filtered image
+                            loaded.filtered_path = Some(new_filtered_path);
+                            loaded.cached_filter_settings = Some(self.image_state.filters);
+                            eprintln!("[ImageViewer::check_filter_processing] Filtered image updated");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[ImageViewer::check_filter_processing] Filter processing failed: {}", e);
+                    }
+                }
+                
+                self.is_processing_filters = false;
+                self.filter_processing_handle = None;
+                return true;
+            }
+        }
+        false
     }
     
     /// Clear the current image
