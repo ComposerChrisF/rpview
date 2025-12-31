@@ -1,0 +1,16 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=RPView
+GenericName=Image Viewer
+Comment=A fast, cross-platform image viewer built with GPUI
+Icon=rpview
+Exec=rpview %F
+Terminal=false
+Categories=Graphics;Viewer;
+MimeType=image/png;image/jpeg;image/gif;image/bmp;image/tiff;image/x-icon;image/webp;
+Keywords=image;viewer;photo;picture;
+
+[Desktop Action Open]
+Name=Open Image
+Exec=rpview %f

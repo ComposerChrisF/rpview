@@ -1261,6 +1261,63 @@ fn setup_key_bindings(cx: &mut gpui::App) {
     ]);
 }
 
+/// Set up native application menus (macOS menu bar, Windows/Linux menus)
+fn setup_menus(cx: &mut gpui::App) {
+    cx.set_menus(vec![
+        // Application menu (macOS only - shows as "RPView" menu)
+        Menu {
+            name: "RPView".into(),
+            items: vec![
+                MenuItem::action("Quit", Quit),
+            ],
+        },
+        Menu {
+            name: "File".into(),
+            items: vec![
+                MenuItem::action("Open File...", OpenFile),
+                MenuItem::action("Save File...", SaveFile),
+                MenuItem::action("Save to Downloads...", SaveFileToDownloads),
+                MenuItem::separator(),
+                MenuItem::action("Close Window", CloseWindow),
+            ],
+        },
+        Menu {
+            name: "View".into(),
+            items: vec![
+                MenuItem::action("Zoom In", ZoomIn),
+                MenuItem::action("Zoom Out", ZoomOut),
+                MenuItem::action("Reset Zoom", ZoomReset),
+                MenuItem::separator(),
+                MenuItem::action("Toggle Filters", ToggleFilters),
+                MenuItem::action("Disable Filters", DisableFilters),
+                MenuItem::action("Enable Filters", EnableFilters),
+                MenuItem::action("Reset Filters", ResetFilters),
+                MenuItem::separator(),
+                MenuItem::action("Toggle Help", ToggleHelp),
+                MenuItem::action("Toggle Debug", ToggleDebug),
+            ],
+        },
+        Menu {
+            name: "Navigate".into(),
+            items: vec![
+                MenuItem::action("Next Image", NextImage),
+                MenuItem::action("Previous Image", PreviousImage),
+                MenuItem::separator(),
+                MenuItem::action("Sort Alphabetically", SortAlphabetical),
+                MenuItem::action("Sort by Modified Date", SortByModified),
+            ],
+        },
+        Menu {
+            name: "Animation".into(),
+            items: vec![
+                MenuItem::action("Play/Pause", ToggleAnimationPlayPause),
+                MenuItem::action("Next Frame", NextFrame),
+                MenuItem::action("Previous Frame", PreviousFrame),
+            ],
+        },
+    ]);
+}
+
 fn main() {
     // Parse command-line arguments to get image paths and starting index
     let (image_paths, start_index) = match Cli::parse_image_paths() {
@@ -1315,6 +1372,7 @@ fn main() {
         .detach();
         
         setup_key_bindings(cx);
+        setup_menus(cx);
         
         cx.on_action(|_: &Quit, cx| {
             cx.quit();
