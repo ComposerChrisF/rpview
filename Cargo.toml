@@ -2,6 +2,14 @@
 name = "rpview-gpui"
 version = "0.1.0"
 edition = "2024"
+authors = ["rpview contributors"]
+description = "A fast, cross-platform image viewer built with GPUI"
+readme = "README.md"
+homepage = "https://github.com/yourusername/rpview-gpui"
+repository = "https://github.com/yourusername/rpview-gpui"
+license = "MIT OR Apache-2.0"
+keywords = ["image", "viewer", "gpui", "cross-platform"]
+categories = ["multimedia::images", "gui"]
 
 [dependencies]
 gpui = "0.2.2"
@@ -14,3 +22,22 @@ dirs = "5.0"
 # components that can have children. uncomment this line or
 # use `cargo add smallvec` to add it to your project
 #smallvec = "1.13.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+
+[target.'cfg(target_os = "windows")'.dependencies]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+
+[[bin]]
+name = "rpview"
+path = "src/main.rs"
