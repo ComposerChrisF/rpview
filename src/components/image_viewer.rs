@@ -590,14 +590,12 @@ impl ImageViewer {
                         if let Some(ref mut loaded) = self.current_image {
                             // Clean up old filtered image
                             if let Some(ref old_filtered_path) = loaded.filtered_path {
-                                eprintln!("[ImageViewer::check_filter_processing] Cleaning up old filtered image: {:?}", old_filtered_path);
                                 let _ = std::fs::remove_file(old_filtered_path);
                             }
                             
                             // Update to new filtered image
                             loaded.filtered_path = Some(new_filtered_path);
                             loaded.cached_filter_settings = Some(self.image_state.filters);
-                            eprintln!("[ImageViewer::check_filter_processing] Filtered image updated");
                         }
                     }
                     Err(e) => {

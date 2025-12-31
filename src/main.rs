@@ -718,13 +718,15 @@ impl Render for App {
         }
         
         // Check if filter processing has completed
-        if self.viewer.check_filter_processing() {
+        let just_finished_processing = self.viewer.check_filter_processing();
+        if just_finished_processing {
             // Filter processing completed - request re-render to show the filtered image
             cx.notify();
         }
         
         // If still loading or processing filters, request another render to check again
-        if self.viewer.is_loading || self.viewer.is_processing_filters {
+        // Also request one more frame if we just finished processing to ensure UI updates
+        if self.viewer.is_loading || self.viewer.is_processing_filters || just_finished_processing {
             window.request_animation_frame();
         }
         
@@ -809,7 +811,10 @@ impl Render for App {
                 self.viewer.update_filtered_cache();
                 self.save_current_image_state();
                 
-                eprintln!("[App::render] Viewer filters updated, cache regenerated");
+                // If we just started filter processing, request animation frames to poll for completion
+                if self.viewer.is_processing_filters {
+                    window.request_animation_frame();
+                }
             }
         }
         
