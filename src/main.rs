@@ -1402,6 +1402,7 @@ fn main() {
                         preload_paths: Vec::new(),
                         loading_handle: None,
                         is_loading: false,
+                        is_processing_filters: false,
                     };
                     
                     if let Some(ref path) = first_image_path {

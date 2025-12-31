@@ -8,6 +8,7 @@ use crate::utils::animation::AnimationData;
 use crate::components::error_display::ErrorDisplay;
 use crate::components::zoom_indicator::ZoomIndicator;
 use crate::components::animation_indicator::AnimationIndicator;
+use crate::components::processing_indicator::ProcessingIndicator;
 use crate::state::ImageState;
 use crate::state::image_state::FilterSettings;
 
@@ -83,6 +84,8 @@ pub struct ImageViewer {
     pub loading_handle: Option<image_loader::LoaderHandle>,
     /// Loading state indicator
     pub is_loading: bool,
+    /// Filter processing state
+    pub is_processing_filters: bool,
 }
 
 impl ImageViewer {
@@ -506,13 +509,17 @@ impl ImageViewer {
             
             if needs_update {
                 if !filters_enabled || (filters.brightness.abs() < 0.001 && filters.contrast.abs() < 0.001 && (filters.gamma - 1.0).abs() < 0.001) {
-                    // Clear filtered cache
+                    // Clear filtered cache (no processing needed)
+                    self.is_processing_filters = false;
                     if let Some(ref filtered_path) = loaded.filtered_path {
                         let _ = std::fs::remove_file(filtered_path);
                     }
                     loaded.filtered_path = None;
                     loaded.cached_filter_settings = None;
                 } else {
+                    // Start filter processing
+                    self.is_processing_filters = true;
+                    
                     // Generate filtered image
                     if let Ok(img) = image_loader::load_image(&loaded.path) {
                         let filtered = filters::apply_filters(&img, filters.brightness, filters.contrast, filters.gamma);
@@ -529,7 +536,7 @@ impl ImageViewer {
                             eprintln!("[ImageViewer::update_filtered_cache] Saving filtered image to: {:?}", temp_path);
                             
                             if filtered.save(&temp_path).is_ok() {
-                                // Clean up old filtered image
+                                // Only clean up old filtered image AFTER new one is ready
                                 if let Some(ref old_filtered_path) = loaded.filtered_path {
                                     eprintln!("[ImageViewer::update_filtered_cache] Cleaning up old filtered image: {:?}", old_filtered_path);
                                     let _ = std::fs::remove_file(old_filtered_path);
@@ -537,13 +544,21 @@ impl ImageViewer {
                                 
                                 loaded.filtered_path = Some(temp_path);
                                 loaded.cached_filter_settings = Some(*filters);
+                                self.is_processing_filters = false;
                                 eprintln!("[ImageViewer::update_filtered_cache] Filtered image saved and path updated");
                             } else {
+                                self.is_processing_filters = false;
                                 eprintln!("[ImageViewer::update_filtered_cache] Failed to save filtered image");
                             }
+                        } else {
+                            self.is_processing_filters = false;
                         }
+                    } else {
+                        self.is_processing_filters = false;
                     }
                 }
+            } else {
+                self.is_processing_filters = false;
             }
         }
     }
@@ -754,6 +769,13 @@ impl ImageViewer {
             cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit, Some((width, height))))
         );
         
+        // Add processing indicator if filters are being processed
+        if self.is_processing_filters {
+            container = container.child(
+                cx.new(|_cx| ProcessingIndicator::new("Processing filters..."))
+            );
+        }
+        
         // Add animation indicator if this is an animated image
         if let Some(ref anim_state) = self.image_state.animation {
             container = container.child(
@@ -907,6 +929,13 @@ impl Render for ImageViewer {
                 // Zoom indicator overlay
                 cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit, Some((width, height))))
             );
+            
+            // Add processing indicator if filters are being processed
+            if self.is_processing_filters {
+                container = container.child(
+                    cx.new(|_cx| ProcessingIndicator::new("Processing filters..."))
+                );
+            }
             
             // Add animation indicator if this is an animated image
             if let Some(ref anim_state) = self.image_state.animation {
