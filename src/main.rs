@@ -577,13 +577,13 @@ impl App {
     
 
     fn handle_pan_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, -10.0);  // Pan up = move image down (negative Y)
+        self.viewer.pan(0.0, 10.0);  // Pan up = move viewport up = image moves down (positive Y)
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, 10.0);  // Pan down = move image up (positive Y)
+        self.viewer.pan(0.0, -10.0);  // Pan down = move viewport down = image moves up (negative Y)
         self.save_current_image_state();
         cx.notify();
     }
@@ -602,13 +602,13 @@ impl App {
     
     // Fast pan (3x speed = 30px) with Shift modifier
     fn handle_pan_up_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, -30.0);
+        self.viewer.pan(0.0, 30.0);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_down_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, 30.0);
+        self.viewer.pan(0.0, -30.0);
         self.save_current_image_state();
         cx.notify();
     }
@@ -627,13 +627,13 @@ impl App {
     
     // Slow pan (3px) with Ctrl/Cmd modifier (0.3x speed)
     fn handle_pan_up_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, -3.0);
+        self.viewer.pan(0.0, 3.0);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_down_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, 3.0);
+        self.viewer.pan(0.0, -3.0);
         self.save_current_image_state();
         cx.notify();
     }
