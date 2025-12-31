@@ -717,8 +717,14 @@ impl Render for App {
             cx.notify();
         }
         
-        // If still loading, request another render to check again
-        if self.viewer.is_loading {
+        // Check if filter processing has completed
+        if self.viewer.check_filter_processing() {
+            // Filter processing completed - request re-render to show the filtered image
+            cx.notify();
+        }
+        
+        // If still loading or processing filters, request another render to check again
+        if self.viewer.is_loading || self.viewer.is_processing_filters {
             window.request_animation_frame();
         }
         
@@ -1403,6 +1409,7 @@ fn main() {
                         loading_handle: None,
                         is_loading: false,
                         is_processing_filters: false,
+                        filter_processing_handle: None,
                     };
                     
                     if let Some(ref path) = first_image_path {
