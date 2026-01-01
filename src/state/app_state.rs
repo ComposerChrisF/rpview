@@ -115,7 +115,7 @@ impl AppState {
     }
     
     /// Navigate to the next image
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code)]
     pub fn next_image(&mut self) {
         self.next_image_with_wrap(true);
     }
@@ -133,7 +133,7 @@ impl AppState {
     }
     
     /// Navigate to the previous image
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code)]
     pub fn previous_image(&mut self) {
         self.previous_image_with_wrap(true);
     }

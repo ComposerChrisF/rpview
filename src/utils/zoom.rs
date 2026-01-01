@@ -19,7 +19,7 @@ pub const ZOOM_STEP_SLOW: f32 = 1.05;
 pub const ZOOM_STEP_INCREMENTAL: f32 = 0.01;
 
 /// Mouse wheel zoom step (smaller for smoother scrolling)
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code)]
 pub const ZOOM_STEP_WHEEL: f32 = 1.1;
 
 /// Clamp zoom level to valid range
