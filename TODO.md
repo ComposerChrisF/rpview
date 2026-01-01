@@ -648,19 +648,25 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [ ] Tooltips/help text for complex settings
 - [ ] Drag-and-drop reordering for external viewer list
 
-### Phase 16.7: Interactive Settings UI (Partially Complete) 🔄
+### Phase 16.7: Interactive Settings UI ✅ COMPLETE
 
-**Current Status:** Settings window is **partially interactive**. Most commonly used settings can be changed directly in the UI:
+**Status:** Settings window is **fully interactive** for all numeric and boolean settings (25+ settings).
 
 ✅ **Working Interactive Controls:**
-- Checkboxes for all boolean settings (animation auto-play, pan acceleration, etc.)
+- Checkboxes for all boolean settings (10+ settings including animation auto-play, pan acceleration, etc.)
 - Radio buttons for enum selections (zoom mode, sort mode, save format)
+- Numeric inputs with increment/decrement buttons (15+ settings)
+  - Pan speeds (normal, fast, slow)
+  - Zoom sensitivities (scroll wheel, Z-drag)
+  - Cache sizes and thread counts
+  - Filter defaults (brightness, contrast, gamma)
+  - Appearance settings (transparency, font scale)
+- Range validation: All numeric values automatically clamped to valid ranges
 - Apply button (Cmd+Enter) saves changes to disk
 - Cancel button (Esc) discards changes
 - Reset to Defaults button restores all settings to default values
 
-⏳ **Still Display-Only (requires JSON editing):**
-- Numeric input fields (pan speeds, sensitivities, dimensions, etc.)
+⏳ **Optional Enhancements (Low Priority - rarely changed settings):**
 - Text input fields (window title format, file paths)
 - Color picker for background color
 - File browser for default save directory
