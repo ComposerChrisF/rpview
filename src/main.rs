@@ -236,13 +236,20 @@ impl App {
     }
     
     fn handle_reset_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.image_state.filters = state::image_state::FilterSettings::default();
+        // Reset to default values from settings
+        let default_filters = state::image_state::FilterSettings {
+            brightness: self.settings.filters.default_brightness,
+            contrast: self.settings.filters.default_contrast,
+            gamma: self.settings.filters.default_gamma,
+        };
+        
+        self.viewer.image_state.filters = default_filters;
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         
         // Update the filter controls sliders to reflect the reset values
         self.filter_controls.update(cx, |controls, cx| {
-            controls.update_from_filters(state::image_state::FilterSettings::default(), cx);
+            controls.update_from_filters(default_filters, cx);
         });
         
         cx.notify();
@@ -346,17 +353,30 @@ impl App {
                 .and_then(|s| s.to_str())
                 .unwrap_or("image");
             
-            // Get original extension (default to png if none)
-            let original_ext = current_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("png");
+            // Determine extension from settings when filters are enabled
+            let save_ext = if self.viewer.image_state.filters_enabled {
+                // Use default save format from settings
+                use crate::state::settings::SaveFormat;
+                match self.settings.file_operations.default_save_format {
+                    SaveFormat::Png => "png",
+                    SaveFormat::Jpeg => "jpg",
+                    SaveFormat::Bmp => "bmp",
+                    SaveFormat::Tiff => "tiff",
+                    SaveFormat::Webp => "webp",
+                }
+            } else {
+                // Use original extension for unfiltered saves
+                current_path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("png")
+            };
             
             // Generate suggested filename with _filtered suffix if filters are enabled
             let suggested_name = if self.viewer.image_state.filters_enabled {
-                format!("{}_filtered.{}", original_stem, original_ext)
+                format!("{}_filtered.{}", original_stem, save_ext)
             } else {
-                format!("{}.{}", original_stem, original_ext)
+                format!("{}.{}", original_stem, save_ext)
             };
             
             // Open save dialog
@@ -369,11 +389,14 @@ impl App {
                 .set_file_name(&suggested_name)
                 .set_title("Save Image");
             
-            // Set default directory based on parameter
+            // Set default directory based on parameter or settings
             if let Some(dir) = default_dir {
                 file_dialog = file_dialog.set_directory(dir);
+            } else if let Some(ref default_save_dir) = self.settings.file_operations.default_save_directory {
+                // Use default save directory from settings
+                file_dialog = file_dialog.set_directory(default_save_dir);
             } else if let Some(parent) = current_path.parent() {
-                // Default to current image's parent directory
+                // Fall back to current image's parent directory
                 file_dialog = file_dialog.set_directory(parent);
             }
             
@@ -655,14 +678,16 @@ impl App {
     }
     
     fn handle_next_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.app_state.next_image();
+        let wrap = self.settings.sort_navigation.wrap_navigation;
+        self.app_state.next_image_with_wrap(wrap);
         self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
     
     fn handle_previous_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.app_state.previous_image();
+        let wrap = self.settings.sort_navigation.wrap_navigation;
+        self.app_state.previous_image_with_wrap(wrap);
         self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
@@ -779,82 +804,97 @@ impl App {
     
 
     fn handle_pan_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, -10.0);  // Pan up = move viewport up = image moves down (positive Y)
+        let speed = self.settings.keyboard_mouse.pan_speed_normal;
+        self.viewer.pan(0.0, -speed);  // Pan up = move viewport up = image moves down (positive Y)
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, 10.0);  // Pan down = move viewport down = image moves up (negative Y)
+        let speed = self.settings.keyboard_mouse.pan_speed_normal;
+        self.viewer.pan(0.0, speed);  // Pan down = move viewport down = image moves up (negative Y)
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_left(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(-10.0, 0.0);  // Pan left = move image right (negative X)
+        let speed = self.settings.keyboard_mouse.pan_speed_normal;
+        self.viewer.pan(-speed, 0.0);  // Pan left = move image right (negative X)
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_right(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(10.0, 0.0);  // Pan right = move image left (positive X)
+        let speed = self.settings.keyboard_mouse.pan_speed_normal;
+        self.viewer.pan(speed, 0.0);  // Pan right = move image left (positive X)
         self.save_current_image_state();
         cx.notify();
     }
     
-    // Fast pan (3x speed = 30px) with Shift modifier
+    // Fast pan with Shift modifier
     fn handle_pan_up_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, -30.0);
+        let speed = self.settings.keyboard_mouse.pan_speed_fast;
+        self.viewer.pan(0.0, -speed);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_down_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, 30.0);
+        let speed = self.settings.keyboard_mouse.pan_speed_fast;
+        self.viewer.pan(0.0, speed);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_left_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(-30.0, 0.0);
+        let speed = self.settings.keyboard_mouse.pan_speed_fast;
+        self.viewer.pan(-speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_right_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(30.0, 0.0);
+        let speed = self.settings.keyboard_mouse.pan_speed_fast;
+        self.viewer.pan(speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
     
-    // Slow pan (3px) with Ctrl/Cmd modifier (0.3x speed)
+    // Slow pan with Ctrl/Cmd modifier
     fn handle_pan_up_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, -3.0);
+        let speed = self.settings.keyboard_mouse.pan_speed_slow;
+        self.viewer.pan(0.0, -speed);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_down_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(0.0, 3.0);
+        let speed = self.settings.keyboard_mouse.pan_speed_slow;
+        self.viewer.pan(0.0, speed);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_left_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(-3.0, 0.0);
+        let speed = self.settings.keyboard_mouse.pan_speed_slow;
+        self.viewer.pan(-speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn handle_pan_right_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.viewer.pan(3.0, 0.0);
+        let speed = self.settings.keyboard_mouse.pan_speed_slow;
+        self.viewer.pan(speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
     
     fn save_current_image_state(&mut self) {
-        let state = self.viewer.get_image_state();
-        self.app_state.save_current_state(state);
+        // Only save state if enabled in settings
+        if self.settings.viewer_behavior.remember_per_image_state {
+            let state = self.viewer.get_image_state();
+            self.app_state.save_current_state(state);
+        }
     }
     
     fn load_current_image_state(&mut self) {
@@ -886,7 +926,16 @@ impl App {
             let position = self.app_state.current_index + 1;
             let total = self.app_state.image_paths.len();
             
-            let title = format!("{} ({}/{})", filename, position, total);
+            // Apply window title format from settings
+            let title = if self.settings.sort_navigation.show_image_counter {
+                self.settings.appearance.window_title_format
+                    .replace("{filename}", filename)
+                    .replace("{index}", &position.to_string())
+                    .replace("{total}", &total.to_string())
+            } else {
+                filename.to_string()
+            };
+            
             window.set_window_title(&title);
         } else {
             window.set_window_title("rpview-gpui");
@@ -902,13 +951,33 @@ impl Render for App {
         if self.viewer.check_async_load() {
             // Image loaded successfully or failed - load state and setup animation
             if let Some(path) = self.app_state.current_image().cloned() {
-                // Load cached state if available
-                if self.app_state.image_states.contains_key(&path) {
+                // Load cached state if available and enabled in settings
+                if self.settings.viewer_behavior.remember_per_image_state 
+                    && self.app_state.image_states.contains_key(&path) {
                     self.load_current_image_state();
+                } else {
+                    // Apply default zoom mode from settings for new images
+                    use crate::state::settings::ZoomMode;
+                    match self.settings.viewer_behavior.default_zoom_mode {
+                        ZoomMode::FitToWindow => {
+                            self.viewer.fit_to_window();
+                        }
+                        ZoomMode::OneHundredPercent => {
+                            self.viewer.image_state.zoom = 1.0;
+                            self.viewer.image_state.is_fit_to_window = false;
+                            self.viewer.image_state.pan = (0.0, 0.0);
+                        }
+                    }
                 }
                 
-                // Start animation if this is an animated image and it's set to play
-                if let Some(ref anim_state) = self.viewer.image_state.animation {
+                // Apply animation auto-play setting
+                if let Some(ref mut anim_state) = self.viewer.image_state.animation {
+                    // Set is_playing based on settings (unless we loaded cached state)
+                    if !self.settings.viewer_behavior.remember_per_image_state 
+                        || !self.app_state.image_states.contains_key(&path) {
+                        anim_state.is_playing = self.settings.viewer_behavior.animation_auto_play;
+                    }
+                    
                     if anim_state.is_playing {
                         self.last_frame_update = Instant::now();
                     }
@@ -1139,10 +1208,11 @@ impl Render for App {
                             let current_zoom = this.viewer.image_state.zoom;
                             
                             // Scale zoom change proportionally to CURRENT zoom level
-                            // At 100% zoom (1.0): 1% per pixel
-                            // At 200% zoom (2.0): 2% per pixel (more sensitive)
-                            // At 50% zoom (0.5): 0.5% per pixel (less sensitive)
-                            let zoom_change = combined_delta * 0.01 * current_zoom;
+                            // At 100% zoom (1.0): sensitivity% per pixel
+                            // At 200% zoom (2.0): 2*sensitivity% per pixel (more sensitive)
+                            // At 50% zoom (0.5): 0.5*sensitivity% per pixel (less sensitive)
+                            let sensitivity = this.settings.keyboard_mouse.z_drag_sensitivity;
+                            let zoom_change = combined_delta * sensitivity * current_zoom;
                             let new_zoom = utils::zoom::clamp_zoom(current_zoom + zoom_change);
                             
                             // Apply zoom centered on initial click position
@@ -1183,7 +1253,9 @@ impl Render for App {
                     let cursor_x: f32 = event.position.x.into();
                     let cursor_y: f32 = event.position.y.into();
                     
-                    this.viewer.zoom_toward_point(cursor_x, cursor_y, zoom_in, utils::zoom::ZOOM_STEP_WHEEL);
+                    // Use scroll wheel sensitivity from settings
+                    let zoom_step = this.settings.keyboard_mouse.scroll_wheel_sensitivity;
+                    this.viewer.zoom_toward_point(cursor_x, cursor_y, zoom_in, zoom_step);
                     this.save_current_image_state();
                     cx.notify();
                 }
@@ -1608,8 +1680,13 @@ fn main() {
         std::path::PathBuf::new()
     };
     
-    // Initialize application state with the starting index
-    let app_state = AppState::new_with_index(image_paths.clone(), start_index);
+    // Initialize application state with the starting index and settings
+    let app_state = AppState::new_with_settings(
+        image_paths.clone(), 
+        start_index,
+        settings.sort_navigation.default_sort_mode.into(),
+        settings.viewer_behavior.state_cache_size,
+    );
     
     // Print startup info
     println!("rpview-gpui starting...");

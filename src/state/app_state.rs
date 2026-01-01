@@ -60,6 +60,33 @@ impl AppState {
         }
     }
     
+    /// Create a new AppState with settings
+    pub fn new_with_settings(
+        image_paths: Vec<PathBuf>, 
+        start_index: usize,
+        default_sort_mode: SortMode,
+        cache_size: usize,
+    ) -> Self {
+        let current_index = if start_index < image_paths.len() {
+            start_index
+        } else {
+            0
+        };
+        
+        let mut state = Self {
+            image_paths,
+            current_index,
+            sort_mode: default_sort_mode,
+            image_states: HashMap::new(),
+            max_cache_size: cache_size,
+        };
+        
+        // Sort images according to the default sort mode
+        state.sort_images();
+        
+        state
+    }
+    
     /// Get the current image path
     pub fn current_image(&self) -> Option<&PathBuf> {
         self.image_paths.get(self.current_index)
@@ -89,19 +116,35 @@ impl AppState {
     
     /// Navigate to the next image
     pub fn next_image(&mut self) {
+        self.next_image_with_wrap(true);
+    }
+    
+    /// Navigate to the next image with optional wrapping
+    pub fn next_image_with_wrap(&mut self, wrap: bool) {
         if !self.image_paths.is_empty() {
-            self.current_index = (self.current_index + 1) % self.image_paths.len();
+            if self.current_index + 1 < self.image_paths.len() {
+                self.current_index += 1;
+            } else if wrap {
+                self.current_index = 0;
+            }
+            // If not wrapping and at end, stay at current position
         }
     }
     
     /// Navigate to the previous image
     pub fn previous_image(&mut self) {
+        self.previous_image_with_wrap(true);
+    }
+    
+    /// Navigate to the previous image with optional wrapping
+    pub fn previous_image_with_wrap(&mut self, wrap: bool) {
         if !self.image_paths.is_empty() {
-            if self.current_index == 0 {
-                self.current_index = self.image_paths.len() - 1;
-            } else {
+            if self.current_index > 0 {
                 self.current_index -= 1;
+            } else if wrap {
+                self.current_index = self.image_paths.len() - 1;
             }
+            // If not wrapping and at start, stay at current position
         }
     }
     

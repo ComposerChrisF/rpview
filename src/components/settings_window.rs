@@ -1,7 +1,38 @@
 //! Settings window component for rpview-gpui
 //! 
 //! Provides a full-screen overlay with a settings panel allowing users to
-//! customize all application settings.
+//! view all application settings.
+//!
+//! ## Current Status: READ-ONLY (Display-Only)
+//!
+//! **Important:** The settings window currently displays settings values but
+//! does not provide interactive controls to edit them. Users must manually
+//! edit the `settings.json` file to change settings:
+//!
+//! - macOS: `~/Library/Application Support/rpview/settings.json`
+//! - Linux: `~/.config/rpview/settings.json`
+//! - Windows: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
+//!
+//! ## Making the UI Interactive
+//!
+//! To enable in-app editing, the following needs to be implemented:
+//!
+//! 1. **Add event handlers** to UI controls (checkboxes, radio buttons, inputs)
+//! 2. **Update working_settings** field when users interact with controls
+//! 3. **Add input validation** for numeric fields and paths
+//! 4. **Wire up Apply button** to save working_settings to disk
+//! 5. **Add text input components** for numeric and string fields
+//!
+//! See TODO.md Phase 16.7 for detailed implementation tasks.
+//!
+//! ## Architecture
+//!
+//! The component maintains two copies of settings:
+//! - `working_settings`: Current edits (not yet saved)
+//! - `original_settings`: Original values (for Cancel/revert)
+//!
+//! Apply/Cancel/Reset handlers exist in main.rs but working_settings is
+//! never modified since controls are not interactive.
 
 use adabraka_ui::prelude::scrollable_vertical;
 use gpui::prelude::*;
