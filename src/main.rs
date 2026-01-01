@@ -60,6 +60,8 @@ actions!(app, [
     OpenFile,
     SaveFile,
     SaveFileToDownloads,
+    OpenInExternalViewer,
+    OpenInExternalViewerAndQuit,
 ]);
 
 struct App {
@@ -380,6 +382,83 @@ impl App {
         };
         
         save_result.map_err(|e| format!("Failed to save image: {}", e))
+    }
+    
+    fn handle_open_in_external_viewer(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(current_path) = self.app_state.current_image() {
+            if let Err(e) = self.open_in_system_viewer(current_path) {
+                eprintln!("Failed to open image in external viewer: {}", e);
+            }
+        }
+        cx.notify();
+    }
+    
+    fn handle_open_in_external_viewer_and_quit(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(current_path) = self.app_state.current_image() {
+            if let Err(e) = self.open_in_system_viewer(current_path) {
+                eprintln!("Failed to open image in external viewer: {}", e);
+            } else {
+                // Only quit if we successfully opened the image
+                cx.quit();
+            }
+        }
+    }
+    
+    fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            // On macOS, explicitly open with Preview.app
+            std::process::Command::new("open")
+                .arg("-a")
+                .arg("Preview")
+                .arg(image_path)
+                .spawn()
+                .map_err(|e| format!("Failed to launch Preview: {}", e))?;
+        }
+        
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows, explicitly open with Photos app to avoid circular reference
+            // if rpview is set as the default image viewer
+            // Try Photos app first (Windows 10/11), fall back to Windows Photo Viewer
+            let photos_result = std::process::Command::new("cmd")
+                .args(&["/C", "start", "ms-photos:", image_path.to_str().unwrap_or("")])
+                .spawn();
+            
+            if photos_result.is_err() {
+                // Fall back to Windows Photo Viewer (older Windows or if Photos app not available)
+                std::process::Command::new("rundll32.exe")
+                    .args(&[
+                        "C:\\Program Files\\Windows Photo Viewer\\PhotoViewer.dll,ImageView_Fullscreen",
+                        image_path.to_str().unwrap_or("")
+                    ])
+                    .spawn()
+                    .map_err(|e| format!("Failed to open image: {}", e))?;
+            }
+        }
+        
+        #[cfg(target_os = "linux")]
+        {
+            // On Linux, try common image viewers in order of preference
+            let viewers = ["eog", "xviewer", "gwenview", "feh", "xdg-open"];
+            let mut opened = false;
+            
+            for viewer in &viewers {
+                if let Ok(_) = std::process::Command::new(viewer)
+                    .arg(image_path)
+                    .spawn()
+                {
+                    opened = true;
+                    break;
+                }
+            }
+            
+            if !opened {
+                return Err("No suitable image viewer found".to_string());
+            }
+        }
+        
+        Ok(())
     }
     
     fn handle_dropped_files(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
@@ -1194,6 +1273,12 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &SaveFileToDownloads, window, cx| {
                 this.handle_save_file_to_downloads(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &OpenInExternalViewer, window, cx| {
+                this.handle_open_in_external_viewer(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &OpenInExternalViewerAndQuit, window, cx| {
+                this.handle_open_in_external_viewer_and_quit(window, cx);
+            }))
     }
 }
 
@@ -1269,6 +1354,9 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("cmd-o", OpenFile, None),
         KeyBinding::new("cmd-s", SaveFile, None),
         KeyBinding::new("cmd-alt-s", SaveFileToDownloads, None),
+        // External viewer
+        KeyBinding::new("cmd-alt-f", OpenInExternalViewer, None),
+        KeyBinding::new("shift-cmd-alt-f", OpenInExternalViewerAndQuit, None),
     ]);
 }
 

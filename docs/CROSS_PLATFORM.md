@@ -176,6 +176,20 @@ RPView supports drag-and-drop file opening on all platforms:
 - Directory drag (scans for images)
 - Visual feedback (green border during drag-over)
 
+### External Viewer Integration
+
+RPView can open the current image in external viewers without setting itself as the default handler:
+
+- **macOS**: Opens in Preview.app explicitly (`Cmd+Opt+F`)
+- **Windows**: Opens in Photos app or Windows Photo Viewer (`Ctrl+Alt+F`)
+- **Linux**: Tries common viewers (eog, xviewer, gwenview, feh, xdg-open) (`Ctrl+Alt+F`)
+
+**Features:**
+- `Cmd/Ctrl+Opt/Alt+F`: Opens current image in external viewer
+- `Shift+Cmd/Ctrl+Opt/Alt+F`: Opens in external viewer and quits rpview
+- Avoids circular reference when rpview is set as default viewer
+- Falls back through multiple viewers on Linux until one succeeds
+
 ## Building for Each Platform
 
 ### macOS
@@ -273,6 +287,8 @@ All keyboard shortcuts have been verified to work cross-platform:
 | Zoom In | Cmd++ | Ctrl++ |
 | Filters | Cmd+F | Ctrl+F |
 | Sort Alphabetically | Shift+Cmd+A | Shift+Ctrl+A |
+| Open in External Viewer | Cmd+Opt+F | Ctrl+Alt+F |
+| Open Externally & Quit | Shift+Cmd+Opt+F | Shift+Ctrl+Alt+F |
 
 ### File Dialogs
 
