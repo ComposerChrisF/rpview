@@ -114,6 +114,7 @@ impl HelpOverlay {
             self.render_shortcut(format!("{}-Option-S", platform_key), "Save to Downloads folder".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-Option-F", platform_key), "Open in external viewer (Preview/Photos)".to_string()).into_any_element(),
             self.render_shortcut(format!("Shift+{}-Option-F", platform_key), "Open externally and quit".to_string()).into_any_element(),
+            self.render_shortcut(format!("{}-E", platform_key), "Open in external editor".to_string()).into_any_element(),
             self.render_shortcut("Drag & Drop".to_string(), "Drop files/folders to open".to_string()).into_any_element(),
             
             // Help section
