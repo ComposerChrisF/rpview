@@ -19,7 +19,7 @@ use rpview_gpui::{
     CloseWindow, Quit, EscapePressed, NextImage, PreviousImage,
     ToggleAnimationPlayPause, NextFrame, PreviousFrame,
     SortAlphabetical, SortByModified,
-    ZoomIn, ZoomOut, ZoomReset, ZoomInFast, ZoomOutFast, ZoomInSlow, ZoomOutSlow,
+    ZoomIn, ZoomOut, ZoomReset, ZoomResetAndCenter, ZoomInFast, ZoomOutFast, ZoomInSlow, ZoomOutSlow,
     ZoomInIncremental, ZoomOutIncremental,
     PanUp, PanDown, PanLeft, PanRight,
     PanUpFast, PanDownFast, PanLeftFast, PanRightFast,
@@ -720,6 +720,12 @@ impl App {
         cx.notify();
     }
     
+    fn handle_zoom_reset_and_center(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.reset_zoom_and_pan();
+        self.save_current_image_state();
+        cx.notify();
+    }
+    
     fn handle_zoom_in_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.viewer.zoom_in(utils::zoom::ZOOM_STEP_FAST);
         self.save_current_image_state();
@@ -1332,6 +1338,9 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &ZoomReset, window, cx| {
                 this.handle_zoom_reset(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ZoomResetAndCenter, window, cx| {
+                this.handle_zoom_reset_and_center(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &ZoomInFast, window, cx| {
                 this.handle_zoom_in_fast(window, cx);
             }))
@@ -1473,6 +1482,7 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("+", ZoomIn, None),
         KeyBinding::new("-", ZoomOut, None),
         KeyBinding::new("0", ZoomReset, None),
+        KeyBinding::new("cmd-0", ZoomResetAndCenter, None),
         // Zoom controls - fast (with Shift)
         KeyBinding::new("shift-=", ZoomInFast, None),
         KeyBinding::new("shift-+", ZoomInFast, None),

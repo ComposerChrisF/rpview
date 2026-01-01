@@ -201,14 +201,39 @@ impl ImageViewer {
         self.image_state.pan = self.constrain_pan(new_pan_x, new_pan_y);
     }
     
-    /// Toggle between fit-to-window and 100% zoom
+    /// Toggle between fit-to-window and 100% zoom, preserving center pixel position
     pub fn reset_zoom(&mut self) {
-        if self.image_state.is_fit_to_window {
-            // Currently at fit-to-window, switch to 100%
-            self.set_one_hundred_percent();
-        } else {
-            // Currently at custom zoom, switch to fit-to-window
-            self.fit_to_window();
+        if let (Some(_img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+            let viewport_width: f32 = viewport.width.into();
+            let viewport_height: f32 = viewport.height.into();
+            
+            if self.image_state.is_fit_to_window {
+                // Currently at fit-to-window, switch to 100%
+                // Calculate the center point of the viewport in image coordinates
+                let center_x = viewport_width / 2.0;
+                let center_y = viewport_height / 2.0;
+                
+                // At fit-to-window, the image is centered and scaled
+                // We need to find what image pixel is at the viewport center
+                let current_zoom = self.image_state.zoom;
+                let (current_pan_x, current_pan_y) = self.image_state.pan;
+                
+                // Image pixel at viewport center (in image coordinates)
+                let image_x = (center_x - current_pan_x) / current_zoom;
+                let image_y = (center_y - current_pan_y) / current_zoom;
+                
+                // Now set to 100% zoom and adjust pan to keep that pixel centered
+                let new_zoom = 1.0;
+                let new_pan_x = center_x - (image_x * new_zoom);
+                let new_pan_y = center_y - (image_y * new_zoom);
+                
+                self.image_state.zoom = new_zoom;
+                self.image_state.pan = (new_pan_x, new_pan_y);
+                self.image_state.is_fit_to_window = false;
+            } else {
+                // Currently at custom zoom, switch to fit-to-window
+                self.fit_to_window();
+            }
         }
     }
     
@@ -227,6 +252,17 @@ impl ImageViewer {
             self.image_state.zoom = 1.0;
             self.image_state.pan = (pan_x, pan_y);
             self.image_state.is_fit_to_window = false;
+        }
+    }
+    
+    /// Reset both zoom and pan - set to 100% centered or fit-to-window
+    pub fn reset_zoom_and_pan(&mut self) {
+        if self.image_state.is_fit_to_window {
+            // Already at fit-to-window (which is centered), do nothing or toggle to 100% centered
+            self.set_one_hundred_percent();
+        } else {
+            // Set to 100% and center
+            self.set_one_hundred_percent();
         }
     }
     
