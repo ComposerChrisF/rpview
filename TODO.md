@@ -657,73 +657,202 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 **What's Needed:** Add interactive controls to allow in-app editing of settings through the Cmd+, settings window.
 
-- [ ] **Interactive Checkboxes**
-  - [ ] Add on_mouse_down handlers to checkbox divs
-  - [ ] Toggle boolean values in working_settings
-  - [ ] Update visual state on click
+---
+
+## Research Summary: Zed Settings UI Patterns (December 2024)
+
+### UI Components to Use
+
+Based on research of Zed editor's Settings dialog implementation, we should use the following patterns:
+
+**1. Checkboxes:**
+- Use `adabraka-ui` checkbox components (we already depend on this crate)
+- Zed uses dedicated `Checkbox` component from their UI crate
+- Pattern: `.on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, cx| { ... }))`
+- Toggle boolean in `working_settings` and call `cx.notify()` to trigger re-render
+
+**2. Numeric Inputs (Spinner/NumberInput):**
+- Widget with text input field + increment/decrement buttons
+- Layout: `[-] [value] [+]`
+- Components needed:
+  - Center: Text input showing numeric value
+  - Left: `-` button to decrement
+  - Right: `+` button to increment
+- Add validation for min/max ranges
+- Check if `adabraka-ui` or GPUI provides NumberInput component
+- If not, compose from: TextInput + Button components
+
+**3. Text Inputs:**
+- Use GPUI's `TextInput` or `adabraka-ui` input components
+- For strings like window_title_format, file paths, etc.
+
+**4. Radio Buttons / Toggle Groups:**
+- For enum selections (ZoomMode, SortMode, SaveFormat)
+- Zed uses radio button groups with visual selection state
+- Pattern: Horizontal flex row with clickable divs
+- Highlight selected option with border/background color
+
+**5. Dropdowns/Select:**
+- For enum options and format selections
+- Check `adabraka-ui` for Select component
+- Alternative: implement custom dropdown with click-to-expand
+
+### Zed's Architecture Pattern
+
+Zed's Settings UI uses:
+```
+SettingField<T>         - Type-safe wrapper for read/write operations
+SettingFieldRenderer    - Maps setting types to UI controls
+```
+
+Located in: `crates/settings_ui/src/settings_ui.rs` (lines 406-503)
+
+**Key Features:**
+- Settings organized into pages/sections (we already have this)
+- Sidebar navigation (we already have this)
+- Working copy pattern for Apply/Cancel (we already have this!)
+- Shows which file setting is defined in
+- Allows resetting to defaults
+
+### GPUI Event Handling Pattern
+
+```rust
+// Interactive element pattern
+div()
+    .on_mouse_up(MouseButton::Left, cx.listener(|this, _event, _window, cx| {
+        // Update state
+        this.working_settings.some_field = new_value;
+        // Trigger re-render
+        cx.notify();
+    }))
+```
+
+**Key Points:**
+- Mouse handlers don't require focus
+- `cx.notify()` signals state change and triggers re-render
+- State lives directly in the component (like React's `useState`)
+- Use `cx.listener()` to create event handlers with access to `self`
+
+### Resources for Implementation
+
+**Dependencies:**
+- `adabraka-ui`: Already in use (provides 73+ GPUI components)
+- Check what's available: Checkbox, Input, Button, Select, NumberInput
+
+**Learning Resources:**
+- Zed's Settings UI blog: https://zed.dev/blog/settings-ui
+- GPUI Interactivity guide: https://blog.0xshadow.dev/posts/learning-gpui/gpui-interactivity/
+- GPUI Component Library: https://longbridge.github.io/gpui-component/docs/components/
+- adabraka-ui repo: https://github.com/Augani/adabraka-ui
+
+---
+
+## Implementation Tasks
+
+- [ ] **Step 0: Explore adabraka-ui Components**
+  - [ ] Check what interactive components are available in adabraka-ui
+  - [ ] Document available: Checkbox, Input, Button, Select, NumberInput
+  - [ ] Identify any missing components we need to build custom
+
+- [ ] **Step 1: Interactive Checkboxes** (Easiest first!)
+  - [ ] Import checkbox component from adabraka-ui
+  - [ ] Replace `render_checkbox()` static divs with interactive component
+  - [ ] Add event handlers to toggle boolean values in working_settings
+  - [ ] Call cx.notify() to trigger re-render
+  - [ ] Test with one checkbox, then apply to all
   - [ ] Affected settings: remember_per_image_state, animation_auto_play, preload_adjacent_images, wrap_navigation, etc.
 
-- [ ] **Interactive Numeric Inputs**
-  - [ ] Replace static div with TextInput or custom input element
-  - [ ] Add input validation (min/max ranges)
-  - [ ] Parse and update working_settings on change
-  - [ ] Affected settings: pan speeds, cache sizes, sensitivities, dimensions
-
-- [ ] **Interactive Radio Buttons**
-  - [ ] Add on_mouse_down handlers to radio button divs
-  - [ ] Update enum values in working_settings
-  - [ ] Update visual selection state
+- [ ] **Step 2: Interactive Radio Buttons / Toggle Groups**
+  - [ ] Update radio button divs with on_mouse_up handlers
+  - [ ] Update enum values in working_settings on click
+  - [ ] Update visual selection state (border color, background)
+  - [ ] Call cx.notify() after state change
   - [ ] Affected settings: default_zoom_mode, default_sort_mode, default_save_format
 
-- [ ] **Interactive Dropdowns**
-  - [ ] Implement dropdown/select components
+- [ ] **Step 3: Interactive Numeric Inputs with +/- Buttons**
+  - [ ] Check if adabraka-ui or GPUI provides NumberInput/Spinner
+  - [ ] If yes: use that component
+  - [ ] If no: Build custom using TextInput + Button components
+  - [ ] Layout: `[-] [text_input] [+]` in horizontal flex
+  - [ ] Add increment/decrement handlers
+  - [ ] Add direct text input with parsing and validation
+  - [ ] Validate min/max ranges (cache_size > 0, dimensions reasonable)
+  - [ ] Show validation errors visually (red border, error message)
+  - [ ] Affected settings: pan speeds, cache sizes, sensitivities, dimensions
+
+- [ ] **Step 4: Text Input Fields**
+  - [ ] Import text input component from adabraka-ui
+  - [ ] Replace static divs with interactive TextInput
+  - [ ] Update working_settings on text change
+  - [ ] Affected settings: window_title_format, external viewer command/args
+
+- [ ] **Step 5: Dropdowns/Select Components**
+  - [ ] Check if adabraka-ui provides Select/Dropdown
+  - [ ] If yes: use for save format selection
+  - [ ] If no: keep radio buttons or implement custom dropdown
   - [ ] Populate with enum/option values
   - [ ] Update working_settings on selection
-  - [ ] Affected settings: file formats, sort modes
 
-- [ ] **External Viewer List Editor**
-  - [ ] Add button to add new viewer
-  - [ ] Add delete button for each viewer
-  - [ ] Add up/down reorder buttons
-  - [ ] Add text inputs for name, command, args
-  - [ ] Add enable/disable toggle
-  - [ ] Support {path} placeholder editing
+- [ ] **Step 6: Directory Picker**
+  - [ ] Add "Browse..." button click handler
+  - [ ] Use GPUI's native file dialog (or rfd crate)
+  - [ ] Open directory picker dialog
+  - [ ] Update working_settings.default_save_directory with selected path
+  - [ ] Update display to show new path
 
-- [ ] **Color Picker** (optional)
-  - [ ] Implement or integrate color picker component
+- [ ] **Step 7: Color Picker** (optional, low priority)
+  - [ ] Research if adabraka-ui or GPUI provides color picker
+  - [ ] If not, defer or use hex text input as alternative
   - [ ] Allow RGB selection for background_color
-  - [ ] Show color preview
+  - [ ] Update color preview square
 
-- [ ] **Directory Picker**
-  - [ ] Add "Browse..." button for default_save_directory
-  - [ ] Open native directory picker dialog
-  - [ ] Update setting with selected path
+- [ ] **Step 8: External Viewer List Editor** (Most complex)
+  - [ ] Add "Add Viewer" button with click handler
+  - [ ] Add delete button (X) for each viewer with index tracking
+  - [ ] Add up/down reorder buttons with vec swap logic
+  - [ ] Add text inputs for name, command, args (editable)
+  - [ ] Add enable/disable toggle checkbox per viewer
+  - [ ] Support {path} placeholder in args
+  - [ ] Update working_settings.external_tools.external_viewers vec
 
-- [ ] **Apply/Cancel/Reset Integration**
-  - [ ] Ensure Apply button calls save_settings() with working_settings
-  - [ ] Ensure Cancel button reverts working_settings to original_settings
-  - [ ] Ensure Reset button sets working_settings to AppSettings::default()
-  - [ ] Close settings window after Apply/Cancel
+- [ ] **Step 9: Wire Up Apply/Cancel/Reset Buttons**
+  - [ ] Add on_mouse_up handler to Apply button
+  - [ ] Send event to parent (main.rs) with working_settings
+  - [ ] main.rs calls save_settings() with working_settings
+  - [ ] Close settings window after Apply
+  - [ ] Add on_mouse_up handler to Cancel button
+  - [ ] Revert working_settings to original_settings
+  - [ ] Close settings window
+  - [ ] Add on_mouse_up handler to Reset button
+  - [ ] Set working_settings = AppSettings::default()
+  - [ ] Keep window open to review defaults
 
-- [ ] **Input Validation & Error Handling**
-  - [ ] Validate numeric ranges (e.g., cache_size > 0, max_image_dimensions reasonable)
-  - [ ] Validate file paths exist for directories
-  - [ ] Show error messages for invalid inputs
-  - [ ] Prevent Apply with invalid settings
+- [ ] **Step 10: Input Validation & Error Handling**
+  - [ ] Add validation for numeric ranges (cache_size > 0, dimensions < 100000)
+  - [ ] Add validation for file paths (directory exists)
+  - [ ] Show error messages below invalid inputs (red text)
+  - [ ] Disable Apply button when validation fails
+  - [ ] Add visual error state (red border on invalid inputs)
 
-- [ ] **Live Preview** (optional)
-  - [ ] Apply appearance settings immediately to preview
+- [ ] **Step 11: Live Preview** (optional, nice-to-have)
+  - [ ] Apply appearance settings (background_color) immediately to main window
   - [ ] Revert on Cancel
-  - [ ] Update window title format in real-time
+  - [ ] Update window title format in real-time as user types
 
 **Implementation Notes:**
 - Current render methods in `src/components/settings_window.rs` show values but have no event handlers
-- `working_settings` field exists and is designed to track edits before Apply
+- `working_settings` field exists and is designed to track edits before Apply (perfect!)
 - `handle_apply_settings()` in `src/main.rs` already calls `save_settings()` - just needs working_settings to be updated
-- Consider using GPUI's input primitives or building custom interactive components
-- May need to add state tracking for expanded dropdowns, active inputs, etc.
+- We already use `adabraka-ui` (see import at settings_window.rs:47) - leverage this!
+- Sidebar navigation already works (proof that event handlers work correctly)
 
-**Estimated Effort:** 4-6 hours for basic interactive controls, 8-10 hours for full-featured UI with validation and polish.
+**Estimated Effort:**
+- Steps 0-2 (checkboxes, radio buttons): 2-3 hours
+- Steps 3-4 (numeric inputs, text inputs): 3-4 hours
+- Steps 5-7 (dropdowns, directory picker, color picker): 2-3 hours
+- Step 8 (external viewer editor): 2-3 hours
+- Steps 9-11 (buttons, validation, preview): 2-3 hours
+- **Total: 11-16 hours** (more than initial estimate due to research and polish)
 
 ## Future Enhancements (Post-1.0)
 
