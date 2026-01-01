@@ -527,28 +527,28 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [x] Load settings in main() before window creation
 - [x] Implement immediate save-on-load (crash-resistant, no save-on-quit needed)
 
-### Phase 16.2: Settings Window UI (3-4 hours)
-- [ ] Create SettingsWindow component (src/components/settings_window.rs)
-- [ ] Define SettingsWindow struct with working/original settings copies
-- [ ] Implement SettingsSection enum for navigation
-- [ ] Design basic overlay layout (full-screen semi-transparent background)
-- [ ] Implement section sidebar navigation
-- [ ] Create Apply/Cancel/Reset to Defaults buttons
-- [ ] Implement section rendering methods:
-  - [ ] render_viewer_behavior() - radio buttons, checkboxes, numeric inputs
-  - [ ] render_performance() - checkboxes, numeric inputs
-  - [ ] render_keyboard_mouse() - sliders for all sensitivity settings
-  - [ ] render_file_operations() - file picker, dropdown, checkboxes
-  - [ ] render_appearance() - color picker, transparency slider, font scale slider
-  - [ ] render_filters() - default value sliders, preset list
-  - [ ] render_sort_navigation() - radio buttons, checkboxes
-  - [ ] render_external_tools() - list view with add/remove/reorder
-- [ ] Wire up ToggleSettings action
-- [ ] Add Cmd+, keybinding (standard settings shortcut)
-- [ ] Add show_settings: bool to App struct
-- [ ] Implement toggle handler
-- [ ] Add conditional rendering in App::render()
-- [ ] Update help overlay with settings shortcut
+### Phase 16.2: Settings Window UI ✅
+- [x] Create SettingsWindow component (src/components/settings_window.rs)
+- [x] Define SettingsWindow struct with working/original settings copies
+- [x] Implement SettingsSection enum for navigation
+- [x] Design basic overlay layout (full-screen semi-transparent background)
+- [x] Implement section sidebar navigation
+- [x] Create Apply/Cancel/Reset to Defaults buttons
+- [x] Implement section rendering methods:
+  - [x] render_viewer_behavior() - radio buttons, checkboxes, numeric inputs
+  - [x] render_performance() - checkboxes, numeric inputs
+  - [x] render_keyboard_mouse() - numeric inputs for all sensitivity settings
+  - [x] render_file_operations() - file picker placeholder, dropdown, checkboxes
+  - [x] render_appearance() - color picker placeholder, numeric inputs
+  - [x] render_filters() - numeric inputs, preset list
+  - [x] render_sort_navigation() - radio buttons, checkboxes
+  - [x] render_external_tools() - list view display (add/remove/reorder deferred to Phase 16.3)
+- [x] Wire up ToggleSettings action
+- [x] Add Cmd+, keybinding (standard settings shortcut)
+- [x] Add show_settings: bool to App struct
+- [x] Implement toggle handler
+- [x] Add conditional rendering in App::render()
+- [x] Update help overlay with settings shortcut
 
 ### Phase 16.3: External Viewer Integration (1-2 hours)
 - [ ] Update open_in_system_viewer() to use settings
