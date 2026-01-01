@@ -501,6 +501,150 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [ ] Create installation packages
 - [ ] Publish to crates.io
 
+## Phase 16: Settings System
+
+This phase implements a comprehensive settings system allowing users to customize rpview's behavior, appearance, and external tool integration. See `docs/SETTINGS_DESIGN.md` for detailed design documentation.
+
+### Phase 1: Foundation (2-3 hours)
+- [ ] Create settings module structure (src/state/settings.rs)
+- [ ] Define AppSettings struct with all sub-structs:
+  - [ ] ViewerBehavior (default zoom mode, state cache, animation auto-play)
+  - [ ] Performance (preload, threads, max dimensions)
+  - [ ] KeyboardMouse (pan speeds, zoom sensitivity)
+  - [ ] FileOperations (default save dir/format, remember directory)
+  - [ ] Appearance (background color, overlay transparency, font scale)
+  - [ ] Filters (default values, presets)
+  - [ ] SortNavigation (default sort mode, wrap navigation)
+  - [ ] ExternalTools (viewer list, editor, file manager integration)
+- [ ] Implement Default traits for all settings structs
+- [ ] Add serde derives for serialization
+- [ ] Create settings persistence module (src/utils/settings_io.rs)
+- [ ] Implement get_settings_path() using dirs crate
+- [ ] Implement save_settings() with JSON serialization
+- [ ] Implement load_settings() with error handling
+- [ ] Add serde and serde_json dependencies to Cargo.toml
+- [ ] Integrate settings into App struct
+- [ ] Load settings in main() before window creation
+- [ ] Save settings on quit
+
+### Phase 2: Settings Window UI (3-4 hours)
+- [ ] Create SettingsWindow component (src/components/settings_window.rs)
+- [ ] Define SettingsWindow struct with working/original settings copies
+- [ ] Implement SettingsSection enum for navigation
+- [ ] Design basic overlay layout (full-screen semi-transparent background)
+- [ ] Implement section sidebar navigation
+- [ ] Create Apply/Cancel/Reset to Defaults buttons
+- [ ] Implement section rendering methods:
+  - [ ] render_viewer_behavior() - radio buttons, checkboxes, numeric inputs
+  - [ ] render_performance() - checkboxes, numeric inputs
+  - [ ] render_keyboard_mouse() - sliders for all sensitivity settings
+  - [ ] render_file_operations() - file picker, dropdown, checkboxes
+  - [ ] render_appearance() - color picker, transparency slider, font scale slider
+  - [ ] render_filters() - default value sliders, preset list
+  - [ ] render_sort_navigation() - radio buttons, checkboxes
+  - [ ] render_external_tools() - list view with add/remove/reorder
+- [ ] Wire up ToggleSettings action
+- [ ] Add Cmd+, keybinding (standard settings shortcut)
+- [ ] Add show_settings: bool to App struct
+- [ ] Implement toggle handler
+- [ ] Add conditional rendering in App::render()
+- [ ] Update help overlay with settings shortcut
+
+### Phase 3: External Viewer Integration (1-2 hours)
+- [ ] Update open_in_system_viewer() to use settings
+- [ ] Read settings.external_tools.external_viewers list
+- [ ] Loop through viewers in order until one succeeds
+- [ ] Replace {path} placeholder with actual image path
+- [ ] Try each enabled viewer sequentially
+- [ ] Fall back to platform defaults if all fail
+- [ ] Add error messages for failed viewer launches
+- [ ] Create OpenInExternalEditor action
+- [ ] Add keybinding for external editor (Cmd+E)
+- [ ] Implement handler using settings.external_tools.external_editor
+- [ ] Add "Show in Finder/Explorer" action (optional)
+- [ ] Test external viewer configuration on all platforms
+
+### Phase 4: Apply Settings Throughout App (2-3 hours)
+- [ ] **Viewer Behavior Settings**
+  - [ ] Apply default_zoom_mode when loading images
+  - [ ] Toggle state cache based on remember_per_image_state
+  - [ ] Resize cache when state_cache_size changes
+  - [ ] Control animation auto-play on load
+- [ ] **Keyboard & Mouse Settings**
+  - [ ] Replace hardcoded pan_speed_normal (10px) with setting
+  - [ ] Replace hardcoded pan_speed_fast (30px) with setting
+  - [ ] Replace hardcoded pan_speed_slow (3px) with setting
+  - [ ] Replace scroll_wheel_sensitivity (1.1x) with setting
+  - [ ] Replace z_drag_sensitivity (0.01) with setting
+  - [ ] Implement spacebar_pan_accelerated toggle
+- [ ] **Appearance Settings**
+  - [ ] Apply background_color to image viewer
+  - [ ] Apply overlay_transparency to all overlays
+  - [ ] Apply font_size_scale to overlay text
+  - [ ] Apply window_title_format template
+- [ ] **File Operations Settings**
+  - [ ] Use default_save_directory in save dialogs
+  - [ ] Use default_save_format for filtered images
+  - [ ] Implement remember_last_directory behavior
+  - [ ] Add auto_save_filtered_cache functionality
+- [ ] **Filter Settings**
+  - [ ] Apply default filter values on reset
+  - [ ] Toggle remember_filter_state per-image
+  - [ ] Implement filter preset save/load/apply
+- [ ] **Sort & Navigation Settings**
+  - [ ] Apply default_sort_mode on startup
+  - [ ] Implement wrap_navigation toggle
+  - [ ] Toggle show_image_counter in window title
+
+### Phase 5: Testing & Polish (1-2 hours)
+- [ ] **Settings Persistence Testing**
+  - [ ] Test settings save on quit
+  - [ ] Test settings load on startup
+  - [ ] Test settings survive app restart
+  - [ ] Test corrupt settings file handling
+  - [ ] Test missing settings file (creates with defaults)
+- [ ] **UI Control Testing**
+  - [ ] Test all sliders (ranges, values, updates)
+  - [ ] Test all checkboxes (toggle, state persistence)
+  - [ ] Test all text inputs (validation, placeholder text)
+  - [ ] Test all dropdowns (selection, default values)
+  - [ ] Test color picker (if implemented)
+  - [ ] Test file picker for directories
+- [ ] **External Viewer Testing**
+  - [ ] Test viewer list reordering
+  - [ ] Test viewer add/remove
+  - [ ] Test viewer enable/disable
+  - [ ] Test {path} placeholder replacement
+  - [ ] Test fallback behavior when viewers fail
+  - [ ] Test on macOS, Windows, Linux
+- [ ] **Settings Actions Testing**
+  - [ ] Test Apply button (saves and applies changes)
+  - [ ] Test Cancel button (reverts to original)
+  - [ ] Test Reset to Defaults button
+  - [ ] Test Cmd+, keyboard shortcut
+  - [ ] Test Escape to close settings window
+- [ ] **Documentation**
+  - [ ] Update help overlay with Cmd+, shortcut
+  - [ ] Document settings.json file format
+  - [ ] Add settings section to README
+  - [ ] Document all settings with descriptions
+  - [ ] Create settings troubleshooting guide
+- [ ] **Error Handling**
+  - [ ] Handle missing settings file gracefully
+  - [ ] Handle corrupt JSON with fallback to defaults
+  - [ ] Validate numeric inputs (min/max ranges)
+  - [ ] Validate external viewer commands (executable exists)
+  - [ ] Show user-friendly error messages
+
+### Phase 6: Advanced Features (Optional)
+- [ ] Settings import/export functionality
+- [ ] Multiple settings profiles
+- [ ] Settings search/filter
+- [ ] Live preview for appearance changes
+- [ ] Keyboard shortcut customization
+- [ ] Tooltips/help text for complex settings
+- [ ] Drag-and-drop reordering for external viewer list
+
 ## Future Enhancements (Post-1.0)
 
 ### Advanced Features
@@ -1187,6 +1331,50 @@ pub fn modifier_key() -> &'static str {
 - Well-documented with examples and troubleshooting
 - Ready for distribution on all platforms
 
+**Files Created/Modified Summary:**
+
+**Created (8 files):**
+1. `build.rs` - Platform-specific build configuration
+2. `packaging/macos/Info.plist` - macOS app bundle configuration
+3. `packaging/windows/rpview.iss` - Windows installer script
+4. `packaging/linux/rpview.desktop` - Linux desktop entry
+5. `packaging/linux/install.sh` - Linux installation script (executable)
+6. `packaging/ICONS.md` - Icon requirements guide
+7. `CROSS_PLATFORM.md` - Cross-platform documentation (400+ lines)
+8. `packaging/` directories - Created directory structure
+
+**Modified (3 files):**
+1. `Cargo.toml` - Enhanced with metadata, platform sections, release profile
+2. `src/main.rs` - Added `setup_menus()` function and integration
+3. `TODO.md` - Updated Phase 12 status and comprehensive summary
+
+**Technical Highlights:**
+
+**Platform Abstraction:**
+- GPUI provides excellent cross-platform abstraction
+- Single keyboard binding definition works on all platforms
+- Automatic high-DPI scaling without configuration
+- Native menu integration with unified API
+- GPU-accelerated rendering on all platforms (Metal/DirectX/Vulkan)
+
+**Build System:**
+- Platform detection at build time
+- Optimized release builds (LTO, strip, single codegen unit)
+- Platform-specific environment variables
+- No manual configuration needed
+
+**File Associations:**
+- Standard platform configuration files
+- Easy installation with provided scripts/installers
+- Follows platform conventions (Info.plist, registry, .desktop)
+
+**Architecture Decisions:**
+1. **Zero Conditional Compilation**: GPUI handles platform differences, no `#[cfg(target_os)]` needed in main code
+2. **Platform Files Separate**: All platform-specific files in `packaging/` directory
+3. **Single Codebase**: Same source code compiles for all platforms
+4. **Native Integration**: Uses platform-standard files (Info.plist, .iss, .desktop)
+5. **Documentation First**: Comprehensive docs created before asset creation
+
 **Future Enhancements:**
 - Create actual icon assets (.icns, .ico, multi-size PNGs)
 - macOS app bundle creation with automated build script
@@ -1195,6 +1383,19 @@ pub fn modifier_key() -> &'static str {
 - Touchbar support for macOS
 - Windows thumbnail provider integration
 - Linux DBus integration for desktop notifications
+
+**Conclusion:**
+
+Phase 12 successfully adds comprehensive cross-platform support to RPView. The application now:
+- Works seamlessly on macOS, Windows, and Linux
+- Uses native keyboard shortcuts for each platform
+- Provides native menu integration
+- Supports high-DPI displays automatically
+- Can be associated with image file types
+- Is ready for distribution with provided installers/scripts
+- Has comprehensive documentation for users and developers
+
+The implementation demonstrates GPUI's excellent cross-platform capabilities, requiring minimal platform-specific code while providing native integration on all platforms.
 
 
 ### Phase 13 Summary
