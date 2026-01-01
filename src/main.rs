@@ -11,7 +11,8 @@ mod utils;
 
 use cli::Cli;
 use components::{DebugOverlay, FilterControls, HelpOverlay, ImageViewer};
-use state::AppState;
+use state::{AppState, AppSettings};
+use utils::settings_io;
 
 actions!(app, [
     CloseWindow, 
@@ -88,6 +89,9 @@ struct App {
     last_frame_update: Instant,
     /// Whether files are being dragged over the window
     drag_over: bool,
+    /// Application settings (loaded on startup, will be used in Phase 16.2+)
+    #[allow(dead_code)]
+    settings: AppSettings,
 }
  
 impl App {
@@ -1418,6 +1422,10 @@ fn setup_menus(cx: &mut gpui::App) {
 }
 
 fn main() {
+    // Load settings from disk (or use defaults if file doesn't exist)
+    let settings = settings_io::load_settings();
+    println!("Settings loaded from: {}", settings_io::get_settings_path().display());
+    
     // Parse command-line arguments to get image paths and starting index
     let (image_paths, start_index) = match Cli::parse_image_paths() {
         Ok(result) => result,
@@ -1547,6 +1555,7 @@ fn main() {
                         filter_controls,
                         last_frame_update: Instant::now(),
                         drag_over: false,
+                        settings: settings.clone(),
                     }
                 })
         })
