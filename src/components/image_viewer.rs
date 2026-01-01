@@ -205,23 +205,28 @@ impl ImageViewer {
     pub fn reset_zoom(&mut self) {
         if self.image_state.is_fit_to_window {
             // Currently at fit-to-window, switch to 100%
-            if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
-                let viewport_width: f32 = viewport.width.into();
-                let viewport_height: f32 = viewport.height.into();
-                
-                // Calculate pan to center the image at 100% zoom
-                let zoomed_width = img.width as f32;
-                let zoomed_height = img.height as f32;
-                let pan_x = (viewport_width - zoomed_width) / 2.0;
-                let pan_y = (viewport_height - zoomed_height) / 2.0;
-                
-                self.image_state.zoom = 1.0;
-                self.image_state.pan = (pan_x, pan_y);
-                self.image_state.is_fit_to_window = false;
-            }
+            self.set_one_hundred_percent();
         } else {
             // Currently at custom zoom, switch to fit-to-window
             self.fit_to_window();
+        }
+    }
+    
+    /// Set zoom to 100% (actual size) with image centered
+    pub fn set_one_hundred_percent(&mut self) {
+        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+            let viewport_width: f32 = viewport.width.into();
+            let viewport_height: f32 = viewport.height.into();
+            
+            // Calculate pan to center the image at 100% zoom
+            let zoomed_width = img.width as f32;
+            let zoomed_height = img.height as f32;
+            let pan_x = (viewport_width - zoomed_width) / 2.0;
+            let pan_y = (viewport_height - zoomed_height) / 2.0;
+            
+            self.image_state.zoom = 1.0;
+            self.image_state.pan = (pan_x, pan_y);
+            self.image_state.is_fit_to_window = false;
         }
     }
     

@@ -925,9 +925,7 @@ impl Render for App {
                             self.viewer.fit_to_window();
                         }
                         ZoomMode::OneHundredPercent => {
-                            self.viewer.image_state.zoom = 1.0;
-                            self.viewer.image_state.is_fit_to_window = false;
-                            self.viewer.image_state.pan = (0.0, 0.0);
+                            self.viewer.set_one_hundred_percent();
                         }
                     }
                 }
