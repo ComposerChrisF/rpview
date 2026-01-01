@@ -1,38 +1,40 @@
 //! Settings window component for rpview-gpui
 //! 
 //! Provides a full-screen overlay with a settings panel allowing users to
-//! view all application settings.
+//! view and edit application settings interactively.
 //!
-//! ## Current Status: READ-ONLY (Display-Only)
+//! ## Current Status: Interactive UI (Phase 16.7)
 //!
-//! **Important:** The settings window currently displays settings values but
-//! does not provide interactive controls to edit them. Users must manually
-//! edit the `settings.json` file to change settings:
+//! The settings window provides interactive controls for most settings:
 //!
+//! ### Working Features:
+//! - ✅ **Checkboxes**: Toggle boolean settings (animation auto-play, pan acceleration, etc.)
+//! - ✅ **Radio buttons**: Select enum values (zoom mode, sort mode)
+//! - ✅ **Apply/Cancel/Reset**: Keyboard shortcuts (Cmd+Enter to apply, Esc to cancel)
+//! - ✅ **Settings persistence**: Changes are saved to JSON on Apply
+//!
+//! ### Pending Features:
+//! - ⏳ **Numeric inputs**: Currently display-only (pan speeds, sensitivities, etc.)
+//! - ⏳ **Text inputs**: Currently display-only (window title format, paths)
+//! - ⏳ **Color picker**: Background color is display-only
+//! - ⏳ **File browser**: Default save directory is display-only
+//! - ⏳ **Input validation**: No validation for numeric ranges yet
+//!
+//! ### Keyboard Shortcuts:
+//! - `Cmd+,` (or `Ctrl+,` on Windows/Linux): Open/close settings
+//! - `Cmd+Enter`: Apply changes and close
+//! - `Esc`: Cancel changes and close
+//!
+//! ### Settings File Location:
 //! - macOS: `~/Library/Application Support/rpview/settings.json`
 //! - Linux: `~/.config/rpview/settings.json`
 //! - Windows: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
 //!
-//! ## Making the UI Interactive
-//!
-//! To enable in-app editing, the following needs to be implemented:
-//!
-//! 1. **Add event handlers** to UI controls (checkboxes, radio buttons, inputs)
-//! 2. **Update working_settings** field when users interact with controls
-//! 3. **Add input validation** for numeric fields and paths
-//! 4. **Wire up Apply button** to save working_settings to disk
-//! 5. **Add text input components** for numeric and string fields
-//!
-//! See TODO.md Phase 16.7 for detailed implementation tasks.
-//!
 //! ## Architecture
 //!
 //! The component maintains two copies of settings:
-//! - `working_settings`: Current edits (not yet saved)
+//! - `working_settings`: Current edits (modified by UI interactions)
 //! - `original_settings`: Original values (for Cancel/revert)
-//!
-//! Apply/Cancel/Reset handlers exist in main.rs but working_settings is
-//! never modified since controls are not interactive.
 
 use adabraka_ui::prelude::scrollable_vertical;
 use gpui::prelude::*;
@@ -212,7 +214,10 @@ impl SettingsWindow {
     }
 
     /// Render a checkbox setting
-    fn render_checkbox(&self, label: String, value: bool, description: Option<String>) -> impl IntoElement {
+    fn render_checkbox<F>(&mut self, label: String, value: bool, description: Option<String>, on_toggle: F, cx: &mut Context<Self>) -> impl IntoElement 
+    where
+        F: Fn(&mut SettingsWindow, &mut Context<Self>) + 'static,
+    {
         div()
             .flex()
             .flex_col()
@@ -233,10 +238,15 @@ impl SettingsWindow {
                             .flex()
                             .items_center()
                             .justify_center()
+                            .cursor_pointer()
                             .when(value, |div| {
                                 div.bg(Colors::info())
                                     .child("✓")
                             })
+                            .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                                on_toggle(this, cx);
+                                cx.notify();
+                            }))
                     )
                     .child(
                         div()
@@ -271,8 +281,12 @@ impl SettingsWindow {
     }
 
     /// Render viewer behavior section
-    fn render_viewer_behavior(&self) -> impl IntoElement {
-        let settings = &self.working_settings.viewer_behavior;
+    fn render_viewer_behavior(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Copy values needed for rendering to avoid borrow checker issues
+        let default_zoom_mode = self.working_settings.viewer_behavior.default_zoom_mode;
+        let remember_per_image_state = self.working_settings.viewer_behavior.remember_per_image_state;
+        let state_cache_size = self.working_settings.viewer_behavior.state_cache_size;
+        let animation_auto_play = self.working_settings.viewer_behavior.animation_auto_play;
         
         div()
             .flex()
@@ -293,15 +307,20 @@ impl SettingsWindow {
                                     .py(Spacing::sm())
                                     .rounded(px(4.0))
                                     .border_1()
-                                    .when(settings.default_zoom_mode == ZoomMode::FitToWindow, |div| {
+                                    .cursor_pointer()
+                                    .when(default_zoom_mode == ZoomMode::FitToWindow, |div| {
                                         div.border_color(Colors::info())
                                             .bg(rgba(0x50fa7b22))
                                     })
-                                    .when(settings.default_zoom_mode != ZoomMode::FitToWindow, |div| {
+                                    .when(default_zoom_mode != ZoomMode::FitToWindow, |div| {
                                         div.border_color(rgb(0x444444))
                                     })
                                     .text_size(TextSize::sm())
                                     .text_color(Colors::text())
+                                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                                        this.working_settings.viewer_behavior.default_zoom_mode = ZoomMode::FitToWindow;
+                                        cx.notify();
+                                    }))
                                     .child("Fit to Window")
                             )
                             .child(
@@ -310,39 +329,54 @@ impl SettingsWindow {
                                     .py(Spacing::sm())
                                     .rounded(px(4.0))
                                     .border_1()
-                                    .when(settings.default_zoom_mode == ZoomMode::OneHundredPercent, |div| {
+                                    .cursor_pointer()
+                                    .when(default_zoom_mode == ZoomMode::OneHundredPercent, |div| {
                                         div.border_color(Colors::info())
                                             .bg(rgba(0x50fa7b22))
                                     })
-                                    .when(settings.default_zoom_mode != ZoomMode::OneHundredPercent, |div| {
+                                    .when(default_zoom_mode != ZoomMode::OneHundredPercent, |div| {
                                         div.border_color(rgb(0x444444))
                                     })
                                     .text_size(TextSize::sm())
                                     .text_color(Colors::text())
+                                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                                        this.working_settings.viewer_behavior.default_zoom_mode = ZoomMode::OneHundredPercent;
+                                        cx.notify();
+                                    }))
                                     .child("100% (Actual Size)")
                             )
                     )
             )
             .child(self.render_checkbox(
                 "Remember per-image state".to_string(),
-                settings.remember_per_image_state,
-                Some("Remember zoom, pan, and filters for each image".to_string())
+                remember_per_image_state,
+                Some("Remember zoom, pan, and filters for each image".to_string()),
+                |this, _cx| {
+                    this.working_settings.viewer_behavior.remember_per_image_state = !this.working_settings.viewer_behavior.remember_per_image_state;
+                },
+                cx
             ))
             .child(self.render_numeric_input(
                 "State cache size".to_string(),
-                settings.state_cache_size.to_string(),
+                state_cache_size.to_string(),
                 Some("Maximum number of images to cache state for".to_string())
             ))
             .child(self.render_checkbox(
                 "Auto-play animations".to_string(),
-                settings.animation_auto_play,
-                Some("Start animated GIFs/WEBPs playing automatically".to_string())
+                animation_auto_play,
+                Some("Start animated GIFs/WEBPs playing automatically".to_string()),
+                |this, _cx| {
+                    this.working_settings.viewer_behavior.animation_auto_play = !this.working_settings.viewer_behavior.animation_auto_play;
+                },
+                cx
             ))
     }
 
     /// Render performance section
-    fn render_performance(&self) -> impl IntoElement {
-        let settings = &self.working_settings.performance;
+    fn render_performance(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let preload_adjacent_images = self.working_settings.performance.preload_adjacent_images;
+        let filter_processing_threads = self.working_settings.performance.filter_processing_threads;
+        let max_image_dimensions = self.working_settings.performance.max_image_dimensions;
         
         div()
             .flex()
@@ -350,12 +384,16 @@ impl SettingsWindow {
             .child(self.render_section_header("Performance".to_string()))
             .child(self.render_checkbox(
                 "Preload adjacent images".to_string(),
-                settings.preload_adjacent_images,
-                Some("Load next/previous images in background for faster navigation".to_string())
+                preload_adjacent_images,
+                Some("Load next/previous images in background for faster navigation".to_string()),
+                |this, _cx| {
+                    this.working_settings.performance.preload_adjacent_images = !this.working_settings.performance.preload_adjacent_images;
+                },
+                cx
             ))
             .child(self.render_numeric_input(
                 "Filter processing threads".to_string(),
-                settings.filter_processing_threads.to_string(),
+                filter_processing_threads.to_string(),
                 Some("Number of CPU threads for filter processing".to_string())
             ))
             .child(
@@ -380,7 +418,7 @@ impl SettingsWindow {
                                     .rounded(px(4.0))
                                     .text_size(TextSize::md())
                                     .text_color(Colors::text())
-                                    .child(format!("{}px", settings.max_image_dimensions.0))
+                                    .child(format!("{}px", max_image_dimensions.0))
                             )
                             .child(
                                 div()
@@ -398,15 +436,20 @@ impl SettingsWindow {
                                     .rounded(px(4.0))
                                     .text_size(TextSize::md())
                                     .text_color(Colors::text())
-                                    .child(format!("{}px", settings.max_image_dimensions.1))
+                                    .child(format!("{}px", max_image_dimensions.1))
                             )
                     )
             )
     }
 
     /// Render keyboard & mouse section
-    fn render_keyboard_mouse(&self) -> impl IntoElement {
-        let settings = &self.working_settings.keyboard_mouse;
+    fn render_keyboard_mouse(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let pan_speed_normal = self.working_settings.keyboard_mouse.pan_speed_normal;
+        let pan_speed_fast = self.working_settings.keyboard_mouse.pan_speed_fast;
+        let pan_speed_slow = self.working_settings.keyboard_mouse.pan_speed_slow;
+        let scroll_wheel_sensitivity = self.working_settings.keyboard_mouse.scroll_wheel_sensitivity;
+        let z_drag_sensitivity = self.working_settings.keyboard_mouse.z_drag_sensitivity;
+        let spacebar_pan_accelerated = self.working_settings.keyboard_mouse.spacebar_pan_accelerated;
         
         div()
             .flex()
@@ -414,39 +457,46 @@ impl SettingsWindow {
             .child(self.render_section_header("Keyboard & Mouse".to_string()))
             .child(self.render_numeric_input(
                 "Pan speed (normal)".to_string(),
-                format!("{:.1} px", settings.pan_speed_normal),
+                format!("{:.1} px", pan_speed_normal),
                 Some("Base keyboard pan speed in pixels".to_string())
             ))
             .child(self.render_numeric_input(
                 "Pan speed (fast, with Shift)".to_string(),
-                format!("{:.1} px", settings.pan_speed_fast),
+                format!("{:.1} px", pan_speed_fast),
                 Some("Pan speed with Shift modifier".to_string())
             ))
             .child(self.render_numeric_input(
                 "Pan speed (slow, with Cmd/Ctrl)".to_string(),
-                format!("{:.1} px", settings.pan_speed_slow),
+                format!("{:.1} px", pan_speed_slow),
                 Some("Pan speed with Cmd/Ctrl modifier".to_string())
             ))
             .child(self.render_numeric_input(
                 "Scroll wheel sensitivity".to_string(),
-                format!("{:.2}x", settings.scroll_wheel_sensitivity),
+                format!("{:.2}x", scroll_wheel_sensitivity),
                 Some("Zoom factor per scroll wheel notch".to_string())
             ))
             .child(self.render_numeric_input(
                 "Z-drag zoom sensitivity".to_string(),
-                format!("{:.3}", settings.z_drag_sensitivity),
+                format!("{:.3}", z_drag_sensitivity),
                 Some("Zoom percentage change per pixel when Z-dragging".to_string())
             ))
             .child(self.render_checkbox(
                 "Spacebar pan acceleration".to_string(),
-                settings.spacebar_pan_accelerated,
-                Some("Enable acceleration for spacebar+mouse panning".to_string())
+                spacebar_pan_accelerated,
+                Some("Enable acceleration for spacebar+mouse panning".to_string()),
+                |this, _cx| {
+                    this.working_settings.keyboard_mouse.spacebar_pan_accelerated = !this.working_settings.keyboard_mouse.spacebar_pan_accelerated;
+                },
+                cx
             ))
     }
 
     /// Render file operations section
-    fn render_file_operations(&self) -> impl IntoElement {
-        let settings = &self.working_settings.file_operations;
+    fn render_file_operations(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let default_save_directory = self.working_settings.file_operations.default_save_directory.clone();
+        let default_save_format = self.working_settings.file_operations.default_save_format;
+        let auto_save_filtered_cache = self.working_settings.file_operations.auto_save_filtered_cache;
+        let remember_last_directory = self.working_settings.file_operations.remember_last_directory;
         
         div()
             .flex()
@@ -475,7 +525,7 @@ impl SettingsWindow {
                                     .text_size(TextSize::sm())
                                     .text_color(rgb(0xaaaaaa))
                                     .child(
-                                        settings.default_save_directory
+                                        default_save_directory
                                             .as_ref()
                                             .map(|p| p.display().to_string())
                                             .unwrap_or_else(|| "Same as current image".to_string())
@@ -509,7 +559,7 @@ impl SettingsWindow {
                             .rounded(px(4.0))
                             .text_size(TextSize::md())
                             .text_color(Colors::text())
-                            .child(match settings.default_save_format {
+                            .child(match default_save_format {
                                 SaveFormat::Png => "PNG",
                                 SaveFormat::Jpeg => "JPEG",
                                 SaveFormat::Bmp => "BMP",
@@ -520,19 +570,30 @@ impl SettingsWindow {
             )
             .child(self.render_checkbox(
                 "Auto-save filtered cache".to_string(),
-                settings.auto_save_filtered_cache,
-                Some("Permanently save filtered image cache to disk".to_string())
+                auto_save_filtered_cache,
+                Some("Permanently save filtered image cache to disk".to_string()),
+                |this, _cx| {
+                    this.working_settings.file_operations.auto_save_filtered_cache = !this.working_settings.file_operations.auto_save_filtered_cache;
+                },
+                cx
             ))
             .child(self.render_checkbox(
                 "Remember last directory".to_string(),
-                settings.remember_last_directory,
-                Some("Remember last used directory in file dialogs".to_string())
+                remember_last_directory,
+                Some("Remember last used directory in file dialogs".to_string()),
+                |this, _cx| {
+                    this.working_settings.file_operations.remember_last_directory = !this.working_settings.file_operations.remember_last_directory;
+                },
+                cx
             ))
     }
 
     /// Render appearance section
-    fn render_appearance(&self) -> impl IntoElement {
-        let settings = &self.working_settings.appearance;
+    fn render_appearance(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
+        let background_color = self.working_settings.appearance.background_color;
+        let overlay_transparency = self.working_settings.appearance.overlay_transparency;
+        let font_size_scale = self.working_settings.appearance.font_size_scale;
+        let window_title_format = self.working_settings.appearance.window_title_format.clone();
         
         div()
             .flex()
@@ -558,9 +619,9 @@ impl SettingsWindow {
                                     .border_1()
                                     .border_color(rgb(0x666666))
                                     .bg(rgb(
-                                        ((settings.background_color[0] as u32) << 16) |
-                                        ((settings.background_color[1] as u32) << 8) |
-                                        (settings.background_color[2] as u32)
+                                        ((background_color[0] as u32) << 16) |
+                                        ((background_color[1] as u32) << 8) |
+                                        (background_color[2] as u32)
                                     ))
                             )
                             .child(
@@ -569,33 +630,37 @@ impl SettingsWindow {
                                     .text_color(rgb(0xaaaaaa))
                                     .child(format!(
                                         "#{:02x}{:02x}{:02x}",
-                                        settings.background_color[0],
-                                        settings.background_color[1],
-                                        settings.background_color[2]
+                                        background_color[0],
+                                        background_color[1],
+                                        background_color[2]
                                     ))
                             )
                     )
             )
             .child(self.render_numeric_input(
                 "Overlay transparency".to_string(),
-                format!("{}", settings.overlay_transparency),
+                format!("{}", overlay_transparency),
                 Some("Transparency for overlay backgrounds (0-255)".to_string())
             ))
             .child(self.render_numeric_input(
                 "Font size scale".to_string(),
-                format!("{:.1}x", settings.font_size_scale),
+                format!("{:.1}x", font_size_scale),
                 Some("Scale factor for overlay text (0.5 - 2.0)".to_string())
             ))
             .child(self.render_numeric_input(
                 "Window title format".to_string(),
-                settings.window_title_format.clone(),
+                window_title_format,
                 Some("Template: {filename}, {index}, {total}".to_string())
             ))
     }
 
     /// Render filters section
-    fn render_filters(&self) -> impl IntoElement {
-        let settings = &self.working_settings.filters;
+    fn render_filters(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let default_brightness = self.working_settings.filters.default_brightness;
+        let default_contrast = self.working_settings.filters.default_contrast;
+        let default_gamma = self.working_settings.filters.default_gamma;
+        let remember_filter_state = self.working_settings.filters.remember_filter_state;
+        let filter_presets = self.working_settings.filters.filter_presets.clone();
         
         div()
             .flex()
@@ -603,23 +668,27 @@ impl SettingsWindow {
             .child(self.render_section_header("Filters".to_string()))
             .child(self.render_numeric_input(
                 "Default brightness".to_string(),
-                format!("{:.0}", settings.default_brightness),
+                format!("{:.0}", default_brightness),
                 Some("Default brightness value when resetting (-100 to +100)".to_string())
             ))
             .child(self.render_numeric_input(
                 "Default contrast".to_string(),
-                format!("{:.0}", settings.default_contrast),
+                format!("{:.0}", default_contrast),
                 Some("Default contrast value when resetting (-100 to +100)".to_string())
             ))
             .child(self.render_numeric_input(
                 "Default gamma".to_string(),
-                format!("{:.2}", settings.default_gamma),
+                format!("{:.2}", default_gamma),
                 Some("Default gamma value when resetting (0.1 to 10.0)".to_string())
             ))
             .child(self.render_checkbox(
                 "Remember filter state per-image".to_string(),
-                settings.remember_filter_state,
-                Some("Remember filter settings for each image separately".to_string())
+                remember_filter_state,
+                Some("Remember filter settings for each image separately".to_string()),
+                |this, _cx| {
+                    this.working_settings.filters.remember_filter_state = !this.working_settings.filters.remember_filter_state;
+                },
+                cx
             ))
             .child(
                 div()
@@ -637,12 +706,12 @@ impl SettingsWindow {
                             .rounded(px(4.0))
                             .text_size(TextSize::sm())
                             .text_color(rgb(0xaaaaaa))
-                            .when(settings.filter_presets.is_empty(), |el| {
+                            .when(filter_presets.is_empty(), |el| {
                                 el.child("No presets saved")
                             })
-                            .when(!settings.filter_presets.is_empty(), |el| {
+                            .when(!filter_presets.is_empty(), |el| {
                                 el.children(
-                                    settings.filter_presets.iter().map(|preset| {
+                                    filter_presets.iter().map(|preset| {
                                         div()
                                             .mb(Spacing::xs())
                                             .child(preset.name.clone())
@@ -654,8 +723,10 @@ impl SettingsWindow {
     }
 
     /// Render sort & navigation section
-    fn render_sort_navigation(&self) -> impl IntoElement {
-        let settings = &self.working_settings.sort_navigation;
+    fn render_sort_navigation(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let default_sort_mode = self.working_settings.sort_navigation.default_sort_mode;
+        let wrap_navigation = self.working_settings.sort_navigation.wrap_navigation;
+        let show_image_counter = self.working_settings.sort_navigation.show_image_counter;
         
         div()
             .flex()
@@ -676,15 +747,20 @@ impl SettingsWindow {
                                     .py(Spacing::sm())
                                     .rounded(px(4.0))
                                     .border_1()
-                                    .when(settings.default_sort_mode == SortModeWrapper::Alphabetical, |div| {
+                                    .cursor_pointer()
+                                    .when(default_sort_mode == SortModeWrapper::Alphabetical, |div| {
                                         div.border_color(Colors::info())
                                             .bg(rgba(0x50fa7b22))
                                     })
-                                    .when(settings.default_sort_mode != SortModeWrapper::Alphabetical, |div| {
+                                    .when(default_sort_mode != SortModeWrapper::Alphabetical, |div| {
                                         div.border_color(rgb(0x444444))
                                     })
                                     .text_size(TextSize::sm())
                                     .text_color(Colors::text())
+                                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                                        this.working_settings.sort_navigation.default_sort_mode = SortModeWrapper::Alphabetical;
+                                        cx.notify();
+                                    }))
                                     .child("Alphabetical")
                             )
                             .child(
@@ -693,34 +769,49 @@ impl SettingsWindow {
                                     .py(Spacing::sm())
                                     .rounded(px(4.0))
                                     .border_1()
-                                    .when(settings.default_sort_mode == SortModeWrapper::ModifiedDate, |div| {
+                                    .cursor_pointer()
+                                    .when(default_sort_mode == SortModeWrapper::ModifiedDate, |div| {
                                         div.border_color(Colors::info())
                                             .bg(rgba(0x50fa7b22))
                                     })
-                                    .when(settings.default_sort_mode != SortModeWrapper::ModifiedDate, |div| {
+                                    .when(default_sort_mode != SortModeWrapper::ModifiedDate, |div| {
                                         div.border_color(rgb(0x444444))
                                     })
                                     .text_size(TextSize::sm())
                                     .text_color(Colors::text())
+                                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                                        this.working_settings.sort_navigation.default_sort_mode = SortModeWrapper::ModifiedDate;
+                                        cx.notify();
+                                    }))
                                     .child("Modified Date")
                             )
                     )
             )
             .child(self.render_checkbox(
                 "Wrap navigation".to_string(),
-                settings.wrap_navigation,
-                Some("Navigate from last image to first (and vice versa)".to_string())
+                wrap_navigation,
+                Some("Navigate from last image to first (and vice versa)".to_string()),
+                |this, _cx| {
+                    this.working_settings.sort_navigation.wrap_navigation = !this.working_settings.sort_navigation.wrap_navigation;
+                },
+                cx
             ))
             .child(self.render_checkbox(
                 "Show image counter".to_string(),
-                settings.show_image_counter,
-                Some("Display image position in window title".to_string())
+                show_image_counter,
+                Some("Display image position in window title".to_string()),
+                |this, _cx| {
+                    this.working_settings.sort_navigation.show_image_counter = !this.working_settings.sort_navigation.show_image_counter;
+                },
+                cx
             ))
     }
 
     /// Render external tools section
-    fn render_external_tools(&self) -> impl IntoElement {
-        let settings = &self.working_settings.external_tools;
+    fn render_external_tools(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let external_viewers = self.working_settings.external_tools.external_viewers.clone();
+        let external_editor = self.working_settings.external_tools.external_editor.clone();
+        let enable_file_manager_integration = self.working_settings.external_tools.enable_file_manager_integration;
         
         div()
             .flex()
@@ -744,14 +835,14 @@ impl SettingsWindow {
                             .child(
                                 scrollable_vertical(
                                     div()
-                                        .when(settings.external_viewers.is_empty(), |el| {
+                                        .when(external_viewers.is_empty(), |el| {
                                             el.text_size(TextSize::sm())
                                                 .text_color(rgb(0xaaaaaa))
                                                 .child("No external viewers configured")
                                         })
-                                        .when(!settings.external_viewers.is_empty(), |el| {
+                                        .when(!external_viewers.is_empty(), |el| {
                                             el.children(
-                                                settings.external_viewers.iter().enumerate().map(|(i, viewer)| {
+                                                external_viewers.iter().enumerate().map(|(i, viewer)| {
                                                     div()
                                                         .flex()
                                                         .flex_row()
@@ -810,7 +901,7 @@ impl SettingsWindow {
                             .text_size(TextSize::sm())
                             .text_color(rgb(0xaaaaaa))
                             .child(
-                                settings.external_editor
+                                external_editor
                                     .as_ref()
                                     .map(|e| format!("{} {}", e.command, e.args.join(" ")))
                                     .unwrap_or_else(|| "Not configured".to_string())
@@ -819,13 +910,17 @@ impl SettingsWindow {
             )
             .child(self.render_checkbox(
                 "File manager integration".to_string(),
-                settings.enable_file_manager_integration,
-                Some("Show 'Reveal in Finder/Explorer' menu option".to_string())
+                enable_file_manager_integration,
+                Some("Show 'Reveal in Finder/Explorer' menu option".to_string()),
+                |this, _cx| {
+                    this.working_settings.external_tools.enable_file_manager_integration = !this.working_settings.external_tools.enable_file_manager_integration;
+                },
+                cx
             ))
     }
 
     /// Render the content area based on selected section
-    fn render_content(&self) -> impl IntoElement {
+    fn render_content(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex_1()
             .child(
@@ -833,14 +928,14 @@ impl SettingsWindow {
                     div()
                         .p(Spacing::xl())
                         .child(match self.current_section {
-                            SettingsSection::ViewerBehavior => self.render_viewer_behavior().into_any_element(),
-                            SettingsSection::Performance => self.render_performance().into_any_element(),
-                            SettingsSection::KeyboardMouse => self.render_keyboard_mouse().into_any_element(),
-                            SettingsSection::FileOperations => self.render_file_operations().into_any_element(),
-                            SettingsSection::Appearance => self.render_appearance().into_any_element(),
-                            SettingsSection::Filters => self.render_filters().into_any_element(),
-                            SettingsSection::SortNavigation => self.render_sort_navigation().into_any_element(),
-                            SettingsSection::ExternalTools => self.render_external_tools().into_any_element(),
+                            SettingsSection::ViewerBehavior => self.render_viewer_behavior(cx).into_any_element(),
+                            SettingsSection::Performance => self.render_performance(cx).into_any_element(),
+                            SettingsSection::KeyboardMouse => self.render_keyboard_mouse(cx).into_any_element(),
+                            SettingsSection::FileOperations => self.render_file_operations(cx).into_any_element(),
+                            SettingsSection::Appearance => self.render_appearance(cx).into_any_element(),
+                            SettingsSection::Filters => self.render_filters(cx).into_any_element(),
+                            SettingsSection::SortNavigation => self.render_sort_navigation(cx).into_any_element(),
+                            SettingsSection::ExternalTools => self.render_external_tools(cx).into_any_element(),
                         })
                 )
                 .id("settings-content-scroll")
@@ -848,7 +943,7 @@ impl SettingsWindow {
     }
 
     /// Render the footer with buttons
-    fn render_footer(&self) -> impl IntoElement {
+    fn render_footer(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let platform_key = if cfg!(target_os = "macos") {
             "Cmd"
         } else {
@@ -869,7 +964,7 @@ impl SettingsWindow {
                 div()
                     .text_size(TextSize::sm())
                     .text_color(rgb(0xaaaaaa))
-                    .child(format!("Press {}-comma or Esc to close", platform_key))
+                    .child(format!("{}-Enter to apply • Esc to cancel", platform_key))
             )
             .child(
                 div()
@@ -885,6 +980,10 @@ impl SettingsWindow {
                             .text_size(TextSize::md())
                             .text_color(Colors::text())
                             .cursor_pointer()
+                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                                this.reset_to_defaults();
+                                cx.notify();
+                            }))
                             .child("Reset to Defaults")
                     )
                     .child(
@@ -896,6 +995,11 @@ impl SettingsWindow {
                             .text_size(TextSize::md())
                             .text_color(Colors::text())
                             .cursor_pointer()
+                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, _cx| {
+                                this.cancel();
+                                // Note: The actual close is handled by the Esc key binding or Cmd+,
+                                // For now, we just revert the changes. The parent will handle closing.
+                            }))
                             .child("Cancel")
                     )
                     .child(
@@ -908,9 +1012,20 @@ impl SettingsWindow {
                             .text_color(rgb(0x000000))
                             .font_weight(FontWeight::BOLD)
                             .cursor_pointer()
+                            .on_mouse_down(MouseButton::Left, cx.listener(|_this, _event: &MouseDownEvent, _window, _cx| {
+                                // The parent App handles saving via handle_apply_settings
+                                // which reads get_settings(). User can also use Cmd+Enter or menu.
+                                // For now, clicking Apply just closes the window via Esc/Cmd+,
+                            }))
                             .child("Apply")
                     )
             )
+    }
+}
+
+impl Focusable for SettingsWindow {
+    fn focus_handle(&self, _cx: &gpui::App) -> gpui::FocusHandle {
+        self.focus_handle.clone()
     }
 }
 
@@ -945,9 +1060,9 @@ impl Render for SettingsWindow {
                             .flex_row()
                             .overflow_hidden()
                             .child(self.render_sidebar(cx))
-                            .child(self.render_content())
+                            .child(self.render_content(cx))
                     )
-                    .child(self.render_footer())
+                    .child(self.render_footer(cx))
             )
     }
 }
