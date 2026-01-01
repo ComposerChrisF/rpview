@@ -48,6 +48,9 @@ use gpui::*;
 use crate::state::settings::*;
 use crate::utils::style::{Colors, Spacing, TextSize};
 
+// Import the actions from main - these are defined in the app namespace
+gpui::actions!(app, [ApplySettings, CancelSettings, ResetSettingsToDefaults]);
+
 /// Available settings sections
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsSection {
@@ -1161,6 +1164,8 @@ impl SettingsWindow {
                             .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
                                 this.reset_to_defaults();
                                 cx.notify();
+                                // Also dispatch the action to trigger the parent handler
+                                cx.dispatch_action(&ResetSettingsToDefaults);
                             }))
                             .child("Reset to Defaults")
                     )
@@ -1173,10 +1178,10 @@ impl SettingsWindow {
                             .text_size(TextSize::md())
                             .text_color(Colors::text())
                             .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, _cx| {
+                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
                                 this.cancel();
-                                // Note: The actual close is handled by the Esc key binding or Cmd+,
-                                // For now, we just revert the changes. The parent will handle closing.
+                                // Dispatch action to parent App to close the settings window
+                                cx.dispatch_action(&CancelSettings);
                             }))
                             .child("Cancel")
                     )
@@ -1190,10 +1195,9 @@ impl SettingsWindow {
                             .text_color(rgb(0x000000))
                             .font_weight(FontWeight::BOLD)
                             .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, cx.listener(|_this, _event: &MouseDownEvent, _window, _cx| {
-                                // The parent App handles saving via handle_apply_settings
-                                // which reads get_settings(). User can also use Cmd+Enter or menu.
-                                // For now, clicking Apply just closes the window via Esc/Cmd+,
+                            .on_mouse_down(MouseButton::Left, cx.listener(|_this, _event: &MouseDownEvent, _window, cx| {
+                                // Dispatch action to parent App to save and close
+                                cx.dispatch_action(&ApplySettings);
                             }))
                             .child("Apply")
                     )
