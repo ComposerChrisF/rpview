@@ -47,9 +47,7 @@ use gpui::prelude::*;
 use gpui::*;
 use crate::state::settings::*;
 use crate::utils::style::{Colors, Spacing, TextSize};
-
-// Import the actions from main - these are defined in the app namespace
-gpui::actions!(app, [ApplySettings, CancelSettings, ResetSettingsToDefaults]);
+use crate::{ApplySettings, CancelSettings, ResetSettingsToDefaults};
 
 /// Available settings sections
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
