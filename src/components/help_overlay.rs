@@ -120,6 +120,7 @@ impl HelpOverlay {
             self.render_section_header("Help & Debug".to_string()).into_any_element(),
             self.render_shortcut("H / ? / F1".to_string(), "Toggle this help overlay".to_string()).into_any_element(),
             self.render_shortcut("F12".to_string(), "Toggle debug overlay".to_string()).into_any_element(),
+            self.render_shortcut(format!("{}-,", platform_key), "Open settings window".to_string()).into_any_element(),
         ]
     }
 

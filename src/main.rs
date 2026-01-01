@@ -10,7 +10,7 @@ mod state;
 mod utils;
 
 use cli::Cli;
-use components::{DebugOverlay, FilterControls, HelpOverlay, ImageViewer};
+use components::{DebugOverlay, FilterControls, HelpOverlay, ImageViewer, SettingsWindow};
 use state::{AppState, AppSettings};
 use utils::settings_io;
 
@@ -48,6 +48,7 @@ actions!(app, [
     PanRightSlow,
     ToggleHelp,
     ToggleDebug,
+    ToggleSettings,
     ToggleFilters,
     DisableFilters,
     EnableFilters,
@@ -63,6 +64,9 @@ actions!(app, [
     SaveFileToDownloads,
     OpenInExternalViewer,
     OpenInExternalViewerAndQuit,
+    ApplySettings,
+    CancelSettings,
+    ResetSettingsToDefaults,
 ]);
 
 struct App {
@@ -81,22 +85,25 @@ struct App {
     show_help: bool,
     /// Whether debug overlay is visible
     show_debug: bool,
+    /// Whether settings window is visible
+    show_settings: bool,
     /// Whether filter controls overlay is visible
     show_filters: bool,
     /// Filter controls component
     filter_controls: Entity<FilterControls>,
+    /// Settings window component
+    settings_window: Entity<SettingsWindow>,
     /// Last time animation frame was updated (for animation playback)
     last_frame_update: Instant,
     /// Whether files are being dragged over the window
     drag_over: bool,
-    /// Application settings (loaded on startup, will be used in Phase 16.2+)
-    #[allow(dead_code)]
+    /// Application settings (loaded on startup)
     settings: AppSettings,
 }
  
 impl App {
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // If help, debug, or filter overlay is open, close it instead of counting toward quit
+        // If help, debug, settings, or filter overlay is open, close it instead of counting toward quit
         if self.show_help {
             self.show_help = false;
             self.focus_handle.focus(window);
@@ -105,6 +112,12 @@ impl App {
         }
         if self.show_debug {
             self.show_debug = false;
+            self.focus_handle.focus(window);
+            cx.notify();
+            return;
+        }
+        if self.show_settings {
+            self.show_settings = false;
             self.focus_handle.focus(window);
             cx.notify();
             return;
@@ -137,6 +150,62 @@ impl App {
     
     fn handle_toggle_debug(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.show_debug = !self.show_debug;
+        cx.notify();
+    }
+    
+    fn handle_toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_settings = !self.show_settings;
+        
+        // Restore focus to the main app when hiding settings
+        if !self.show_settings {
+            self.focus_handle.focus(window);
+        }
+        
+        cx.notify();
+    }
+    
+    fn handle_apply_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Get settings from the settings window
+        let new_settings = self.settings_window.update(cx, |sw, _cx| {
+            sw.get_settings()
+        });
+        
+        // Update app settings
+        self.settings = new_settings.clone();
+        
+        // Save settings to disk
+        if let Err(e) = settings_io::save_settings(&self.settings) {
+            eprintln!("Error saving settings: {}", e);
+        } else {
+            println!("Settings saved successfully");
+        }
+        
+        // Close the settings window
+        self.show_settings = false;
+        self.focus_handle.focus(window);
+        
+        cx.notify();
+    }
+    
+    fn handle_cancel_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Revert settings window to original settings
+        self.settings_window.update(cx, |sw, _cx| {
+            sw.cancel();
+        });
+        
+        // Close the settings window
+        self.show_settings = false;
+        self.focus_handle.focus(window);
+        
+        cx.notify();
+    }
+    
+    fn handle_reset_settings_to_defaults(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // Reset settings window to defaults
+        self.settings_window.update(cx, |sw, _cx| {
+            sw.reset_to_defaults();
+        });
+        
         cx.notify();
     }
     
@@ -1139,6 +1208,9 @@ impl Render for App {
                     self.viewer.viewport_size,
                 )))
             })
+            .when(self.show_settings, |el| {
+                el.child(self.settings_window.clone())
+            })
             .when(self.show_filters, |el| {
                 el.child(self.filter_controls.clone())
             })
@@ -1237,6 +1309,18 @@ impl Render for App {
             }))
             .on_action(cx.listener(|this, _: &ToggleDebug, window, cx| {
                 this.handle_toggle_debug(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| {
+                this.handle_toggle_settings(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ApplySettings, window, cx| {
+                this.handle_apply_settings(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &CancelSettings, window, cx| {
+                this.handle_cancel_settings(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ResetSettingsToDefaults, window, cx| {
+                this.handle_reset_settings_to_defaults(window, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleFilters, window, cx| {
                 this.handle_toggle_filters(window, cx);
@@ -1349,6 +1433,8 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("?", ToggleHelp, None),
         KeyBinding::new("f1", ToggleHelp, None),
         KeyBinding::new("f12", ToggleDebug, None),
+        // Settings window
+        KeyBinding::new("cmd-,", ToggleSettings, None),
         // Filter controls
         KeyBinding::new("cmd-f", ToggleFilters, None),
         KeyBinding::new("cmd-1", DisableFilters, None),
@@ -1371,7 +1457,19 @@ fn setup_menus(cx: &mut gpui::App) {
         Menu {
             name: "RPView".into(),
             items: vec![
+                #[cfg(target_os = "macos")]
+                MenuItem::action("Preferences...", ToggleSettings),
+                #[cfg(target_os = "macos")]
+                MenuItem::separator(),
                 MenuItem::action("Quit", Quit),
+            ],
+        },
+        // Edit menu (for Windows/Linux settings)
+        #[cfg(not(target_os = "macos"))]
+        Menu {
+            name: "Edit".into(),
+            items: vec![
+                MenuItem::action("Settings...", ToggleSettings),
             ],
         },
         Menu {
@@ -1541,6 +1639,11 @@ fn main() {
                         FilterControls::new(viewer.image_state.filters, cx)
                     });
                     
+                    // Create settings window
+                    let settings_window = inner_cx.new(|cx| {
+                        SettingsWindow::new(settings.clone(), cx)
+                    });
+                    
                     App {
                         app_state,
                         viewer,
@@ -1551,8 +1654,10 @@ fn main() {
                         mouse_button_down: false,
                         show_help: false,
                         show_debug: false,
+                        show_settings: false,
                         show_filters: false,
                         filter_controls,
+                        settings_window,
                         last_frame_update: Instant::now(),
                         drag_over: false,
                         settings: settings.clone(),
