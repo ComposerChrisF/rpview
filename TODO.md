@@ -648,14 +648,28 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [ ] Tooltips/help text for complex settings
 - [ ] Drag-and-drop reordering for external viewer list
 
-### Phase 16.7: Interactive Settings UI (Currently Deferred)
+### Phase 16.7: Interactive Settings UI (Partially Complete) 🔄
 
-**Current Status:** Settings window is **read-only (display-only)**. Users must manually edit `settings.json` to change settings. The file is located at:
+**Current Status:** Settings window is **partially interactive**. Most commonly used settings can be changed directly in the UI:
+
+✅ **Working Interactive Controls:**
+- Checkboxes for all boolean settings (animation auto-play, pan acceleration, etc.)
+- Radio buttons for enum selections (zoom mode, sort mode, save format)
+- Apply button (Cmd+Enter) saves changes to disk
+- Cancel button (Esc) discards changes
+- Reset to Defaults button restores all settings to default values
+
+⏳ **Still Display-Only (requires JSON editing):**
+- Numeric input fields (pan speeds, sensitivities, dimensions, etc.)
+- Text input fields (window title format, file paths)
+- Color picker for background color
+- File browser for default save directory
+- External viewer list editor (add/remove/reorder viewers)
+
+**Settings File Location** (for manual editing of numeric/text fields):
 - macOS: `~/Library/Application Support/rpview/settings.json`
 - Linux: `~/.config/rpview/settings.json`
 - Windows: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
-
-**What's Needed:** Add interactive controls to allow in-app editing of settings through the Cmd+, settings window.
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The rpview settings system is **fully functional** but the settings UI is currently **read-only (display-only)**. All settings are loaded from and applied throughout the application, but users must manually edit the JSON file to change them.
+The rpview settings system is **fully functional** with an **interactive UI** for most settings. Users can modify settings through the settings window (Cmd+,) and changes are saved immediately when applying.
 
 ## Current Status Summary
 
@@ -11,25 +11,35 @@ The rpview settings system is **fully functional** but the settings UI is curren
 | Settings Data Structures | ✅ Complete | All settings defined in `src/state/settings.rs` |
 | Settings Persistence | ✅ Complete | Auto-saves to platform config directory |
 | Settings Application | ✅ Complete | All 20+ settings integrated throughout app |
-| Settings Window UI | ⚠️ Read-Only | Shows settings but not interactive |
-| Apply/Cancel/Reset | ✅ Ready | Handlers exist, waiting for interactive UI |
+| Settings Window UI | ✅ Partially Interactive | Checkboxes and radio buttons work; text/numeric inputs pending |
+| Apply/Cancel/Reset | ✅ Complete | Cmd+Enter to apply, Esc to cancel |
 
-## How to Change Settings (Current Method)
+## How to Change Settings
 
-### 1. Locate the Settings File
+### Method 1: Interactive Settings Window (Recommended for most settings)
 
-Settings are stored in `settings.json` at:
-- **macOS**: `~/Library/Application Support/rpview/settings.json`
-- **Linux**: `~/.config/rpview/settings.json`
-- **Windows**: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
+1. **Open Settings**: Press `Cmd+,` (or `Ctrl+,` on Windows/Linux) or use the menu: RPView > Preferences
+2. **Navigate**: Click on a category in the left sidebar (Viewer Behavior, Performance, etc.)
+3. **Modify Settings**:
+   - Click checkboxes to toggle boolean settings
+   - Click radio buttons to select enum options (zoom mode, sort mode)
+   - *Note: Numeric and text fields are currently display-only (see Method 2)*
+4. **Apply Changes**: Press `Cmd+Enter` or click the Apply button
+5. **Cancel Changes**: Press `Esc` or click the Cancel button
+6. **Reset to Defaults**: Click "Reset to Defaults" to restore all settings to their default values
 
-### 2. Edit the JSON File
+### Method 2: Manual JSON Editing (For numeric/text settings)
 
-Open `settings.json` in any text editor. The file contains all configurable settings organized by category.
+For settings that don't yet have interactive controls (pan speeds, text formats, etc.):
 
-### 3. Restart rpview
+1. **Locate the Settings File**:
+   - **macOS**: `~/Library/Application Support/rpview/settings.json`
+   - **Linux**: `~/.config/rpview/settings.json`
+   - **Windows**: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
 
-Changes take effect on the next application launch.
+2. **Edit the JSON File**: Open `settings.json` in any text editor
+
+3. **Restart rpview**: Changes take effect on the next application launch
 
 ## Available Settings Categories
 
@@ -70,7 +80,7 @@ Changes take effect on the next application launch.
 
 ## What's Working
 
-✅ **All settings are fully integrated:**
+✅ **All settings are fully integrated and most are interactively editable:**
 - Images load with configured default zoom mode
 - Per-image state saving respects the setting
 - Cache size is configurable
@@ -86,26 +96,30 @@ Changes take effect on the next application launch.
 
 ## What's Not Working
 
-❌ **Settings window is not interactive:**
-- Opening settings (Cmd+,) shows current values
-- Cannot click to change values
-- Cannot type in input fields
-- Apply/Cancel/Reset buttons exist but changes can't be made
-- Must edit JSON file manually
+⏳ **Some UI controls are still read-only:**
+- Numeric input fields (pan speeds, sensitivities, dimensions) are display-only
+- Text input fields (window title format, file paths) are display-only
+- Color picker for background color is display-only
+- File browser for default save directory is display-only
+- For these settings, users must manually edit the JSON file (see Method 2 above)
 
-## Making the Settings UI Interactive
+## Making the Settings UI Fully Interactive
 
-To enable in-app editing, see **Phase 16.7** in `TODO.md` for detailed tasks:
+**Current Status:** Phase 16.7 is partially complete. The following interactive controls are working:
+- ✅ Checkboxes (all boolean settings)
+- ✅ Radio buttons (zoom mode, sort mode, save format)
+- ✅ Apply/Cancel/Reset buttons with keyboard shortcuts
 
-1. Add click handlers to checkboxes
-2. Add text input components for numeric fields
-3. Add click handlers to radio buttons
-4. Implement dropdown components
-5. Build external viewer list editor
-6. Add input validation
-7. Wire up Apply to save changes
+**Remaining tasks** to make all settings editable (see Phase 16.7 in `TODO.md`):
 
-**Estimated effort:** 4-6 hours for basic functionality, 8-10 hours for polished UI.
+1. ⏳ Add numeric input components with increment/decrement buttons
+2. ⏳ Add text input components for string fields
+3. ⏳ Add color picker for background color
+4. ⏳ Add file browser for default save directory
+5. ⏳ Add input validation for numeric ranges
+6. ⏳ Build external viewer list editor (add/remove/reorder)
+
+**Estimated effort for remaining work:** 4-6 hours for basic text/numeric inputs, 8-10 hours for full polish including validation and advanced controls.
 
 ## Implementation Files
 
@@ -180,8 +194,8 @@ To enable in-app editing, see **Phase 16.7** in `TODO.md` for detailed tasks:
 - ✅ **Phase 16.4**: Apply Settings Throughout App
 - ⏳ **Phase 16.5**: Testing & Polish (planned)
 - ⏳ **Phase 16.6**: Advanced Features (optional)
-- ⏳ **Phase 16.7**: Interactive Settings UI (deferred)
+- 🔄 **Phase 16.7**: Interactive Settings UI (partially complete - checkboxes, radio buttons, and Apply/Cancel/Reset working)
 
 ## Conclusion
 
-The settings system is **production-ready** with full functionality. The only limitation is that settings must be edited via JSON file rather than through the UI. All settings are properly loaded, validated, and applied throughout the application. Users who are comfortable editing JSON files can fully customize rpview's behavior.
+The settings system is **production-ready** with **interactive UI for most settings**. Boolean and enum settings can be changed directly in the settings window (Cmd+,), while numeric and text settings still require JSON editing. All settings are properly loaded, validated, and applied throughout the application. The interactive UI provides a user-friendly experience for the most commonly changed settings.

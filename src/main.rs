@@ -1560,6 +1560,8 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("f12", ToggleDebug, None),
         // Settings window
         KeyBinding::new("cmd-,", ToggleSettings, None),
+        KeyBinding::new("cmd-enter", ApplySettings, None),
+        KeyBinding::new("escape", CancelSettings, Some("SettingsWindow")),
         // Filter controls
         KeyBinding::new("cmd-f", ToggleFilters, None),
         KeyBinding::new("cmd-1", DisableFilters, None),
