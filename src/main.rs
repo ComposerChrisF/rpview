@@ -64,6 +64,7 @@ actions!(app, [
     SaveFileToDownloads,
     OpenInExternalViewer,
     OpenInExternalViewerAndQuit,
+    OpenInExternalEditor,
     ApplySettings,
     CancelSettings,
     ResetSettingsToDefaults,
@@ -477,61 +478,110 @@ impl App {
         }
     }
     
+    fn handle_open_in_external_editor(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(current_path) = self.app_state.current_image() {
+            if let Err(e) = self.open_in_external_editor(current_path) {
+                eprintln!("Failed to open image in external editor: {}", e);
+            }
+        }
+        cx.notify();
+    }
+    
     fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
+        // Get the configured external viewers from settings
+        let viewers = &self.settings.external_tools.external_viewers;
+        
+        // Try each enabled viewer in order
+        for viewer_config in viewers.iter().filter(|v| v.enabled) {
+            // Replace {path} placeholder with actual image path
+            let path_str = image_path.to_str().ok_or_else(|| {
+                format!("Invalid image path: cannot convert to string")
+            })?;
+            
+            let args: Vec<String> = viewer_config.args.iter()
+                .map(|arg| arg.replace("{path}", path_str))
+                .collect();
+            
+            // Try to launch the viewer
+            let result = std::process::Command::new(&viewer_config.command)
+                .args(&args)
+                .spawn();
+            
+            match result {
+                Ok(_) => {
+                    eprintln!("Opened image with: {}", viewer_config.name);
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("Failed to launch {}: {}", viewer_config.name, e);
+                    // Continue to next viewer
+                }
+            }
+        }
+        
+        // All configured viewers failed, try platform defaults as fallback
+        eprintln!("All configured viewers failed, trying platform defaults...");
+        
         #[cfg(target_os = "macos")]
         {
-            // On macOS, explicitly open with Preview.app
             std::process::Command::new("open")
-                .arg("-a")
-                .arg("Preview")
                 .arg(image_path)
                 .spawn()
-                .map_err(|e| format!("Failed to launch Preview: {}", e))?;
+                .map_err(|e| format!("Failed to open with default viewer: {}", e))?;
+            return Ok(());
         }
         
         #[cfg(target_os = "windows")]
         {
-            // On Windows, explicitly open with Photos app to avoid circular reference
-            // if rpview is set as the default image viewer
-            // Try Photos app first (Windows 10/11), fall back to Windows Photo Viewer
-            let photos_result = std::process::Command::new("cmd")
-                .args(&["/C", "start", "ms-photos:", image_path.to_str().unwrap_or("")])
-                .spawn();
-            
-            if photos_result.is_err() {
-                // Fall back to Windows Photo Viewer (older Windows or if Photos app not available)
-                std::process::Command::new("rundll32.exe")
-                    .args(&[
-                        "C:\\Program Files\\Windows Photo Viewer\\PhotoViewer.dll,ImageView_Fullscreen",
-                        image_path.to_str().unwrap_or("")
-                    ])
-                    .spawn()
-                    .map_err(|e| format!("Failed to open image: {}", e))?;
-            }
+            std::process::Command::new("cmd")
+                .args(&["/C", "start", "", image_path.to_str().unwrap_or("")])
+                .spawn()
+                .map_err(|e| format!("Failed to open with default viewer: {}", e))?;
+            return Ok(());
         }
         
         #[cfg(target_os = "linux")]
         {
-            // On Linux, try common image viewers in order of preference
-            let viewers = ["eog", "xviewer", "gwenview", "feh", "xdg-open"];
-            let mut opened = false;
-            
-            for viewer in &viewers {
-                if let Ok(_) = std::process::Command::new(viewer)
-                    .arg(image_path)
-                    .spawn()
-                {
-                    opened = true;
-                    break;
-                }
-            }
-            
-            if !opened {
-                return Err("No suitable image viewer found".to_string());
-            }
+            std::process::Command::new("xdg-open")
+                .arg(image_path)
+                .spawn()
+                .map_err(|e| format!("Failed to open with default viewer: {}", e))?;
+            return Ok(());
         }
         
-        Ok(())
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        {
+            Err("No suitable image viewer found for this platform".to_string())
+        }
+    }
+    
+    fn open_in_external_editor(&self, image_path: &PathBuf) -> Result<(), String> {
+        // Check if an external editor is configured
+        if let Some(editor_config) = &self.settings.external_tools.external_editor {
+            if !editor_config.enabled {
+                return Err("External editor is configured but disabled".to_string());
+            }
+            
+            // Replace {path} placeholder with actual image path
+            let path_str = image_path.to_str().ok_or_else(|| {
+                format!("Invalid image path: cannot convert to string")
+            })?;
+            
+            let args: Vec<String> = editor_config.args.iter()
+                .map(|arg| arg.replace("{path}", path_str))
+                .collect();
+            
+            // Try to launch the editor
+            std::process::Command::new(&editor_config.command)
+                .args(&args)
+                .spawn()
+                .map_err(|e| format!("Failed to launch {}: {}", editor_config.name, e))?;
+            
+            eprintln!("Opened image in external editor: {}", editor_config.name);
+            Ok(())
+        } else {
+            Err("No external editor configured. Please set one in Settings (Cmd+,)".to_string())
+        }
     }
     
     fn handle_dropped_files(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
@@ -1367,6 +1417,9 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &OpenInExternalViewerAndQuit, window, cx| {
                 this.handle_open_in_external_viewer_and_quit(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &OpenInExternalEditor, window, cx| {
+                this.handle_open_in_external_editor(window, cx);
+            }))
     }
 }
 
@@ -1447,6 +1500,8 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         // External viewer
         KeyBinding::new("cmd-alt-f", OpenInExternalViewer, None),
         KeyBinding::new("shift-cmd-alt-f", OpenInExternalViewerAndQuit, None),
+        // External editor
+        KeyBinding::new("cmd-e", OpenInExternalEditor, None),
     ]);
 }
 

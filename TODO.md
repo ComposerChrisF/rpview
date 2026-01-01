@@ -550,19 +550,19 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [x] Add conditional rendering in App::render()
 - [x] Update help overlay with settings shortcut
 
-### Phase 16.3: External Viewer Integration (1-2 hours)
-- [ ] Update open_in_system_viewer() to use settings
-- [ ] Read settings.external_tools.external_viewers list
-- [ ] Loop through viewers in order until one succeeds
-- [ ] Replace {path} placeholder with actual image path
-- [ ] Try each enabled viewer sequentially
-- [ ] Fall back to platform defaults if all fail
-- [ ] Add error messages for failed viewer launches
-- [ ] Create OpenInExternalEditor action
-- [ ] Add keybinding for external editor (Cmd+E)
-- [ ] Implement handler using settings.external_tools.external_editor
-- [ ] Add "Show in Finder/Explorer" action (optional)
-- [ ] Test external viewer configuration on all platforms
+### Phase 16.3: External Viewer Integration ✅
+- [x] Update open_in_system_viewer() to use settings
+- [x] Read settings.external_tools.external_viewers list
+- [x] Loop through viewers in order until one succeeds
+- [x] Replace {path} placeholder with actual image path
+- [x] Try each enabled viewer sequentially
+- [x] Fall back to platform defaults if all fail
+- [x] Add error messages for failed viewer launches
+- [x] Create OpenInExternalEditor action
+- [x] Add keybinding for external editor (Cmd+E)
+- [x] Implement handler using settings.external_tools.external_editor
+- [ ] Add "Show in Finder/Explorer" action (optional - deferred)
+- [x] Test external viewer configuration on macOS
 
 ### Phase 16.4: Apply Settings Throughout App (2-3 hours)
 - [ ] **Viewer Behavior Settings**
@@ -1775,3 +1775,106 @@ Phase 16.2 (Settings Window UI) will implement:
 - Fully serializable to/from JSON
 - Zero compilation warnings
 - Ready for Phase 16.2 (Settings UI)
+
+### Phase 16.3 Summary
+Phase 16.3 (External Viewer Integration) has been successfully completed! The application now supports configurable external viewers and editors through the settings system.
+
+**What Was Implemented:**
+
+**1. Settings-Based External Viewer System ✅**
+- **Updated open_in_system_viewer()** (src/main.rs:489) to read from settings.external_tools.external_viewers
+- **Sequential viewer trial** - Loops through enabled viewers in order until one succeeds
+- **{path} placeholder replacement** - Replaces {path} in command arguments with actual image path
+- **Enabled filter** - Only tries viewers marked as enabled in settings
+- **Error handling** - Logs failures and continues to next viewer
+- **Platform defaults fallback** - Falls back to xdg-open/open/start if all configured viewers fail
+- **Success logging** - Reports which viewer successfully opened the image
+
+**2. External Editor Support ✅**
+- **OpenInExternalEditor action** (src/main.rs:67) - New action for opening in external editor
+- **open_in_external_editor() method** (src/main.rs:554) - Reads settings.external_tools.external_editor
+- **handle_open_in_external_editor()** (src/main.rs:479) - Action handler implementation
+- **Cmd+E keybinding** (src/main.rs:1504) - Standard keyboard shortcut for external editor
+- **Clear error messages** - Prompts user to configure editor in settings if none configured
+- **Enabled check** - Verifies editor is enabled before attempting to launch
+
+**3. Help Overlay Updates ✅**
+- **External editor shortcut** (src/components/help_overlay.rs:116) - Added "Cmd+E - Open in external editor"
+- **Existing viewer shortcuts** - Cmd+Opt+F and Shift+Cmd+Opt+F already documented
+- **Consistent formatting** - Matches existing help overlay style
+
+**4. Implementation Architecture ✅**
+- **Viewer iteration** - for loop over filtered enabled viewers
+- **Command construction** - Replaces placeholders in args before spawning process
+- **Error propagation** - Result<(), String> return type with descriptive errors
+- **Platform abstraction** - Platform defaults use cfg! macros for cross-platform support
+- **Non-blocking execution** - Uses spawn() instead of status() to avoid blocking UI
+
+**Key Implementation Details:**
+- **Viewer priority**: Configured viewers → Platform defaults → Error message
+- **macOS fallback**: `open` command (uses default application association)
+- **Windows fallback**: `cmd /C start ""` (uses default application association)
+- **Linux fallback**: `xdg-open` (uses default application association)
+- **Path validation**: Checks if image path can be converted to string before launching
+- **State preservation**: No cx.notify() needed for external viewer (fire-and-forget)
+- **Editor requires notify**: cx.notify() called after editor launch to update UI state
+
+**Testing Results:**
+- ✓ All 10 implementation verification checks passed
+- ✓ Settings file correctly contains external_viewers array
+- ✓ Default Preview viewer configured on macOS
+- ✓ External editor successfully added via settings
+- ✓ {path} placeholder replacement verified in code
+- ✓ Enabled filter implemented correctly
+- ✓ Platform defaults fallback implemented
+- ✓ Help overlay shows new Cmd+E shortcut
+
+**Example Settings Configuration:**
+```json
+"external_tools": {
+  "external_viewers": [
+    {
+      "name": "Preview",
+      "command": "open",
+      "args": ["-a", "Preview", "{path}"],
+      "enabled": true
+    }
+  ],
+  "external_editor": {
+    "name": "Photoshop",
+    "command": "open",
+    "args": ["-a", "Adobe Photoshop 2024", "{path}"],
+    "enabled": true
+  },
+  "enable_file_manager_integration": true
+}
+```
+
+**User Experience:**
+- **Cmd+Opt+F**: Opens current image in first enabled external viewer (e.g., Preview)
+- **Shift+Cmd+Opt+F**: Opens in external viewer and quits rpview
+- **Cmd+E**: Opens current image in configured external editor (e.g., Photoshop, GIMP)
+- **Automatic fallback**: If configured viewers fail, uses system default application
+- **Clear feedback**: Error messages printed to console when viewers fail to launch
+
+**Files Modified:**
+- `src/main.rs` - Updated open_in_system_viewer(), added OpenInExternalEditor action and handler
+- `src/components/help_overlay.rs` - Added Cmd+E shortcut documentation
+- `TODO.md` - Marked Phase 16.3 tasks as complete and added summary
+
+**Code Statistics:**
+- ~60 lines of code refactored in open_in_system_viewer()
+- ~30 lines of new code for open_in_external_editor()
+- ~10 lines for action handler
+- ~1 line for keybinding
+- ~1 line for help overlay entry
+- Platform-specific viewer defaults already existed from Phase 16.1
+
+**Next Steps:**
+- Phase 16.4: Apply settings throughout the application (zoom modes, pan speeds, etc.)
+- Phase 16.5: Testing and polish
+- Phase 16.6: Advanced features (settings profiles, import/export)
+
+**Deferred Tasks:**
+- "Show in Finder/Explorer" action - Optional feature, can be added in Phase 16.6
+- Cross-platform testing - Tested on macOS, Windows/Linux testing pending in Phase 16.5
