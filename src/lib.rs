@@ -23,6 +23,7 @@ actions!(app, [
     ZoomIn,
     ZoomOut,
     ZoomReset,
+    ZoomResetAndCenter,
     ZoomInFast,
     ZoomOutFast,
     ZoomInSlow,
