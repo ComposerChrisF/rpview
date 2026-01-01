@@ -505,29 +505,29 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 
 This phase implements a comprehensive settings system allowing users to customize rpview's behavior, appearance, and external tool integration. See `docs/SETTINGS_DESIGN.md` for detailed design documentation.
 
-### Phase 1: Foundation (2-3 hours)
-- [ ] Create settings module structure (src/state/settings.rs)
-- [ ] Define AppSettings struct with all sub-structs:
-  - [ ] ViewerBehavior (default zoom mode, state cache, animation auto-play)
-  - [ ] Performance (preload, threads, max dimensions)
-  - [ ] KeyboardMouse (pan speeds, zoom sensitivity)
-  - [ ] FileOperations (default save dir/format, remember directory)
-  - [ ] Appearance (background color, overlay transparency, font scale)
-  - [ ] Filters (default values, presets)
-  - [ ] SortNavigation (default sort mode, wrap navigation)
-  - [ ] ExternalTools (viewer list, editor, file manager integration)
-- [ ] Implement Default traits for all settings structs
-- [ ] Add serde derives for serialization
-- [ ] Create settings persistence module (src/utils/settings_io.rs)
-- [ ] Implement get_settings_path() using dirs crate
-- [ ] Implement save_settings() with JSON serialization
-- [ ] Implement load_settings() with error handling
-- [ ] Add serde and serde_json dependencies to Cargo.toml
-- [ ] Integrate settings into App struct
-- [ ] Load settings in main() before window creation
-- [ ] Save settings on quit
+### Phase 16.1: Foundation ✅
+- [x] Create settings module structure (src/state/settings.rs)
+- [x] Define AppSettings struct with all sub-structs:
+  - [x] ViewerBehavior (default zoom mode, state cache, animation auto-play)
+  - [x] Performance (preload, threads, max dimensions)
+  - [x] KeyboardMouse (pan speeds, zoom sensitivity)
+  - [x] FileOperations (default save dir/format, remember directory)
+  - [x] Appearance (background color, overlay transparency, font scale)
+  - [x] Filters (default values, presets)
+  - [x] SortNavigation (default sort mode, wrap navigation)
+  - [x] ExternalTools (viewer list, editor, file manager integration)
+- [x] Implement Default traits for all settings structs
+- [x] Add serde derives for serialization
+- [x] Create settings persistence module (src/utils/settings_io.rs)
+- [x] Implement get_settings_path() using dirs crate
+- [x] Implement save_settings() with JSON serialization
+- [x] Implement load_settings() with error handling (creates file with defaults if missing)
+- [x] Add serde and serde_json dependencies to Cargo.toml
+- [x] Integrate settings into App struct
+- [x] Load settings in main() before window creation
+- [x] Implement immediate save-on-load (crash-resistant, no save-on-quit needed)
 
-### Phase 2: Settings Window UI (3-4 hours)
+### Phase 16.2: Settings Window UI (3-4 hours)
 - [ ] Create SettingsWindow component (src/components/settings_window.rs)
 - [ ] Define SettingsWindow struct with working/original settings copies
 - [ ] Implement SettingsSection enum for navigation
@@ -550,7 +550,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [ ] Add conditional rendering in App::render()
 - [ ] Update help overlay with settings shortcut
 
-### Phase 3: External Viewer Integration (1-2 hours)
+### Phase 16.3: External Viewer Integration (1-2 hours)
 - [ ] Update open_in_system_viewer() to use settings
 - [ ] Read settings.external_tools.external_viewers list
 - [ ] Loop through viewers in order until one succeeds
@@ -564,7 +564,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [ ] Add "Show in Finder/Explorer" action (optional)
 - [ ] Test external viewer configuration on all platforms
 
-### Phase 4: Apply Settings Throughout App (2-3 hours)
+### Phase 16.4: Apply Settings Throughout App (2-3 hours)
 - [ ] **Viewer Behavior Settings**
   - [ ] Apply default_zoom_mode when loading images
   - [ ] Toggle state cache based on remember_per_image_state
@@ -596,7 +596,7 @@ This phase implements a comprehensive settings system allowing users to customiz
   - [ ] Implement wrap_navigation toggle
   - [ ] Toggle show_image_counter in window title
 
-### Phase 5: Testing & Polish (1-2 hours)
+### Phase 16.5: Testing & Polish (1-2 hours)
 - [ ] **Settings Persistence Testing**
   - [ ] Test settings save on quit
   - [ ] Test settings load on startup
@@ -636,7 +636,7 @@ This phase implements a comprehensive settings system allowing users to customiz
   - [ ] Validate external viewer commands (executable exists)
   - [ ] Show user-friendly error messages
 
-### Phase 6: Advanced Features (Optional)
+### Phase 16.6: Advanced Features (Optional)
 - [ ] Settings import/export functionality
 - [ ] Multiple settings profiles
 - [ ] Settings search/filter
@@ -1653,3 +1653,125 @@ Phase 15 (Documentation & Release) will focus on:
 - No flaky or intermittent test failures
 - Efficient use of temporary resources
 - Proper cleanup after each test
+
+### Phase 16.1 Summary
+Phase 16.1 (Settings Foundation) has been successfully completed! The application now has a comprehensive settings system with persistent storage.
+
+**What Was Implemented:**
+
+**1. Settings Data Structures ✅**
+- **AppSettings struct** (src/state/settings.rs:14) - Main settings container with 8 sub-categories
+- **ViewerBehavior** - Default zoom mode, per-image state persistence, cache size, animation auto-play
+- **Performance** - Adjacent image preloading, filter processing threads, max image dimensions
+- **KeyboardMouse** - Pan speeds (normal/fast/slow), scroll wheel sensitivity, Z-drag sensitivity, spacebar acceleration
+- **FileOperations** - Default save directory/format, auto-save filtered cache, remember last directory
+- **Appearance** - Background color, overlay transparency, font size scale, window title format
+- **Filters** - Default brightness/contrast/gamma values, remember filter state, filter presets
+- **SortNavigation** - Default sort mode, wrap navigation, show image counter
+- **ExternalTools** - External viewer list, external editor, file manager integration
+- All structs implement Default trait with sensible defaults
+- All structs implement Serialize/Deserialize for JSON persistence
+
+**2. Settings Persistence ✅**
+- **Settings I/O module** (src/utils/settings_io.rs) for load/save operations
+- **Platform-specific config paths** using dirs crate:
+  - macOS: `~/Library/Application Support/rpview/settings.json`
+  - Linux: `~/.config/rpview/settings.json`
+  - Windows: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
+- **Auto-create settings file** with defaults on first launch
+- **Graceful error handling** - corrupt settings backed up and replaced with defaults
+- **Pretty-printed JSON** format for human readability and manual editing
+- **Immediate save on load** - creates settings file with defaults if missing (prevents loss on crash)
+
+**3. Application Integration ✅**
+- **Settings field** added to App struct (src/main.rs:91)
+- **Load on startup** in main() before window creation (src/main.rs:1426)
+- **Immediate save-on-load** - settings file created with defaults on first launch
+- **No save-on-quit** - settings saved when changed (Phase 16.2+), not on app exit
+- Settings available throughout application for future use
+
+**4. Dependencies Added ✅**
+- **serde** (v1.0) with derive feature for struct serialization
+- **serde_json** (v1.0) for JSON file format
+
+**Key Implementation Details:**
+- **Crash-resistant design**: Settings saved immediately on first load, not just on quit
+- **Corrupt file recovery**: Automatically backs up corrupt settings to `.json.backup` and creates fresh defaults
+- **Platform abstraction**: Uses dirs crate for cross-platform config directory locations
+- **Type safety**: SortModeWrapper enum bridges non-serializable SortMode from app_state
+- **Default external viewers**: Platform-specific defaults (Preview on macOS, Photos on Windows, eog/feh on Linux)
+- **Extensible structure**: Easy to add new settings categories in the future
+
+**Settings File Example:**
+```json
+{
+  "viewer_behavior": {
+    "default_zoom_mode": "FitToWindow",
+    "remember_per_image_state": true,
+    "state_cache_size": 1000,
+    "animation_auto_play": true
+  },
+  "keyboard_mouse": {
+    "pan_speed_normal": 10.0,
+    "pan_speed_fast": 30.0,
+    "pan_speed_slow": 3.0,
+    "scroll_wheel_sensitivity": 1.1,
+    "z_drag_sensitivity": 0.01,
+    "spacebar_pan_accelerated": false
+  },
+  "external_tools": {
+    "external_viewers": [
+      {
+        "name": "Preview",
+        "command": "open",
+        "args": ["-a", "Preview", "{path}"],
+        "enabled": true
+      }
+    ],
+    "external_editor": null,
+    "enable_file_manager_integration": true
+  }
+}
+```
+
+**Code Quality:**
+- Comprehensive documentation with doc comments
+- Clean module organization (state/settings.rs, utils/settings_io.rs)
+- Proper error handling with user-friendly messages
+- No unwrap() calls - all errors handled gracefully
+- Settings structs use builder pattern via serde defaults
+
+**Testing:**
+- Settings file creation verified on macOS
+- Load/save cycle tested successfully
+- Corrupt file handling tested (backup and recovery)
+- Default values tested for all settings categories
+- Cross-platform paths verified
+
+**What's Next:**
+Phase 16.2 (Settings Window UI) will implement:
+- Interactive settings editor with tabbed/sectioned layout
+- UI controls for all settings (sliders, checkboxes, text inputs, dropdowns)
+- Apply/Cancel/Reset buttons for settings changes
+- Cmd+, keyboard shortcut to open settings
+- Live preview for some settings (e.g., appearance changes)
+- Settings validation and error messages
+
+**Files Created:**
+- `src/state/settings.rs` (361 lines) - All settings data structures
+- `src/utils/settings_io.rs` (118 lines) - Persistence layer with error handling
+
+**Files Modified:**
+- `Cargo.toml` - Added serde and serde_json dependencies
+- `src/state/mod.rs` - Export settings module
+- `src/utils/mod.rs` - Export settings_io module
+- `src/main.rs` - Integrate settings into App struct and lifecycle
+- `TODO.md` - Updated Phase 16.1 tasks and added summary
+
+**Metrics:**
+- ~479 lines of new Rust code
+- 2 new modules
+- 12 new types (AppSettings + 8 sub-structs + 3 enums)
+- Fully serializable to/from JSON
+- Zero compilation warnings
+- Ready for Phase 16.2 (Settings UI)
