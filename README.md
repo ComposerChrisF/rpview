@@ -118,14 +118,96 @@ cargo run -- --help
 ### Help & Info
 - `H`, `?`, `F1` - Toggle help overlay
 - `F12` - Toggle debug overlay
+- `Cmd/Ctrl+,` - Open settings window
 
 See [DESIGN.md](DESIGN.md) for complete keyboard shortcuts.
+
+## Settings
+
+RPView is highly customizable through its settings system. Press `Cmd+,` (macOS) or `Ctrl+,` (Windows/Linux) to open the interactive settings window.
+
+### Settings Location
+
+Settings are stored in a JSON file at:
+- **macOS**: `~/Library/Application Support/rpview/settings.json`
+- **Linux**: `~/.config/rpview/settings.json`
+- **Windows**: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
+
+### Configurable Settings
+
+**Viewer Behavior**
+- Default zoom mode (fit-to-window or 100%)
+- Per-image state persistence
+- Animation auto-play
+- State cache size
+
+**Performance**
+- Adjacent image preloading
+- Filter processing threads
+- Maximum image dimensions
+
+**Keyboard & Mouse**
+- Pan speeds (normal, fast, slow)
+- Zoom sensitivity (scroll wheel, Z-drag)
+- Pan acceleration
+
+**File Operations**
+- Default save directory
+- Default save format
+- External viewer/editor integration
+
+**Appearance**
+- Background color
+- Overlay transparency
+- Font size scaling
+- Window title format
+
+**Filters**
+- Default brightness/contrast/gamma values
+- Filter presets (planned)
+
+**Navigation**
+- Default sort mode
+- Wrap-around navigation
+- Image counter display
+
+### Settings Window Features
+
+- ✅ **Interactive controls**: Checkboxes, radio buttons, numeric inputs
+- ✅ **Live preview**: See changes before applying
+- ✅ **Apply/Cancel/Reset**: Full control over changes
+- ✅ **Keyboard shortcuts**: `Cmd+Enter` to apply, `Esc` to cancel
+- ✅ **Auto-save**: Settings persist across restarts
+
+### Manual Editing
+
+You can also edit `settings.json` directly with any text editor. The file uses standard JSON format with pretty-printing for readability. Changes take effect on next launch.
+
+**Example**: Change default zoom mode to 100%
+```json
+{
+  "viewer_behavior": {
+    "default_zoom_mode": "OneHundredPercent",
+    ...
+  }
+}
+```
+
+### Documentation
+
+See [docs/SETTINGS.md](docs/SETTINGS.md) for:
+- Complete settings reference
+- All available options and ranges
+- Example configurations
+- Troubleshooting guide
+- Manual editing tips
 
 ## Documentation
 
 ### User Documentation
 - [DESIGN.md](DESIGN.md) - Application design and architecture
 - [CLI.md](CLI.md) - Command-line interface specification
+- [docs/SETTINGS.md](docs/SETTINGS.md) - Settings documentation and configuration guide
 - [docs/TESTING.md](docs/TESTING.md) - Testing infrastructure and guidelines
 
 ### Developer Documentation
