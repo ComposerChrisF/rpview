@@ -737,7 +737,7 @@ impl ImageViewer {
 
 impl ImageViewer {
     /// Render the image viewer as an element (for inline rendering without cx.new())
-    pub fn render_view<V: 'static>(&self, cx: &mut Context<V>) -> impl IntoElement {
+    pub fn render_view<V: 'static>(&self, background_color: [u8; 3], cx: &mut Context<V>) -> impl IntoElement {
         let content = if self.is_loading {
             // Show loading indicator
             use crate::components::loading_indicator::LoadingIndicator;
@@ -758,7 +758,11 @@ impl ImageViewer {
                 .flex()
                 .items_center()
                 .justify_center()
-                .bg(rgb(0x1e1e1e))
+                .bg(rgb(
+                    ((background_color[0] as u32) << 16) |
+                    ((background_color[1] as u32) << 8) |
+                    (background_color[2] as u32)
+                ))
                 .child(
                     div()
                         .flex()
@@ -847,7 +851,7 @@ impl ImageViewer {
                 .child(cx.new(|_cx| ErrorDisplay::new(full_message)))
                 .into_any_element()
         } else if let Some(ref loaded) = self.current_image {
-            self.render_image(loaded, cx)
+            self.render_image(loaded, background_color, cx)
         } else {
             div().size_full().into_any_element()
         };
@@ -855,7 +859,7 @@ impl ImageViewer {
         content
     }
     
-    fn render_image<V>(&self, loaded: &LoadedImage, cx: &mut Context<V>) -> AnyElement {
+    fn render_image<V>(&self, loaded: &LoadedImage, background_color: [u8; 3], cx: &mut Context<V>) -> AnyElement {
         let width = loaded.width;
         let height = loaded.height;
         
@@ -903,7 +907,11 @@ impl ImageViewer {
         
         let mut container = div()
             .size_full()
-            .bg(Colors::background())
+            .bg(rgb(
+                ((background_color[0] as u32) << 16) |
+                ((background_color[1] as u32) << 8) |
+                (background_color[2] as u32)
+            ))
             .overflow_hidden()
             .relative()
             .child(
