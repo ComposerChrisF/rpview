@@ -1107,21 +1107,25 @@ impl SettingsWindow {
         div()
             .flex()
             .flex_col()
+            .max_w_full() // Ensure we don't exceed parent width
             .child(self.render_section_header("Settings File".to_string()))
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .mb(Spacing::md())
+                    .max_w_full()
                     .child(self.render_label("Settings file location".to_string(), Some("Path to the JSON settings file".to_string())))
                     .child(
                         div()
                             .flex()
                             .flex_row()
                             .gap(Spacing::sm())
+                            .max_w_full()
                             .child(
                                 div()
                                     .flex_1()
+                                    .min_w_0() // Allow flex child to shrink below content size
                                     .px(Spacing::sm())
                                     .py(Spacing::xs())
                                     .bg(rgb(0x2a2a2a))
@@ -1130,11 +1134,17 @@ impl SettingsWindow {
                                     .rounded(px(4.0))
                                     .text_size(TextSize::sm())
                                     .text_color(Colors::text())
-                                    .overflow_x_hidden()
-                                    .child(path_str.clone())
+                                    .line_height(relative(1.3))
+                                    .cursor(gpui::CursorStyle::IBeam)
+                                    .child(
+                                        div()
+                                            .id("settings-path-text")
+                                            .child(path_str.clone())
+                                    )
                             )
                             .child(
                                 div()
+                                    .flex_shrink_0() // Prevent button from shrinking
                                     .px(Spacing::md())
                                     .py(Spacing::xs())
                                     .bg(rgb(0x444444))
@@ -1146,67 +1156,68 @@ impl SettingsWindow {
                                         // Copy path to clipboard
                                         cx.write_to_clipboard(ClipboardItem::new_string(path_str.clone()));
                                     }))
-                                    .child("Copy Path")
+                                    .child("Copy")
                             )
                     )
             )
             .child(
                 div()
-                    .flex()
-                    .flex_col()
                     .mb(Spacing::md())
-                    .child(self.render_label("Quick actions".to_string(), Some("Open the settings file or its containing folder".to_string())))
+                    .flex()
+                    .flex_row()
                     .child(
                         div()
-                            .flex()
-                            .flex_row()
-                            .gap(Spacing::sm())
-                            .child(
-                                div()
-                                    .px(Spacing::md())
-                                    .py(Spacing::sm())
-                                    .bg(Colors::info())
-                                    .rounded(px(4.0))
-                                    .text_size(TextSize::sm())
-                                    .text_color(rgb(0x000000))
-                                    .font_weight(FontWeight::BOLD)
-                                    .cursor_pointer()
-                                    .on_mouse_down(MouseButton::Left, cx.listener(move |_this, _event: &MouseDownEvent, _window, _cx| {
-                                        // Reveal settings file in file manager
-                                        let path = settings_io::get_settings_path();
-                                        #[cfg(target_os = "macos")]
-                                        {
-                                            std::process::Command::new("open")
-                                                .arg("-R")
-                                                .arg(&path)
-                                                .spawn()
-                                                .ok();
-                                        }
-                                        #[cfg(target_os = "windows")]
-                                        {
-                                            std::process::Command::new("explorer")
-                                                .arg("/select,")
-                                                .arg(&path)
-                                                .spawn()
-                                                .ok();
-                                        }
-                                        #[cfg(target_os = "linux")]
-                                        {
-                                            // Try to get the parent directory
-                                            if let Some(parent) = path.parent() {
-                                                std::process::Command::new("xdg-open")
-                                                    .arg(parent)
-                                                    .spawn()
-                                                    .ok();
-                                            }
-                                        }
-                                    }))
-                                    .child("Reveal in File Manager")
-                            )
+                            .px(Spacing::md())
+                            .py(Spacing::sm())
+                            .bg(Colors::info())
+                            .rounded(px(4.0))
+                            .text_size(TextSize::sm())
+                            .text_color(rgb(0x000000))
+                            .font_weight(FontWeight::BOLD)
+                            .cursor_pointer()
+                            .on_mouse_down(MouseButton::Left, cx.listener(move |_this, _event: &MouseDownEvent, _window, _cx| {
+                                // Reveal settings file in file manager
+                                let path = settings_io::get_settings_path();
+                                #[cfg(target_os = "macos")]
+                                {
+                                    std::process::Command::new("open")
+                                        .arg("-R")
+                                        .arg(&path)
+                                        .spawn()
+                                        .ok();
+                                }
+                                #[cfg(target_os = "windows")]
+                                {
+                                    std::process::Command::new("explorer")
+                                        .arg("/select,")
+                                        .arg(&path)
+                                        .spawn()
+                                        .ok();
+                                }
+                                #[cfg(target_os = "linux")]
+                                {
+                                    // Try to get the parent directory
+                                    if let Some(parent) = path.parent() {
+                                        std::process::Command::new("xdg-open")
+                                            .arg(parent)
+                                            .spawn()
+                                            .ok();
+                                    }
+                                }
+                            }))
+                            .child({
+                                #[cfg(target_os = "macos")]
+                                { "Reveal settings file in Finder" }
+                                #[cfg(target_os = "windows")]
+                                { "Reveal settings file in File Explorer" }
+                                #[cfg(target_os = "linux")]
+                                { "Reveal settings file in file manager" }
+                            })
                     )
             )
             .child(
                 div()
+                    .max_w_full()
                     .px(Spacing::md())
                     .py(Spacing::md())
                     .bg(rgba(0x50fa7b22))
@@ -1215,7 +1226,17 @@ impl SettingsWindow {
                     .rounded(px(4.0))
                     .text_size(TextSize::sm())
                     .text_color(Colors::text())
-                    .child("Note: You can manually edit the settings.json file to configure advanced options like window title format, background color, and external tool commands.")
+                    .line_height(relative(1.4))
+                    .child(
+                        div()
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::BOLD)
+                                    .mb(Spacing::xs())
+                                    .child("Note:")
+                            )
+                            .child("Edit settings.json to configure advanced options.")
+                    )
             )
     }
 
