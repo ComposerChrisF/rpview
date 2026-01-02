@@ -62,6 +62,8 @@ pub struct ImageViewer {
     pub error_message: Option<String>,
     /// Path of the image that failed to load (for full path display)
     pub error_path: Option<PathBuf>,
+    /// Oversized image warning: (path, width, height, max_dimension)
+    pub oversized_image: Option<(PathBuf, u32, u32, u32)>,
     /// Focus handle for keyboard events
     pub focus_handle: FocusHandle,
     /// Current image state (zoom, pan, etc.)
@@ -436,7 +438,7 @@ impl ImageViewer {
     }
     
     /// Start loading an image asynchronously in the background
-    pub fn load_image_async(&mut self, path: PathBuf) {
+    pub fn load_image_async(&mut self, path: PathBuf, max_dimension: Option<u32>, force_load: bool) {
         // Cancel any previous loading operation
         if let Some(handle) = self.loading_handle.take() {
             handle.cancel();
@@ -444,7 +446,7 @@ impl ImageViewer {
         
         // Start new async load
         eprintln!("[ASYNC] Starting async load for: {}", path.display());
-        self.loading_handle = Some(image_loader::load_image_async(path));
+        self.loading_handle = Some(image_loader::load_image_async(path, max_dimension, force_load));
         self.is_loading = true;
         
         // Clear previous image and errors
@@ -502,6 +504,7 @@ impl ImageViewer {
                         });
                         self.error_message = None;
                         self.error_path = None;
+                        self.oversized_image = None;
                         
                         // Fit to window on load
                         self.fit_to_window();
@@ -513,6 +516,16 @@ impl ImageViewer {
                         self.current_image = None;
                         self.error_message = Some(msg);
                         self.error_path = Some(path);
+                        self.oversized_image = None;
+                        
+                        return true;
+                    }
+                    image_loader::LoaderMessage::OversizedImage(path, width, height, max_dim) => {
+                        eprintln!("[ASYNC] Image oversized: {}×{} exceeds max {}",width, height, max_dim);
+                        self.current_image = None;
+                        self.error_message = None;
+                        self.error_path = None;
+                        self.oversized_image = Some((path, width, height, max_dim));
                         
                         return true;
                     }
@@ -724,13 +737,99 @@ impl ImageViewer {
 
 impl ImageViewer {
     /// Render the image viewer as an element (for inline rendering without cx.new())
-    pub fn render_view<V>(&self, cx: &mut Context<V>) -> impl IntoElement {
+    pub fn render_view<V: 'static>(&self, cx: &mut Context<V>) -> impl IntoElement {
         let content = if self.is_loading {
             // Show loading indicator
             use crate::components::loading_indicator::LoadingIndicator;
             div()
                 .size_full()
                 .child(cx.new(|_cx| LoadingIndicator::new("Loading image...")))
+                .into_any_element()
+        } else if let Some((ref path, width, height, max_dim)) = self.oversized_image {
+            // Show oversized image warning with Load Anyway button
+            use crate::utils::style::{Colors, Spacing, TextSize};
+            
+            let canonical_path = path.canonicalize()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| path.display().to_string());
+            
+            div()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(rgb(0x1e1e1e))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .gap(Spacing::lg())
+                        .max_w(px(600.0))
+                        .px(Spacing::xl())
+                        .py(Spacing::xl())
+                        .bg(rgba(0x50fa7b22))
+                        .border_2()
+                        .border_color(Colors::info())
+                        .rounded(px(8.0))
+                        .child(
+                            div()
+                                .text_size(TextSize::xl())
+                                .text_color(Colors::info())
+                                .font_weight(FontWeight::BOLD)
+                                .child("⚠ Large Image Protection")
+                        )
+                        .child(
+                            div()
+                                .text_size(TextSize::md())
+                                .text_color(Colors::text())
+                                .text_align(gpui::TextAlign::Center)
+                                .child(format!(
+                                    "This image is {}×{} pixels, which exceeds the maximum dimension limit of {} pixels.",
+                                    width, height, max_dim
+                                ))
+                        )
+                        .child(
+                            div()
+                                .text_size(TextSize::sm())
+                                .text_color(rgb(0xaaaaaa))
+                                .text_align(gpui::TextAlign::Center)
+                                .child("Loading very large images may cause slowdowns or high memory usage.")
+                        )
+                        .child(
+                            div()
+                                .text_size(TextSize::sm())
+                                .text_color(rgb(0x888888))
+                                .text_align(gpui::TextAlign::Center)
+                                .px(Spacing::md())
+                                .py(Spacing::xs())
+                                .bg(rgb(0x2a2a2a))
+                                .rounded(px(4.0))
+                                .child(canonical_path)
+                        )
+                        .child(
+                            div()
+                                .text_size(TextSize::md())
+                                .text_color(Colors::text())
+                                .text_align(gpui::TextAlign::Center)
+                                .mt(Spacing::md())
+                                .child("To load this image:")
+                        )
+                        .child(
+                            div()
+                                .text_size(TextSize::sm())
+                                .text_color(rgb(0xaaaaaa))
+                                .text_align(gpui::TextAlign::Center)
+                                .child(format!("Open Settings (Cmd+,) > Performance > Maximum image dimension"))
+                        )
+                        .child(
+                            div()
+                                .text_size(TextSize::sm())
+                                .text_color(rgb(0xaaaaaa))
+                                .text_align(gpui::TextAlign::Center)
+                                .child(format!("and increase the limit above {} px", max_dim))
+                        )
+                )
                 .into_any_element()
         } else if let Some(ref error) = self.error_message {
             // Show error message with full canonical path if available

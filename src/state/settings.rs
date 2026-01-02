@@ -75,8 +75,8 @@ pub struct Performance {
     pub preload_adjacent_images: bool,
     /// Number of background threads for filter processing
     pub filter_processing_threads: usize,
-    /// Maximum image dimensions to load (safety limit)
-    pub max_image_dimensions: (u32, u32),
+    /// Maximum image dimension to load (neither width nor height can exceed this)
+    pub max_image_dimension: u32,
 }
 
 impl Default for Performance {
@@ -84,7 +84,7 @@ impl Default for Performance {
         Self {
             preload_adjacent_images: true,
             filter_processing_threads: 4,
-            max_image_dimensions: (16384, 16384), // 16K x 16K
+            max_image_dimension: 17000,
         }
     }
 }
@@ -136,7 +136,7 @@ impl Default for FileOperations {
     fn default() -> Self {
         Self {
             default_save_directory: None,
-            default_save_format: SaveFormat::Png,
+            default_save_format: SaveFormat::SameAsLoaded,
             auto_save_filtered_cache: false,
             remember_last_directory: true,
         }
@@ -146,11 +146,39 @@ impl Default for FileOperations {
 /// Image save format options
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SaveFormat {
+    /// Save in same format as loaded image
+    SameAsLoaded,
     Png,
     Jpeg,
     Bmp,
     Tiff,
     Webp,
+}
+
+impl SaveFormat {
+    /// Get display name for the save format
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            SaveFormat::SameAsLoaded => "Same as loaded image",
+            SaveFormat::Png => "PNG",
+            SaveFormat::Jpeg => "JPEG",
+            SaveFormat::Bmp => "BMP",
+            SaveFormat::Tiff => "TIFF",
+            SaveFormat::Webp => "WEBP",
+        }
+    }
+
+    /// Get all save format options
+    pub fn all() -> Vec<Self> {
+        vec![
+            Self::SameAsLoaded,
+            Self::Png,
+            Self::Jpeg,
+            Self::Bmp,
+            Self::Tiff,
+            Self::Webp,
+        ]
+    }
 }
 
 /// Appearance settings

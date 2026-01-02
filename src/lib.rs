@@ -64,4 +64,5 @@ actions!(app, [
     ApplySettings,
     CancelSettings,
     ResetSettingsToDefaults,
+    LoadOversizedImageAnyway,
 ]);
