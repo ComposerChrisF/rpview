@@ -723,12 +723,12 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .gap(Spacing::sm())
+                            .gap(Spacing::md())
                             .items_center()
                             .child(
                                 div()
-                                    .w(px(40.0))
-                                    .h(px(40.0))
+                                    .w(px(60.0))
+                                    .h(px(60.0))
                                     .rounded(px(4.0))
                                     .border_1()
                                     .border_color(rgb(0x666666))
@@ -740,14 +740,205 @@ impl SettingsWindow {
                             )
                             .child(
                                 div()
-                                    .text_size(TextSize::sm())
-                                    .text_color(rgb(0xaaaaaa))
-                                    .child(format!(
-                                        "#{:02x}{:02x}{:02x}",
-                                        background_color[0],
-                                        background_color[1],
-                                        background_color[2]
-                                    ))
+                                    .flex()
+                                    .flex_col()
+                                    .gap(Spacing::xs())
+                                    .flex_1()
+                                    .child(
+                                        div()
+                                            .text_size(TextSize::sm())
+                                            .text_color(rgb(0xaaaaaa))
+                                            .mb(Spacing::xs())
+                                            .child(format!(
+                                                "#{:02x}{:02x}{:02x}",
+                                                background_color[0],
+                                                background_color[1],
+                                                background_color[2]
+                                            ))
+                                    )
+                                    // Red channel
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(Spacing::xs())
+                                            .child(
+                                                div()
+                                                    .w(px(20.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(rgb(0xff6666))
+                                                    .child("R")
+                                            )
+                                            .child(
+                                                div()
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                                                        this.working_settings.appearance.background_color[0] = 
+                                                            this.working_settings.appearance.background_color[0].saturating_sub(5);
+                                                        cx.notify();
+                                                    }))
+                                                    .child("−")
+                                            )
+                                            .child(
+                                                div()
+                                                    .w(px(40.0))
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x2a2a2a))
+                                                    .border_1()
+                                                    .border_color(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .text_align(gpui::TextAlign::Center)
+                                                    .child(format!("{}", background_color[0]))
+                                            )
+                                            .child(
+                                                div()
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                                                        this.working_settings.appearance.background_color[0] = 
+                                                            this.working_settings.appearance.background_color[0].saturating_add(5).min(255);
+                                                        cx.notify();
+                                                    }))
+                                                    .child("+")
+                                            )
+                                    )
+                                    // Green channel
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(Spacing::xs())
+                                            .child(
+                                                div()
+                                                    .w(px(20.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(rgb(0x66ff66))
+                                                    .child("G")
+                                            )
+                                            .child(
+                                                div()
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                                                        this.working_settings.appearance.background_color[1] = 
+                                                            this.working_settings.appearance.background_color[1].saturating_sub(5);
+                                                        cx.notify();
+                                                    }))
+                                                    .child("−")
+                                            )
+                                            .child(
+                                                div()
+                                                    .w(px(40.0))
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x2a2a2a))
+                                                    .border_1()
+                                                    .border_color(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .text_align(gpui::TextAlign::Center)
+                                                    .child(format!("{}", background_color[1]))
+                                            )
+                                            .child(
+                                                div()
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                                                        this.working_settings.appearance.background_color[1] = 
+                                                            this.working_settings.appearance.background_color[1].saturating_add(5).min(255);
+                                                        cx.notify();
+                                                    }))
+                                                    .child("+")
+                                            )
+                                    )
+                                    // Blue channel
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(Spacing::xs())
+                                            .child(
+                                                div()
+                                                    .w(px(20.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(rgb(0x6666ff))
+                                                    .child("B")
+                                            )
+                                            .child(
+                                                div()
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                                                        this.working_settings.appearance.background_color[2] = 
+                                                            this.working_settings.appearance.background_color[2].saturating_sub(5);
+                                                        cx.notify();
+                                                    }))
+                                                    .child("−")
+                                            )
+                                            .child(
+                                                div()
+                                                    .w(px(40.0))
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x2a2a2a))
+                                                    .border_1()
+                                                    .border_color(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .text_align(gpui::TextAlign::Center)
+                                                    .child(format!("{}", background_color[2]))
+                                            )
+                                            .child(
+                                                div()
+                                                    .px(Spacing::xs())
+                                                    .py(px(2.0))
+                                                    .bg(rgb(0x444444))
+                                                    .rounded(px(3.0))
+                                                    .text_size(TextSize::sm())
+                                                    .text_color(Colors::text())
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                                                        this.working_settings.appearance.background_color[2] = 
+                                                            this.working_settings.appearance.background_color[2].saturating_add(5).min(255);
+                                                        cx.notify();
+                                                    }))
+                                                    .child("+")
+                                            )
+                                    )
                             )
                     )
             )

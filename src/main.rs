@@ -1104,7 +1104,11 @@ impl Render for App {
         div()
             .track_focus(&self.focus_handle)
             .size_full()
-            .bg(utils::style::Colors::background())
+            .bg(rgb(
+                ((self.settings.appearance.background_color[0] as u32) << 16) |
+                ((self.settings.appearance.background_color[1] as u32) << 8) |
+                (self.settings.appearance.background_color[2] as u32)
+            ))
             .when(self.drag_over, |div| {
                 // Show highlighted border when dragging files over the window
                 div.border_4()
@@ -1312,7 +1316,7 @@ impl Render for App {
                 this.drag_over = false;
                 this.handle_dropped_files(paths, window, cx);
             }))
-            .child(self.viewer.render_view(cx))
+            .child(self.viewer.render_view(self.settings.appearance.background_color, cx))
             // Render overlays on top with proper z-order
             .when(self.show_help, |el| {
                 el.child(cx.new(|_cx| HelpOverlay::new()))
