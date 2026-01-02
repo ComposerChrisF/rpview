@@ -653,7 +653,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 ### Phase 16.7: Interactive Settings UI ✅ COMPLETE
 
-**Status:** Settings window is **fully interactive** for all numeric and boolean settings (25+ settings).
+**Status:** Settings window is **fully interactive** for all settings including color picker.
 
 ✅ **Working Interactive Controls:**
 - Checkboxes for all boolean settings (10+ settings including animation auto-play, pan acceleration, etc.)
@@ -664,6 +664,16 @@ This phase implements a comprehensive settings system allowing users to customiz
   - Cache sizes and thread counts
   - Filter defaults (brightness, contrast, gamma)
   - Appearance settings (transparency, font scale)
+- **RGB Color Picker for background color** ✅ NEW
+  - Interactive sliders with +/- buttons for Red, Green, Blue channels
+  - Live color preview swatch (60x60 pixels)
+  - Hex color display (#RRGGBB format)
+  - Real-time updates throughout entire UI
+  - Background color applied to:
+    - Main application window
+    - Image viewer container
+    - Oversized image warning screen
+    - All viewer states (loading, error, image display)
 - Range validation: All numeric values automatically clamped to valid ranges
 - Apply button (Cmd+Enter) saves changes to disk
 - Cancel button (Esc) discards changes
@@ -671,11 +681,10 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 ⏳ **Optional Enhancements (Low Priority - rarely changed settings):**
 - Text input fields (window title format, file paths)
-- Color picker for background color
 - File browser for default save directory
 - External viewer list editor (add/remove/reorder viewers)
 
-**Settings File Location** (for manual editing of numeric/text fields):
+**Settings File Location** (for manual editing of text fields):
 - macOS: `~/Library/Application Support/rpview/settings.json`
 - Linux: `~/.config/rpview/settings.json`
 - Windows: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
