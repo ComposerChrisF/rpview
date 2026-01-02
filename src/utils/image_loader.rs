@@ -23,6 +23,8 @@ pub enum LoaderMessage {
     Success(LoadedImageData),
     /// Image loading failed
     Error(PathBuf, String),
+    /// Image exceeds size limit (path, width, height, max_dimension)
+    OversizedImage(PathBuf, u32, u32, u32),
 }
 
 /// Handle to a background image loading operation
@@ -47,7 +49,10 @@ impl LoaderHandle {
 
 /// Start loading an image in the background
 /// Returns a handle that can be used to check for completion or cancel
-pub fn load_image_async(path: PathBuf) -> LoaderHandle {
+/// 
+/// If max_dimension is Some(n) and either width or height exceeds n,
+/// returns OversizedImage instead of Success
+pub fn load_image_async(path: PathBuf, max_dimension: Option<u32>, force_load: bool) -> LoaderHandle {
     let (tx, rx) = mpsc::channel();
     let cancel_flag = Arc::new(Mutex::new(false));
     let cancel_flag_clone = cancel_flag.clone();
@@ -70,6 +75,16 @@ pub fn load_image_async(path: PathBuf) -> LoaderHandle {
         // Check cancellation after dimensions
         if is_cancelled(&cancel_flag_clone) {
             return;
+        }
+        
+        // Check if image exceeds size limit (unless force_load is true)
+        if !force_load {
+            if let Some(max_dim) = max_dimension {
+                if width > max_dim || height > max_dim {
+                    let _ = tx.send(LoaderMessage::OversizedImage(path, width, height, max_dim));
+                    return;
+                }
+            }
         }
         
         // Try to load animation data if it's an animated image

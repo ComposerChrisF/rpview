@@ -23,6 +23,9 @@ pub struct ImageState {
     
     /// Animation state (if applicable)
     pub animation: Option<AnimationState>,
+    
+    /// Whether user has chosen to override the size limit for this image
+    pub override_size_limit: bool,
 }
 
 impl ImageState {
@@ -36,6 +39,7 @@ impl ImageState {
             filters: FilterSettings::default(),
             filters_enabled: true,
             animation: None,
+            override_size_limit: false,
         }
     }
 }

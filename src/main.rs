@@ -172,6 +172,24 @@ impl App {
         cx.notify();
     }
     
+    fn handle_load_oversized_image_anyway(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // Get the current image path from the oversized_image state
+        if let Some((ref path, _, _, _)) = self.viewer.oversized_image {
+            let path = path.clone();
+            
+            // Set the override flag in the image state cache
+            let mut state = self.app_state.image_states.get(&path).cloned().unwrap_or_else(state::ImageState::new);
+            state.override_size_limit = true;
+            self.app_state.image_states.insert(path.clone(), state);
+            
+            // Reload the image with force_load = true
+            let max_dim = Some(self.settings.performance.max_image_dimension);
+            self.viewer.load_image_async(path, max_dim, true);
+            
+            cx.notify();
+        }
+    }
+    
     fn handle_toggle_filters(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_filters = !self.show_filters;
         
@@ -320,6 +338,13 @@ impl App {
                 // Use default save format from settings
                 use crate::state::settings::SaveFormat;
                 match self.settings.file_operations.default_save_format {
+                    SaveFormat::SameAsLoaded => {
+                        // Use original extension
+                        current_path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("png")
+                    }
                     SaveFormat::Png => "png",
                     SaveFormat::Jpeg => "jpg",
                     SaveFormat::Bmp => "bmp",
@@ -876,8 +901,15 @@ impl App {
             let viewport_size = window.viewport_size();
             self.viewer.update_viewport_size(viewport_size);
             
+            // Check if user has overridden size limit for this image
+            let force_load = self.app_state.image_states
+                .get(&path)
+                .map(|state| state.override_size_limit)
+                .unwrap_or(false);
+            
             // Load the image asynchronously (non-blocking)
-            self.viewer.load_image_async(path.clone());
+            let max_dim = Some(self.settings.performance.max_image_dimension);
+            self.viewer.load_image_async(path.clone(), max_dim, force_load);
             
             // State will be loaded when async load completes (in render loop)
         } else {
@@ -1413,6 +1445,9 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &ResetSettingsToDefaults, window, cx| {
                 this.handle_reset_settings_to_defaults(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &rpview_gpui::LoadOversizedImageAnyway, window, cx| {
+                this.handle_load_oversized_image_anyway(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &ToggleFilters, window, cx| {
                 this.handle_toggle_filters(window, cx);
             }))
@@ -1703,6 +1738,7 @@ fn main() {
                         current_image: None,
                         error_message: None,
                         error_path: None,
+                        oversized_image: None,
                         focus_handle: inner_cx.focus_handle(),
                         image_state: state::ImageState::new(),
                         viewport_size: None,
@@ -1716,7 +1752,8 @@ fn main() {
                     };
                     
                     if let Some(ref path) = first_image_path {
-                        viewer.load_image_async(path.clone());
+                        let max_dim = Some(settings.performance.max_image_dimension);
+                        viewer.load_image_async(path.clone(), max_dim, false);
                     } else {
                         // No images found - show error with canonical directory path
                         let canonical_dir = search_dir.canonicalize()

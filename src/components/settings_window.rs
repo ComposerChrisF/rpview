@@ -47,6 +47,7 @@ use gpui::prelude::*;
 use gpui::*;
 use crate::state::settings::*;
 use crate::utils::style::{Colors, Spacing, TextSize};
+use crate::utils::settings_io;
 use crate::{ApplySettings, CancelSettings, ResetSettingsToDefaults};
 
 /// Available settings sections
@@ -60,6 +61,7 @@ pub enum SettingsSection {
     Filters,
     SortNavigation,
     ExternalTools,
+    SettingsFile,
 }
 
 impl SettingsSection {
@@ -74,6 +76,7 @@ impl SettingsSection {
             Self::Filters => "Filters",
             Self::SortNavigation => "Sort & Navigation",
             Self::ExternalTools => "External Tools",
+            Self::SettingsFile => "Settings File",
         }
     }
 
@@ -88,6 +91,7 @@ impl SettingsSection {
             Self::Filters,
             Self::SortNavigation,
             Self::ExternalTools,
+            Self::SettingsFile,
         ]
     }
 }
@@ -449,7 +453,7 @@ impl SettingsWindow {
     fn render_performance(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let preload_adjacent_images = self.working_settings.performance.preload_adjacent_images;
         let filter_processing_threads = self.working_settings.performance.filter_processing_threads;
-        let max_image_dimensions = self.working_settings.performance.max_image_dimensions;
+        let max_image_dimension = self.working_settings.performance.max_image_dimension;
         
         div()
             .flex()
@@ -478,50 +482,20 @@ impl SettingsWindow {
                 },
                 cx
             ))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .mb(Spacing::md())
-                    .child(self.render_label("Maximum image dimensions".to_string(), Some("Safety limit for loading images".to_string())))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(Spacing::sm())
-                            .child(
-                                div()
-                                    .w(px(100.0))
-                                    .px(Spacing::sm())
-                                    .py(Spacing::xs())
-                                    .bg(rgb(0x2a2a2a))
-                                    .border_1()
-                                    .border_color(rgb(0x444444))
-                                    .rounded(px(4.0))
-                                    .text_size(TextSize::md())
-                                    .text_color(Colors::text())
-                                    .child(format!("{}px", max_image_dimensions.0))
-                            )
-                            .child(
-                                div()
-                                    .text_color(rgb(0xaaaaaa))
-                                    .child("×")
-                            )
-                            .child(
-                                div()
-                                    .w(px(100.0))
-                                    .px(Spacing::sm())
-                                    .py(Spacing::xs())
-                                    .bg(rgb(0x2a2a2a))
-                                    .border_1()
-                                    .border_color(rgb(0x444444))
-                                    .rounded(px(4.0))
-                                    .text_size(TextSize::md())
-                                    .text_color(Colors::text())
-                                    .child(format!("{}px", max_image_dimensions.1))
-                            )
-                    )
-            )
+            .child(self.render_numeric_input(
+                "Maximum image dimension".to_string(),
+                format!("{}px", max_image_dimension),
+                Some("Maximum allowed width or height for loading images".to_string()),
+                |this, _cx| {
+                    this.working_settings.performance.max_image_dimension = 
+                        (this.working_settings.performance.max_image_dimension + 1000).min(100000);
+                },
+                |this, _cx| {
+                    this.working_settings.performance.max_image_dimension = 
+                        this.working_settings.performance.max_image_dimension.saturating_sub(1000).max(1000);
+                },
+                cx
+            ))
     }
 
     /// Render keyboard & mouse section
@@ -671,30 +645,43 @@ impl SettingsWindow {
                             )
                     )
             )
-            .child(
+            .child({
+                let formats: Vec<_> = SaveFormat::all().into_iter().map(|format| {
+                    let is_selected = format == default_save_format;
+                    
+                    div()
+                        .px(Spacing::md())
+                        .py(Spacing::sm())
+                        .rounded(px(4.0))
+                        .border_1()
+                        .cursor_pointer()
+                        .when(is_selected, |div| {
+                            div.border_color(Colors::info())
+                                .bg(rgba(0x50fa7b22))
+                        })
+                        .when(!is_selected, |div| {
+                            div.border_color(rgb(0x444444))
+                        })
+                        .text_size(TextSize::sm())
+                        .text_color(Colors::text())
+                        .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                            this.working_settings.file_operations.default_save_format = format;
+                            cx.notify();
+                        }))
+                        .child(format.display_name())
+                }).collect();
+                
                 div()
                     .mb(Spacing::md())
                     .child(self.render_label("Default save format".to_string(), Some("Format for saving filtered images".to_string())))
                     .child(
                         div()
-                            .w(px(150.0))
-                            .px(Spacing::sm())
-                            .py(Spacing::xs())
-                            .bg(rgb(0x2a2a2a))
-                            .border_1()
-                            .border_color(rgb(0x444444))
-                            .rounded(px(4.0))
-                            .text_size(TextSize::md())
-                            .text_color(Colors::text())
-                            .child(match default_save_format {
-                                SaveFormat::Png => "PNG",
-                                SaveFormat::Jpeg => "JPEG",
-                                SaveFormat::Bmp => "BMP",
-                                SaveFormat::Tiff => "TIFF",
-                                SaveFormat::Webp => "WEBP",
-                            })
+                            .flex()
+                            .flex_col()
+                            .gap(Spacing::xs())
+                            .children(formats)
                     )
-            )
+            })
             .child(self.render_checkbox(
                 "Auto-save filtered cache".to_string(),
                 auto_save_filtered_cache,
@@ -792,18 +779,32 @@ impl SettingsWindow {
                 },
                 cx
             ))
-            .child(self.render_numeric_input(
-                "Window title format".to_string(),
-                window_title_format.clone(),
-                Some("Template: {filename}, {index}, {total}".to_string()),
-                |_this, _cx| {
-                    // Text fields not editable yet - would need text input component
-                },
-                |_this, _cx| {
-                    // Text fields not editable yet - would need text input component
-                },
-                cx
-            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .mb(Spacing::md())
+                    .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
+                    .child(
+                        div()
+                            .px(Spacing::sm())
+                            .py(Spacing::xs())
+                            .bg(rgb(0x2a2a2a))
+                            .border_1()
+                            .border_color(rgb(0x444444))
+                            .rounded(px(4.0))
+                            .text_size(TextSize::md())
+                            .text_color(rgb(0xaaaaaa))
+                            .child(window_title_format.clone())
+                            .child(
+                                div()
+                                    .text_size(TextSize::sm())
+                                    .text_color(rgb(0x666666))
+                                    .mt(Spacing::xs())
+                                    .child("(Edit in settings JSON file)")
+                            )
+                    )
+            )
     }
 
     /// Render filters section
@@ -1098,6 +1099,126 @@ impl SettingsWindow {
             ))
     }
 
+    /// Render settings file section
+    fn render_settings_file(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let settings_path = settings_io::get_settings_path();
+        let path_str = settings_path.display().to_string();
+        
+        div()
+            .flex()
+            .flex_col()
+            .child(self.render_section_header("Settings File".to_string()))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .mb(Spacing::md())
+                    .child(self.render_label("Settings file location".to_string(), Some("Path to the JSON settings file".to_string())))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(Spacing::sm())
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .px(Spacing::sm())
+                                    .py(Spacing::xs())
+                                    .bg(rgb(0x2a2a2a))
+                                    .border_1()
+                                    .border_color(rgb(0x444444))
+                                    .rounded(px(4.0))
+                                    .text_size(TextSize::sm())
+                                    .text_color(Colors::text())
+                                    .overflow_x_hidden()
+                                    .child(path_str.clone())
+                            )
+                            .child(
+                                div()
+                                    .px(Spacing::md())
+                                    .py(Spacing::xs())
+                                    .bg(rgb(0x444444))
+                                    .rounded(px(4.0))
+                                    .text_size(TextSize::sm())
+                                    .text_color(Colors::text())
+                                    .cursor_pointer()
+                                    .on_mouse_down(MouseButton::Left, cx.listener(move |_this, _event: &MouseDownEvent, _window, cx| {
+                                        // Copy path to clipboard
+                                        cx.write_to_clipboard(ClipboardItem::new_string(path_str.clone()));
+                                    }))
+                                    .child("Copy Path")
+                            )
+                    )
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .mb(Spacing::md())
+                    .child(self.render_label("Quick actions".to_string(), Some("Open the settings file or its containing folder".to_string())))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(Spacing::sm())
+                            .child(
+                                div()
+                                    .px(Spacing::md())
+                                    .py(Spacing::sm())
+                                    .bg(Colors::info())
+                                    .rounded(px(4.0))
+                                    .text_size(TextSize::sm())
+                                    .text_color(rgb(0x000000))
+                                    .font_weight(FontWeight::BOLD)
+                                    .cursor_pointer()
+                                    .on_mouse_down(MouseButton::Left, cx.listener(move |_this, _event: &MouseDownEvent, _window, _cx| {
+                                        // Reveal settings file in file manager
+                                        let path = settings_io::get_settings_path();
+                                        #[cfg(target_os = "macos")]
+                                        {
+                                            std::process::Command::new("open")
+                                                .arg("-R")
+                                                .arg(&path)
+                                                .spawn()
+                                                .ok();
+                                        }
+                                        #[cfg(target_os = "windows")]
+                                        {
+                                            std::process::Command::new("explorer")
+                                                .arg("/select,")
+                                                .arg(&path)
+                                                .spawn()
+                                                .ok();
+                                        }
+                                        #[cfg(target_os = "linux")]
+                                        {
+                                            // Try to get the parent directory
+                                            if let Some(parent) = path.parent() {
+                                                std::process::Command::new("xdg-open")
+                                                    .arg(parent)
+                                                    .spawn()
+                                                    .ok();
+                                            }
+                                        }
+                                    }))
+                                    .child("Reveal in File Manager")
+                            )
+                    )
+            )
+            .child(
+                div()
+                    .px(Spacing::md())
+                    .py(Spacing::md())
+                    .bg(rgba(0x50fa7b22))
+                    .border_1()
+                    .border_color(Colors::info())
+                    .rounded(px(4.0))
+                    .text_size(TextSize::sm())
+                    .text_color(Colors::text())
+                    .child("Note: You can manually edit the settings.json file to configure advanced options like window title format, background color, and external tool commands.")
+            )
+    }
+
     /// Render the content area based on selected section
     fn render_content(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
@@ -1115,6 +1236,7 @@ impl SettingsWindow {
                             SettingsSection::Filters => self.render_filters(cx).into_any_element(),
                             SettingsSection::SortNavigation => self.render_sort_navigation(cx).into_any_element(),
                             SettingsSection::ExternalTools => self.render_external_tools(cx).into_any_element(),
+                            SettingsSection::SettingsFile => self.render_settings_file(cx).into_any_element(),
                         })
                 )
                 .id("settings-content-scroll")
@@ -1159,11 +1281,11 @@ impl SettingsWindow {
                             .text_size(TextSize::md())
                             .text_color(Colors::text())
                             .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                                 this.reset_to_defaults();
                                 cx.notify();
-                                // Also dispatch the action to trigger the parent handler
-                                cx.dispatch_action(&ResetSettingsToDefaults);
+                                // Dispatch the action to parent using window context
+                                window.dispatch_action(ResetSettingsToDefaults.boxed_clone(), cx);
                             }))
                             .child("Reset to Defaults")
                     )
@@ -1176,10 +1298,10 @@ impl SettingsWindow {
                             .text_size(TextSize::md())
                             .text_color(Colors::text())
                             .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                                 this.cancel();
                                 // Dispatch action to parent App to close the settings window
-                                cx.dispatch_action(&CancelSettings);
+                                window.dispatch_action(CancelSettings.boxed_clone(), cx);
                             }))
                             .child("Cancel")
                     )
@@ -1193,9 +1315,9 @@ impl SettingsWindow {
                             .text_color(rgb(0x000000))
                             .font_weight(FontWeight::BOLD)
                             .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, cx.listener(|_this, _event: &MouseDownEvent, _window, cx| {
+                            .on_mouse_down(MouseButton::Left, cx.listener(|_this, _event: &MouseDownEvent, window, cx| {
                                 // Dispatch action to parent App to save and close
-                                cx.dispatch_action(&ApplySettings);
+                                window.dispatch_action(ApplySettings.boxed_clone(), cx);
                             }))
                             .child("Apply")
                     )
