@@ -145,7 +145,10 @@ impl App {
         let new_settings = self.settings_window.update(cx, |sw, _cx| {
             sw.get_settings()
         });
-        
+
+        // Update app settings
+        self.settings = new_settings.clone();
+
         // Save settings to disk
         if let Err(e) = settings_io::save_settings(&new_settings) {
             eprintln!("Error saving settings: {}", e);
