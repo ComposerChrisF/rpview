@@ -121,15 +121,16 @@ impl HelpOverlay {
             self.render_shortcut(format!("{}-F", platform_key), "Toggle filter controls".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-1", platform_key), "Disable filters".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-2", platform_key), "Enable filters".to_string()).into_any_element(),
-            self.render_shortcut(format!("{}-R", platform_key), "Reset all filters".to_string()).into_any_element(),
-            
+            self.render_shortcut(format!("Shift+{}-R", platform_key), "Reset all filters".to_string()).into_any_element(),
+
             // File Operations section
             self.render_section_header("File Operations".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-O", platform_key), "Open image file(s)".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-S", platform_key), "Save image (current folder)".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-Option-S", platform_key), "Save to Downloads folder".to_string()).into_any_element(),
-            self.render_shortcut(format!("{}-Option-F", platform_key), "Open in external viewer (Preview/Photos)".to_string()).into_any_element(),
-            self.render_shortcut(format!("Shift+{}-Option-F", platform_key), "Open externally and quit".to_string()).into_any_element(),
+            self.render_shortcut(format!("{}-R", platform_key), "Reveal in Finder".to_string()).into_any_element(),
+            self.render_shortcut(format!("{}-Option-V", platform_key), "Open in external viewer (Preview/Photos)".to_string()).into_any_element(),
+            self.render_shortcut(format!("Shift+{}-Option-V", platform_key), "Open externally and quit".to_string()).into_any_element(),
             self.render_shortcut(format!("{}-E", platform_key), "Open in external editor".to_string()).into_any_element(),
             self.render_shortcut("Drag & Drop".to_string(), "Drop files/folders to open".to_string()).into_any_element(),
             
