@@ -30,7 +30,7 @@ use rpview_gpui::{
     DisableFilters, EnableFilters, ResetFilters,
     BrightnessUp, BrightnessDown, ContrastUp, ContrastDown, GammaUp, GammaDown,
     OpenFile, SaveFile, SaveFileToDownloads,
-    OpenInExternalViewer, OpenInExternalViewerAndQuit, OpenInExternalEditor,
+    OpenInExternalViewer, OpenInExternalViewerAndQuit, OpenInExternalEditor, RevealInFinder,
     CloseSettings, ResetSettingsToDefaults,
 };
 
@@ -510,7 +510,58 @@ impl App {
         }
         cx.notify();
     }
-    
+
+    fn handle_reveal_in_finder(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_modal_open() { return; }
+        if let Some(current_path) = self.app_state.current_image() {
+            if let Err(e) = self.reveal_in_finder(current_path) {
+                eprintln!("Failed to reveal in file manager: {}", e);
+            }
+        }
+        cx.notify();
+    }
+
+    #[allow(clippy::needless_return)]
+    fn reveal_in_finder(&self, path: &std::path::Path) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg("-R")
+                .arg(path)
+                .spawn()
+                .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+            return Ok(());
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("explorer")
+                .arg("/select,")
+                .arg(path)
+                .spawn()
+                .map_err(|e| format!("Failed to reveal in Explorer: {}", e))?;
+            return Ok(());
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Try to get the parent directory and open it
+            if let Some(parent) = path.parent() {
+                std::process::Command::new("xdg-open")
+                    .arg(parent)
+                    .spawn()
+                    .map_err(|e| format!("Failed to open file manager: {}", e))?;
+                return Ok(());
+            }
+            return Err("Could not determine parent directory".to_string());
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        {
+            Err("Reveal in file manager not supported on this platform".to_string())
+        }
+    }
+
     #[allow(clippy::needless_return)]
     fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
         // Get the configured external viewers from settings
@@ -1608,6 +1659,9 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &OpenInExternalEditor, window, cx| {
                 this.handle_open_in_external_editor(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &RevealInFinder, window, cx| {
+                this.handle_reveal_in_finder(window, cx);
+            }))
     }
 }
 
@@ -1683,14 +1737,15 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("cmd-f", ToggleFilters, None),
         KeyBinding::new("cmd-1", DisableFilters, None),
         KeyBinding::new("cmd-2", EnableFilters, None),
-        KeyBinding::new("cmd-r", ResetFilters, None),
+        KeyBinding::new("shift-cmd-r", ResetFilters, None),
         // File operations
         KeyBinding::new("cmd-o", OpenFile, None),
         KeyBinding::new("cmd-s", SaveFile, None),
         KeyBinding::new("cmd-alt-s", SaveFileToDownloads, None),
+        KeyBinding::new("cmd-r", RevealInFinder, None),
         // External viewer
-        KeyBinding::new("cmd-alt-f", OpenInExternalViewer, None),
-        KeyBinding::new("shift-cmd-alt-f", OpenInExternalViewerAndQuit, None),
+        KeyBinding::new("cmd-alt-v", OpenInExternalViewer, None),
+        KeyBinding::new("shift-cmd-alt-v", OpenInExternalViewerAndQuit, None),
         // External editor
         KeyBinding::new("cmd-e", OpenInExternalEditor, None),
     ]);

@@ -61,6 +61,7 @@ actions!(app, [
     OpenInExternalViewer,
     OpenInExternalViewerAndQuit,
     OpenInExternalEditor,
+    RevealInFinder,
     CloseSettings,
     ResetSettingsToDefaults,
     LoadOversizedImageAnyway,
