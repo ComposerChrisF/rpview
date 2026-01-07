@@ -58,6 +58,8 @@ struct App {
     filter_controls: Entity<FilterControls>,
     /// Settings window component
     settings_window: Entity<SettingsWindow>,
+    /// Help overlay component
+    help_overlay: Entity<HelpOverlay>,
     /// Last time animation frame was updated (for animation playback)
     last_frame_update: Instant,
     /// Whether files are being dragged over the window
@@ -1426,10 +1428,7 @@ impl Render for App {
             ))
             // Render overlays on top with proper z-order
             .when(self.show_help, |el| {
-                el.child(cx.new(|_cx| HelpOverlay::new(
-                    self.settings.appearance.overlay_transparency,
-                    self.settings.appearance.font_size_scale,
-                )))
+                el.child(self.help_overlay.clone())
             })
             .when(self.show_debug, |el| {
                 let image_dimensions = self.viewer.current_image.as_ref().map(|img| (img.width, img.height));
@@ -1904,7 +1903,15 @@ fn main() {
                     let settings_window = inner_cx.new(|cx| {
                         SettingsWindow::new(settings.clone(), cx)
                     });
-                    
+
+                    // Create help overlay
+                    let help_overlay = inner_cx.new(|_cx| {
+                        HelpOverlay::new(
+                            settings.appearance.overlay_transparency,
+                            settings.appearance.font_size_scale,
+                        )
+                    });
+
                     App {
                         app_state,
                         viewer,
@@ -1919,6 +1926,7 @@ fn main() {
                         show_filters: false,
                         filter_controls,
                         settings_window,
+                        help_overlay,
                         last_frame_update: Instant::now(),
                         drag_over: false,
                         settings: settings.clone(),
