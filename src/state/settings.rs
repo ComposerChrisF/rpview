@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use super::app_state::SortMode;
 
 /// Main application settings container
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct AppSettings {
     pub viewer_behavior: ViewerBehavior,
     pub performance: Performance,
@@ -18,21 +18,6 @@ pub struct AppSettings {
     pub filters: Filters,
     pub sort_navigation: SortNavigation,
     pub external_tools: ExternalTools,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            viewer_behavior: ViewerBehavior::default(),
-            performance: Performance::default(),
-            keyboard_mouse: KeyboardMouse::default(),
-            file_operations: FileOperations::default(),
-            appearance: Appearance::default(),
-            filters: Filters::default(),
-            sort_navigation: SortNavigation::default(),
-            external_tools: ExternalTools::default(),
-        }
-    }
 }
 
 /// Viewer behavior settings
@@ -188,7 +173,7 @@ pub struct Appearance {
     pub background_color: [u8; 3],
     /// Alpha value for overlay backgrounds (0-255)
     pub overlay_transparency: u8,
-    /// Font size multiplier for overlays (0.5 - 2.0)
+    /// Font size multiplier for overlays (0.5 - 8.0)
     pub font_size_scale: f32,
     /// Window title format template
     pub window_title_format: String,

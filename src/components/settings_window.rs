@@ -15,21 +15,19 @@
 //!   - Zoom sensitivities (scroll wheel, Z-drag)
 //!   - Cache sizes and thread counts
 //!   - Filter defaults (brightness, contrast, gamma)
-//!   - Appearance settings (transparency, font scale)
+//!   - Appearance settings (transparency, font scale, RGB color picker)
+//! - ✅ **Text input**: Window title format is editable with proper focus handling
 //! - ✅ **Range validation**: All numeric values are clamped to valid ranges
-//! - ✅ **Apply/Cancel/Reset**: Keyboard shortcuts (Cmd+Enter to apply, Esc to cancel)
-//! - ✅ **Settings persistence**: Changes are saved to JSON on Apply
+//! - ✅ **Auto-save**: Changes are automatically saved when closing the settings window
+//! - ✅ **Settings persistence**: Changes are saved to JSON on close
 //!
 //! ### Pending Features (Low Priority):
-//! - ⏳ **Text inputs**: Window title format and file paths still require JSON editing
-//! - ⏳ **Color picker**: Background color requires JSON editing
 //! - ⏳ **File browser**: Default save directory requires JSON editing
 //! - ⏳ **External viewer list editor**: Add/remove/reorder viewers requires JSON editing
 //!
 //! ### Keyboard Shortcuts:
 //! - `Cmd+,` (or `Ctrl+,` on Windows/Linux): Open/close settings
-//! - `Cmd+Enter`: Apply changes and close
-//! - `Esc`: Cancel changes and close
+//! - `Cmd+Enter` or `Esc`: Close and save settings
 //!
 //! ### Settings File Location:
 //! - macOS: `~/Library/Application Support/rpview/settings.json`
@@ -38,9 +36,8 @@
 //!
 //! ## Architecture
 //!
-//! The component maintains two copies of settings:
-//! - `working_settings`: Current edits (modified by UI interactions)
-//! - `original_settings`: Original values (for Cancel/revert)
+//! The component maintains settings in `working_settings` which are immediately
+//! visible in the UI and saved to disk when the settings window is closed.
 
 use adabraka_ui::prelude::scrollable_vertical;
 use gpui::prelude::*;
@@ -48,7 +45,7 @@ use gpui::*;
 use crate::state::settings::*;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::utils::settings_io;
-use crate::{ApplySettings, CancelSettings, ResetSettingsToDefaults};
+use crate::{CloseSettings, ResetSettingsToDefaults};
 
 /// Available settings sections
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +55,6 @@ pub enum SettingsSection {
     KeyboardMouse,
     FileOperations,
     Appearance,
-    Filters,
     SortNavigation,
     ExternalTools,
     SettingsFile,
@@ -73,7 +69,6 @@ impl SettingsSection {
             Self::KeyboardMouse => "Keyboard & Mouse",
             Self::FileOperations => "File Operations",
             Self::Appearance => "Appearance",
-            Self::Filters => "Filters",
             Self::SortNavigation => "Sort & Navigation",
             Self::ExternalTools => "External Tools",
             Self::SettingsFile => "Settings File",
@@ -88,7 +83,6 @@ impl SettingsSection {
             Self::KeyboardMouse,
             Self::FileOperations,
             Self::Appearance,
-            Self::Filters,
             Self::SortNavigation,
             Self::ExternalTools,
             Self::SettingsFile,
@@ -100,22 +94,25 @@ impl SettingsSection {
 pub struct SettingsWindow {
     /// Working copy of settings (being edited)
     pub working_settings: AppSettings,
-    /// Original settings (for cancel/revert)
-    pub original_settings: AppSettings,
     /// Currently selected section
     pub current_section: SettingsSection,
     /// Focus handle for the settings window
     focus_handle: FocusHandle,
+    /// Text input buffer for window title format
+    window_title_input: String,
+    /// Focus handle for the text input
+    text_input_focus: FocusHandle,
 }
 
 impl SettingsWindow {
     /// Create a new settings window with the given settings
     pub fn new(settings: AppSettings, cx: &mut Context<Self>) -> Self {
         Self {
-            working_settings: settings.clone(),
-            original_settings: settings,
+            window_title_input: settings.appearance.window_title_format.clone(),
+            working_settings: settings,
             current_section: SettingsSection::ViewerBehavior,
             focus_handle: cx.focus_handle(),
+            text_input_focus: cx.focus_handle(),
         }
     }
     
@@ -125,19 +122,18 @@ impl SettingsWindow {
         cx.notify();
     }
 
-    /// Reset working settings to original
-    pub fn cancel(&mut self) {
-        self.working_settings = self.original_settings.clone();
-    }
-
     /// Reset all settings to defaults
     pub fn reset_to_defaults(&mut self) {
         self.working_settings = AppSettings::default();
+        self.window_title_input = AppSettings::default().appearance.window_title_format;
     }
 
     /// Get the final settings (for apply)
     pub fn get_settings(&self) -> AppSettings {
-        self.working_settings.clone()
+        let mut settings = self.working_settings.clone();
+        // Apply text input buffer to settings
+        settings.appearance.window_title_format = self.window_title_input.clone();
+        settings
     }
 
     /// Render the header
@@ -224,6 +220,42 @@ impl SettingsWindow {
             })
     }
 
+    /// Render a simple text input
+    #[allow(dead_code)]
+    fn render_text_input(
+        &mut self,
+        label: String,
+        value: String,
+        description: Option<String>,
+        _on_change: impl Fn(&mut SettingsWindow, String, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>
+    ) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_col()
+            .mb(Spacing::md())
+            .child(self.render_label(label, description))
+            .child(
+                div()
+                    .w_full()
+                    .px(Spacing::sm())
+                    .py(Spacing::xs())
+                    .bg(rgb(0x2a2a2a))
+                    .border_1()
+                    .border_color(rgb(0x444444))
+                    .rounded(px(4.0))
+                    .text_size(TextSize::sm())
+                    .text_color(Colors::text())
+                    .cursor(gpui::CursorStyle::IBeam)
+                    .on_mouse_down(MouseButton::Left, cx.listener(move |_this, _event: &MouseDownEvent, _window, cx| {
+                        // Simple click-to-edit: For now, we'll use a simpler approach
+                        // User can edit the value in the JSON file for complex editing
+                        cx.notify();
+                    }))
+                    .child(value)
+            )
+    }
+    
     /// Render a checkbox setting
     fn render_checkbox<F>(&mut self, label: String, value: bool, description: Option<String>, on_toggle: F, cx: &mut Context<Self>) -> impl IntoElement 
     where
@@ -645,43 +677,44 @@ impl SettingsWindow {
                             )
                     )
             )
-            .child({
-                let formats: Vec<_> = SaveFormat::all().into_iter().map(|format| {
-                    let is_selected = format == default_save_format;
-                    
-                    div()
-                        .px(Spacing::md())
-                        .py(Spacing::sm())
-                        .rounded(px(4.0))
-                        .border_1()
-                        .cursor_pointer()
-                        .when(is_selected, |div| {
-                            div.border_color(Colors::info())
-                                .bg(rgba(0x50fa7b22))
-                        })
-                        .when(!is_selected, |div| {
-                            div.border_color(rgb(0x444444))
-                        })
-                        .text_size(TextSize::sm())
-                        .text_color(Colors::text())
-                        .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
-                            this.working_settings.file_operations.default_save_format = format;
-                            cx.notify();
-                        }))
-                        .child(format.display_name())
-                }).collect();
-                
+            .child(
                 div()
                     .mb(Spacing::md())
                     .child(self.render_label("Default save format".to_string(), Some("Format for saving filtered images".to_string())))
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .gap(Spacing::xs())
-                            .children(formats)
+                            .w(px(200.0))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .gap(Spacing::xs())
+                                    .children(SaveFormat::all().into_iter().map(|format| {
+                                        let is_selected = format == default_save_format;
+                                        div()
+                                            .px(Spacing::md())
+                                            .py(Spacing::sm())
+                                            .rounded(px(4.0))
+                                            .border_1()
+                                            .cursor_pointer()
+                                            .when(is_selected, |div| {
+                                                div.border_color(Colors::info())
+                                                    .bg(rgba(0x50fa7b22))
+                                            })
+                                            .when(!is_selected, |div| {
+                                                div.border_color(rgb(0x444444))
+                                            })
+                                            .text_size(TextSize::sm())
+                                            .text_color(Colors::text())
+                                            .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                                                this.working_settings.file_operations.default_save_format = format;
+                                                cx.notify();
+                                            }))
+                                            .child(format.display_name())
+                                    }))
+                            )
                     )
-            })
+            )
             .child(self.render_checkbox(
                 "Auto-save filtered cache".to_string(),
                 auto_save_filtered_cache,
@@ -703,11 +736,10 @@ impl SettingsWindow {
     }
 
     /// Render appearance section
-    fn render_appearance(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_appearance(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let background_color = self.working_settings.appearance.background_color;
         let overlay_transparency = self.working_settings.appearance.overlay_transparency;
         let font_size_scale = self.working_settings.appearance.font_size_scale;
-        let window_title_format = self.working_settings.appearance.window_title_format.clone();
         
         div()
             .flex()
@@ -722,40 +754,35 @@ impl SettingsWindow {
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .gap(Spacing::md())
-                            .items_center()
+                            .flex_col()
+                            .gap(Spacing::xs())
                             .child(
-                                div()
-                                    .w(px(60.0))
-                                    .h(px(60.0))
-                                    .rounded(px(4.0))
-                                    .border_1()
-                                    .border_color(rgb(0x666666))
-                                    .bg(rgb(
-                                        ((background_color[0] as u32) << 16) |
-                                        ((background_color[1] as u32) << 8) |
-                                        (background_color[2] as u32)
-                                    ))
-                            )
-                            .child(
+                                // Row with swatch and RGB sliders (vertically centered)
                                 div()
                                     .flex()
-                                    .flex_col()
-                                    .gap(Spacing::xs())
-                                    .flex_1()
+                                    .flex_row()
+                                    .gap(Spacing::md())
+                                    .items_center()
                                     .child(
+                                        // Color swatch (just the square)
                                         div()
-                                            .text_size(TextSize::sm())
-                                            .text_color(rgb(0xaaaaaa))
-                                            .mb(Spacing::xs())
-                                            .child(format!(
-                                                "#{:02x}{:02x}{:02x}",
-                                                background_color[0],
-                                                background_color[1],
-                                                background_color[2]
+                                            .w(px(100.0))
+                                            .h(px(100.0))
+                                            .rounded(px(4.0))
+                                            .border_1()
+                                            .border_color(rgb(0x666666))
+                                            .bg(rgb(
+                                                ((background_color[0] as u32) << 16) |
+                                                ((background_color[1] as u32) << 8) |
+                                                (background_color[2] as u32)
                                             ))
                                     )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap(Spacing::xs())
+                                            .flex_1()
                                     // Red channel
                                     .child(
                                         div()
@@ -810,8 +837,8 @@ impl SettingsWindow {
                                                     .text_color(Colors::text())
                                                     .cursor_pointer()
                                                     .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
-                                                        this.working_settings.appearance.background_color[0] = 
-                                                            this.working_settings.appearance.background_color[0].saturating_add(5).min(255);
+                                                        this.working_settings.appearance.background_color[0] =
+                                                            this.working_settings.appearance.background_color[0].saturating_add(5);
                                                         cx.notify();
                                                     }))
                                                     .child("+")
@@ -871,8 +898,8 @@ impl SettingsWindow {
                                                     .text_color(Colors::text())
                                                     .cursor_pointer()
                                                     .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
-                                                        this.working_settings.appearance.background_color[1] = 
-                                                            this.working_settings.appearance.background_color[1].saturating_add(5).min(255);
+                                                        this.working_settings.appearance.background_color[1] =
+                                                            this.working_settings.appearance.background_color[1].saturating_add(5);
                                                         cx.notify();
                                                     }))
                                                     .child("+")
@@ -932,13 +959,29 @@ impl SettingsWindow {
                                                     .text_color(Colors::text())
                                                     .cursor_pointer()
                                                     .on_mouse_down(MouseButton::Left, cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
-                                                        this.working_settings.appearance.background_color[2] = 
-                                                            this.working_settings.appearance.background_color[2].saturating_add(5).min(255);
+                                                        this.working_settings.appearance.background_color[2] =
+                                                            this.working_settings.appearance.background_color[2].saturating_add(5);
                                                         cx.notify();
                                                     }))
                                                     .child("+")
                                             )
                                     )
+                                    )
+                            )
+                            .child(
+                                // Hex label row (centered under swatch)
+                                div()
+                                    .w(px(100.0))
+                                    .flex()
+                                    .justify_center()
+                                    .text_size(TextSize::sm())
+                                    .text_color(rgb(0xaaaaaa))
+                                    .child(format!(
+                                        "#{:02x}{:02x}{:02x}",
+                                        background_color[0],
+                                        background_color[1],
+                                        background_color[2]
+                                    ))
                             )
                     )
             )
@@ -947,8 +990,8 @@ impl SettingsWindow {
                 format!("{}", overlay_transparency),
                 Some("Transparency for overlay backgrounds (0-255)".to_string()),
                 |this, _cx| {
-                    this.working_settings.appearance.overlay_transparency = 
-                        this.working_settings.appearance.overlay_transparency.saturating_add(10).min(255);
+                    this.working_settings.appearance.overlay_transparency =
+                        this.working_settings.appearance.overlay_transparency.saturating_add(10);
                 },
                 |this, _cx| {
                     this.working_settings.appearance.overlay_transparency = 
@@ -959,10 +1002,10 @@ impl SettingsWindow {
             .child(self.render_numeric_input(
                 "Font size scale".to_string(),
                 format!("{:.1}x", font_size_scale),
-                Some("Scale factor for overlay text (0.5 - 2.0)".to_string()),
+                Some("Scale factor for overlay text (0.5 - 8.0)".to_string()),
                 |this, _cx| {
                     this.working_settings.appearance.font_size_scale = 
-                        (this.working_settings.appearance.font_size_scale + 0.1).min(2.0);
+                        (this.working_settings.appearance.font_size_scale + 0.1).min(8.0);
                 },
                 |this, _cx| {
                     this.working_settings.appearance.font_size_scale = 
@@ -976,29 +1019,60 @@ impl SettingsWindow {
                     .flex_col()
                     .mb(Spacing::md())
                     .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
-                    .child(
+                    .child({
+                        let text_input_focus = self.text_input_focus.clone();
+                        let is_focused = text_input_focus.contains_focused(window, cx);
+                        let text_with_cursor = if is_focused {
+                            format!("{}|", self.window_title_input)
+                        } else {
+                            self.window_title_input.clone()
+                        };
+                        
                         div()
+                            .w_full()
                             .px(Spacing::sm())
                             .py(Spacing::xs())
                             .bg(rgb(0x2a2a2a))
                             .border_1()
-                            .border_color(rgb(0x444444))
+                            .border_color(if is_focused { rgb(0x50fa7b) } else { rgb(0x444444) })
                             .rounded(px(4.0))
                             .text_size(TextSize::md())
-                            .text_color(rgb(0xaaaaaa))
-                            .child(window_title_format.clone())
-                            .child(
-                                div()
-                                    .text_size(TextSize::sm())
-                                    .text_color(rgb(0x666666))
-                                    .mt(Spacing::xs())
-                                    .child("(Edit in settings JSON file)")
-                            )
-                    )
+                            .text_color(Colors::text())
+                            .cursor(gpui::CursorStyle::IBeam)
+                            .track_focus(&text_input_focus)
+                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                                this.text_input_focus.focus(window);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                                // Handle text input
+                                let key = &event.keystroke.key;
+                                match key.as_str() {
+                                    "backspace" => {
+                                        this.window_title_input.pop();
+                                        cx.notify();
+                                    }
+                                    "escape" => {
+                                        // Unfocus the text input and focus the main settings window
+                                        this.focus_handle.focus(window);
+                                        cx.notify();
+                                    }
+                                    _ => {
+                                        // Add printable characters (single character keys)
+                                        if key.len() == 1 && !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform {
+                                            this.window_title_input.push_str(key);
+                                            cx.notify();
+                                        }
+                                    }
+                                }
+                            }))
+                            .child(text_with_cursor)
+                    })
             )
     }
 
     /// Render filters section
+    #[allow(dead_code)]
     fn render_filters(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let default_brightness = self.working_settings.filters.default_brightness;
         let default_contrast = self.working_settings.filters.default_contrast;
@@ -1356,6 +1430,7 @@ impl SettingsWindow {
                     .mb(Spacing::md())
                     .flex()
                     .flex_row()
+                    .gap(Spacing::md())
                     .child(
                         div()
                             .px(Spacing::md())
@@ -1405,6 +1480,24 @@ impl SettingsWindow {
                                 { "Reveal settings file in file manager" }
                             })
                     )
+                    .child(
+                        div()
+                            .px(Spacing::md())
+                            .py(Spacing::sm())
+                            .bg(rgb(0x884444))
+                            .rounded(px(4.0))
+                            .text_size(TextSize::sm())
+                            .text_color(Colors::text())
+                            .font_weight(FontWeight::BOLD)
+                            .cursor_pointer()
+                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                                this.reset_to_defaults();
+                                cx.notify();
+                                // Dispatch the action to parent using window context
+                                window.dispatch_action(ResetSettingsToDefaults.boxed_clone(), cx);
+                            }))
+                            .child("Reset all settings to Defaults")
+                    )
             )
             .child(
                 div()
@@ -1432,7 +1525,7 @@ impl SettingsWindow {
     }
 
     /// Render the content area based on selected section
-    fn render_content(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex_1()
             .child(
@@ -1444,8 +1537,7 @@ impl SettingsWindow {
                             SettingsSection::Performance => self.render_performance(cx).into_any_element(),
                             SettingsSection::KeyboardMouse => self.render_keyboard_mouse(cx).into_any_element(),
                             SettingsSection::FileOperations => self.render_file_operations(cx).into_any_element(),
-                            SettingsSection::Appearance => self.render_appearance(cx).into_any_element(),
-                            SettingsSection::Filters => self.render_filters(cx).into_any_element(),
+                            SettingsSection::Appearance => self.render_appearance(window, cx).into_any_element(),
                             SettingsSection::SortNavigation => self.render_sort_navigation(cx).into_any_element(),
                             SettingsSection::ExternalTools => self.render_external_tools(cx).into_any_element(),
                             SettingsSection::SettingsFile => self.render_settings_file(cx).into_any_element(),
@@ -1477,62 +1569,23 @@ impl SettingsWindow {
                 div()
                     .text_size(TextSize::sm())
                     .text_color(rgb(0xaaaaaa))
-                    .child(format!("{}-Enter to apply • Esc to cancel", platform_key))
+                    .child(format!("{}-Enter or Esc to close and save", platform_key))
             )
             .child(
                 div()
-                    .flex()
-                    .flex_row()
-                    .gap(Spacing::md())
-                    .child(
-                        div()
-                            .px(Spacing::lg())
-                            .py(Spacing::sm())
-                            .bg(rgb(0x444444))
-                            .rounded(px(4.0))
-                            .text_size(TextSize::md())
-                            .text_color(Colors::text())
-                            .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                                this.reset_to_defaults();
-                                cx.notify();
-                                // Dispatch the action to parent using window context
-                                window.dispatch_action(ResetSettingsToDefaults.boxed_clone(), cx);
-                            }))
-                            .child("Reset to Defaults")
-                    )
-                    .child(
-                        div()
-                            .px(Spacing::lg())
-                            .py(Spacing::sm())
-                            .bg(rgb(0x444444))
-                            .rounded(px(4.0))
-                            .text_size(TextSize::md())
-                            .text_color(Colors::text())
-                            .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                                this.cancel();
-                                // Dispatch action to parent App to close the settings window
-                                window.dispatch_action(CancelSettings.boxed_clone(), cx);
-                            }))
-                            .child("Cancel")
-                    )
-                    .child(
-                        div()
-                            .px(Spacing::lg())
-                            .py(Spacing::sm())
-                            .bg(Colors::info())
-                            .rounded(px(4.0))
-                            .text_size(TextSize::md())
-                            .text_color(rgb(0x000000))
-                            .font_weight(FontWeight::BOLD)
-                            .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, cx.listener(|_this, _event: &MouseDownEvent, window, cx| {
-                                // Dispatch action to parent App to save and close
-                                window.dispatch_action(ApplySettings.boxed_clone(), cx);
-                            }))
-                            .child("Apply")
-                    )
+                    .px(Spacing::lg())
+                    .py(Spacing::sm())
+                    .bg(Colors::info())
+                    .rounded(px(4.0))
+                    .text_size(TextSize::md())
+                    .text_color(rgb(0x000000))
+                    .font_weight(FontWeight::BOLD)
+                    .cursor_pointer()
+                    .on_mouse_down(MouseButton::Left, cx.listener(|_this, _event: &MouseDownEvent, window, cx| {
+                        // Dispatch action to parent App to save and close
+                        window.dispatch_action(CloseSettings.boxed_clone(), cx);
+                    }))
+                    .child("Close")
             )
     }
 }
@@ -1544,15 +1597,16 @@ impl Focusable for SettingsWindow {
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             // Full screen overlay with semi-transparent background
             .absolute()
             .inset_0()
-            .bg(rgba(0x00000099))
+            .bg(Colors::overlay_bg_alpha(self.working_settings.appearance.overlay_transparency))
             .flex()
             .items_center()
             .justify_center()
+            .track_focus(&self.focus_handle)
             .child(
                 // Settings window box
                 div()
@@ -1574,7 +1628,7 @@ impl Render for SettingsWindow {
                             .flex_row()
                             .overflow_hidden()
                             .child(self.render_sidebar(cx))
-                            .child(self.render_content(cx))
+                            .child(self.render_content(window, cx))
                     )
                     .child(self.render_footer(cx))
             )

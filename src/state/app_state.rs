@@ -1,21 +1,16 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use super::image_state::ImageState;
+use super::image_state::{ImageState, FilterSettings};
 
 /// Sort mode for image list
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortMode {
     /// Alphabetical (case-insensitive)
+    #[default]
     Alphabetical,
-    
+
     /// Modified date (newest first)
     ModifiedDate,
-}
-
-impl Default for SortMode {
-    fn default() -> Self {
-        SortMode::Alphabetical
-    }
 }
 
 /// Application-wide state
@@ -151,14 +146,14 @@ impl AppState {
     }
     
     /// Get the state for the current image, creating a default if it doesn't exist
-    pub fn get_current_state(&mut self) -> ImageState {
+    pub fn get_current_state(&mut self, default_filters: FilterSettings) -> ImageState {
         if let Some(path) = self.current_image() {
             self.image_states
                 .entry(path.clone())
-                .or_insert_with(ImageState::new)
+                .or_insert_with(|| ImageState::new_with_filter_defaults(default_filters))
                 .clone()
         } else {
-            ImageState::new()
+            ImageState::new_with_filter_defaults(default_filters)
         }
     }
     

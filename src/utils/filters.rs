@@ -83,10 +83,10 @@ pub fn apply_gamma(img: &DynamicImage, gamma: f32) -> DynamicImage {
     
     // Pre-calculate gamma lookup table for performance
     let mut gamma_lut = [0u8; 256];
-    for i in 0..256 {
+    for (i, lut_entry) in gamma_lut.iter_mut().enumerate() {
         let normalized = (i as f32) / 255.0;
         let corrected = normalized.powf(1.0 / gamma);
-        gamma_lut[i] = (corrected * 255.0).clamp(0.0, 255.0) as u8;
+        *lut_entry = (corrected * 255.0).clamp(0.0, 255.0) as u8;
     }
     
     for (x, y, pixel) in rgba_img.enumerate_pixels() {

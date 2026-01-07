@@ -1,6 +1,6 @@
 use gpui::*;
 use adabraka_ui::components::slider::{Slider, SliderState};
-use crate::utils::style::{Colors, Spacing, TextSize};
+use crate::utils::style::{Colors, Spacing, TextSize, scaled_text_size};
 use crate::state::image_state::FilterSettings;
 
 /// Filter controls overlay component
@@ -14,10 +14,15 @@ pub struct FilterControls {
     last_brightness: f32,
     last_contrast: f32,
     last_gamma: f32,
+    
+    /// Overlay transparency (0-255)
+    pub overlay_transparency: u8,
+    /// Font size scale multiplier
+    pub font_size_scale: f32,
 }
 
 impl FilterControls {
-    pub fn new(filters: FilterSettings, cx: &mut Context<Self>) -> Self {
+    pub fn new(filters: FilterSettings, overlay_transparency: u8, font_size_scale: f32, cx: &mut Context<Self>) -> Self {
         // Create brightness slider (-100 to +100, current value)
         let brightness_slider = cx.new(|cx| {
             let mut state = SliderState::new(cx);
@@ -55,6 +60,8 @@ impl FilterControls {
             last_brightness: filters.brightness,
             last_contrast: filters.contrast,
             last_gamma: filters.gamma,
+            overlay_transparency,
+            font_size_scale,
         }
     }
     
@@ -117,7 +124,7 @@ impl Render for FilterControls {
             .absolute()
             .top(px(20.0))
             .right(px(20.0))
-            .bg(rgba(0x00_00_00_CC))
+            .bg(Colors::overlay_bg_alpha(self.overlay_transparency))
             .border_1()
             .border_color(rgba(0x44_44_44_FF))
             .rounded(px(8.0))
@@ -130,7 +137,7 @@ impl Render for FilterControls {
                     .gap(Spacing::md())
                     .child(
                         div()
-                            .text_size(TextSize::lg())
+                            .text_size(scaled_text_size(16.0, self.font_size_scale))
                             .text_color(Colors::text())
                             .font_weight(FontWeight::BOLD)
                             .child("Filter Controls")
@@ -153,13 +160,13 @@ impl Render for FilterControls {
                                     .items_center()
                                     .child(
                                         div()
-                                            .text_size(TextSize::sm())
+                                            .text_size(scaled_text_size(12.0, self.font_size_scale))
                                             .text_color(Colors::text())
                                             .child("Brightness")
                                     )
                                     .child(
                                         div()
-                                            .text_size(TextSize::sm())
+                                            .text_size(scaled_text_size(12.0, self.font_size_scale))
                                             .text_color(rgb(0xAAAAAA))
                                             .font_weight(FontWeight::BOLD)
                                             .child(format!("{:+.0}", brightness_value))
@@ -180,13 +187,13 @@ impl Render for FilterControls {
                                     .items_center()
                                     .child(
                                         div()
-                                            .text_size(TextSize::sm())
+                                            .text_size(scaled_text_size(12.0, self.font_size_scale))
                                             .text_color(Colors::text())
                                             .child("Contrast")
                                     )
                                     .child(
                                         div()
-                                            .text_size(TextSize::sm())
+                                            .text_size(scaled_text_size(12.0, self.font_size_scale))
                                             .text_color(rgb(0xAAAAAA))
                                             .font_weight(FontWeight::BOLD)
                                             .child(format!("{:+.0}", contrast_value))
@@ -207,13 +214,13 @@ impl Render for FilterControls {
                                     .items_center()
                                     .child(
                                         div()
-                                            .text_size(TextSize::sm())
+                                            .text_size(scaled_text_size(12.0, self.font_size_scale))
                                             .text_color(Colors::text())
                                             .child("Gamma")
                                     )
                                     .child(
                                         div()
-                                            .text_size(TextSize::sm())
+                                            .text_size(scaled_text_size(12.0, self.font_size_scale))
                                             .text_color(rgb(0xAAAAAA))
                                             .font_weight(FontWeight::BOLD)
                                             .child(format!("{:.2}", gamma_value))

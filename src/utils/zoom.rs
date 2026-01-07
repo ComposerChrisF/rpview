@@ -1,4 +1,4 @@
-/// Zoom-related constants and utilities
+//! Zoom-related constants and utilities
 
 /// Minimum zoom level (10%)
 pub const MIN_ZOOM: f32 = 0.1;
@@ -24,7 +24,7 @@ pub const ZOOM_STEP_WHEEL: f32 = 1.1;
 
 /// Clamp zoom level to valid range
 pub fn clamp_zoom(zoom: f32) -> f32 {
-    zoom.max(MIN_ZOOM).min(MAX_ZOOM)
+    zoom.clamp(MIN_ZOOM, MAX_ZOOM)
 }
 
 /// Calculate zoom level to fit image in viewport

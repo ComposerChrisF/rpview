@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use gpui::*;
 use std::path::PathBuf;
 use crate::utils::style::{Colors, Spacing, TextSize};
@@ -90,6 +92,10 @@ pub struct ImageViewer {
     pub is_processing_filters: bool,
     /// Handle for async filter processing
     pub filter_processing_handle: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
+    /// Pending filtered image path (ready to be applied after GPU preload)
+    pub pending_filtered_path: Option<PathBuf>,
+    /// Number of frames the pending filtered path has been preloaded (for GPU cache)
+    pub pending_filter_preload_frames: u32,
 }
 
 impl ImageViewer {
@@ -453,6 +459,10 @@ impl ImageViewer {
         self.current_image = None;
         self.error_message = None;
         self.error_path = None;
+        
+        // Clear pending filtered image from previous image
+        self.pending_filtered_path = None;
+        self.pending_filter_preload_frames = 0;
     }
     
     /// Check if async loading has completed and process the result
@@ -493,6 +503,8 @@ impl ImageViewer {
                             self.image_state.animation = None;
                         }
                         
+                        // Don't restore filtered path here - it will be restored when load_current_image_state() is called
+                        // At this point self.image_state still has the OLD image's state
                         self.current_image = Some(LoadedImage {
                             path: data.path,
                             width: data.width,
@@ -580,6 +592,8 @@ impl ImageViewer {
                     }
                     loaded.filtered_path = None;
                     loaded.cached_filter_settings = None;
+                    // Also clear from persisted state
+                    self.image_state.filtered_image_path = None;
                 } else {
                     // Start async filter processing
                     self.is_processing_filters = true;
@@ -640,16 +654,10 @@ impl ImageViewer {
                 
                 match result {
                     Ok(new_filtered_path) => {
-                        if let Some(ref mut loaded) = self.current_image {
-                            // Clean up old filtered image
-                            if let Some(ref old_filtered_path) = loaded.filtered_path {
-                                let _ = std::fs::remove_file(old_filtered_path);
-                            }
-                            
-                            // Update to new filtered image
-                            loaded.filtered_path = Some(new_filtered_path);
-                            loaded.cached_filter_settings = Some(self.image_state.filters);
-                        }
+                        // Store the pending filtered path for GPU preloading
+                        // Don't update loaded.filtered_path yet to avoid black flash
+                        self.pending_filtered_path = Some(new_filtered_path);
+                        eprintln!("[ImageViewer::check_filter_processing] Set pending filtered path, will apply after preload");
                     }
                     Err(e) => {
                         eprintln!("[ImageViewer::check_filter_processing] Filter processing failed: {}", e);
@@ -662,6 +670,45 @@ impl ImageViewer {
             }
         }
         false
+    }
+    
+    /// Apply pending filtered image (called after GPU preload to avoid black flash)
+    pub fn apply_pending_filtered_image(&mut self) {
+        if let Some(pending_path) = self.pending_filtered_path.take() {
+            if let Some(ref mut loaded) = self.current_image {
+                eprintln!("[ImageViewer::apply_pending_filtered_image] Applying pending filtered path");
+                
+                // Clean up old filtered image
+                if let Some(ref old_filtered_path) = loaded.filtered_path {
+                    let _ = std::fs::remove_file(old_filtered_path);
+                }
+                
+                // Update to new filtered image (texture already preloaded, no black flash)
+                loaded.filtered_path = Some(pending_path.clone());
+                loaded.cached_filter_settings = Some(self.image_state.filters);
+                
+                // Persist the filtered path in ImageState so it survives navigation
+                self.image_state.filtered_image_path = Some(pending_path);
+            }
+        }
+    }
+    
+    /// Restore filtered image from ImageState (called after load_current_image_state)
+    pub fn restore_filtered_image_from_state(&mut self) {
+        if let Some(ref mut loaded) = self.current_image {
+            // Check if ImageState has a cached filtered path
+            if let Some(ref cached_path) = self.image_state.filtered_image_path {
+                if cached_path.exists() {
+                    eprintln!("[ImageViewer::restore_filtered_image_from_state] Restoring cached filtered image");
+                    loaded.filtered_path = Some(cached_path.clone());
+                    loaded.cached_filter_settings = Some(self.image_state.filters);
+                } else {
+                    // File was deleted, clear the cached path
+                    eprintln!("[ImageViewer::restore_filtered_image_from_state] Cached file not found, clearing");
+                    self.image_state.filtered_image_path = None;
+                }
+            }
+        }
     }
     
     /// Clear the current image
@@ -737,8 +784,8 @@ impl ImageViewer {
 
 impl ImageViewer {
     /// Render the image viewer as an element (for inline rendering without cx.new())
-    pub fn render_view<V: 'static>(&self, background_color: [u8; 3], cx: &mut Context<V>) -> impl IntoElement {
-        let content = if self.is_loading {
+    pub fn render_view<V: 'static>(&self, background_color: [u8; 3], overlay_transparency: u8, font_size_scale: f32, cx: &mut Context<V>) -> impl IntoElement {
+        if self.is_loading {
             // Show loading indicator
             use crate::components::loading_indicator::LoadingIndicator;
             div()
@@ -824,7 +871,7 @@ impl ImageViewer {
                                 .text_size(TextSize::sm())
                                 .text_color(rgb(0xaaaaaa))
                                 .text_align(gpui::TextAlign::Center)
-                                .child(format!("Open Settings (Cmd+,) > Performance > Maximum image dimension"))
+                                .child("Open Settings (Cmd+,) > Performance > Maximum image dimension")
                         )
                         .child(
                             div()
@@ -851,15 +898,13 @@ impl ImageViewer {
                 .child(cx.new(|_cx| ErrorDisplay::new(full_message)))
                 .into_any_element()
         } else if let Some(ref loaded) = self.current_image {
-            self.render_image(loaded, background_color, cx)
+            self.render_image(loaded, background_color, overlay_transparency, font_size_scale, cx)
         } else {
             div().size_full().into_any_element()
-        };
-        
-        content
+        }
     }
     
-    fn render_image<V>(&self, loaded: &LoadedImage, background_color: [u8; 3], cx: &mut Context<V>) -> AnyElement {
+    fn render_image<V>(&self, loaded: &LoadedImage, background_color: [u8; 3], overlay_transparency: u8, font_size_scale: f32, cx: &mut Context<V>) -> AnyElement {
         let width = loaded.width;
         let height = loaded.height;
         
@@ -943,6 +988,24 @@ impl ImageViewer {
             }
         }
         
+        // Preload pending filtered image (if processing just finished)
+        // This preloads the texture into GPU before we switch to it, preventing black flash
+        if let Some(ref pending_path) = self.pending_filtered_path {
+            if pending_path.exists() {
+                let preload_id = ElementId::Name(format!("pending-filter-{}", pending_path.display()).into());
+                container = container.child(
+                    img(pending_path.clone())
+                        .id(preload_id)
+                        .w(px(zoomed_width as f32))
+                        .h(px(zoomed_height as f32))
+                        .absolute()
+                        .left(px(-10000.0))
+                        .top(px(0.0))
+                        .opacity(0.0)
+                );
+            }
+        }
+        
         // Preload next/previous images in navigation list
         for preload_path in &self.preload_paths {
             if preload_path.exists() {
@@ -961,13 +1024,13 @@ impl ImageViewer {
         }
         
         container = container.child(
-            cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit, Some((width, height))))
+            cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit, Some((width, height)), overlay_transparency, font_size_scale))
         );
         
         // Add processing indicator if filters are being processed
         if self.is_processing_filters {
             container = container.child(
-                cx.new(|_cx| ProcessingIndicator::new("Processing filters..."))
+                cx.new(|_cx| ProcessingIndicator::new("Processing filters...", overlay_transparency, font_size_scale))
             );
         }
         
@@ -978,6 +1041,8 @@ impl ImageViewer {
                     anim_state.current_frame,
                     anim_state.frame_count,
                     anim_state.is_playing,
+                    overlay_transparency,
+                    font_size_scale,
                 ))
             );
         }
@@ -1120,15 +1185,19 @@ impl Render for ImageViewer {
                 }
             }
             
+            // Use default appearance settings for Render trait (not used by main app, which uses render_view)
+            let default_overlay_transparency = 204; // ~80% opacity (default)
+            let default_font_size_scale = 1.0; // 1x (default)
+            
             container = container.child(
                 // Zoom indicator overlay
-                cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit, Some((width, height))))
+                cx.new(|_cx| ZoomIndicator::new(zoom_level, is_fit, Some((width, height)), default_overlay_transparency, default_font_size_scale))
             );
             
             // Add processing indicator if filters are being processed
             if self.is_processing_filters {
                 container = container.child(
-                    cx.new(|_cx| ProcessingIndicator::new("Processing filters..."))
+                    cx.new(|_cx| ProcessingIndicator::new("Processing filters...", default_overlay_transparency, default_font_size_scale))
                 );
             }
             
@@ -1139,6 +1208,8 @@ impl Render for ImageViewer {
                         anim_state.current_frame,
                         anim_state.frame_count,
                         anim_state.is_playing,
+                        default_overlay_transparency,
+                        default_font_size_scale,
                     ))
                 );
             }

@@ -1,15 +1,23 @@
 use adabraka_ui::prelude::scrollable_vertical;
 use gpui::prelude::*;
 use gpui::*;
-use crate::utils::style::{Colors, Spacing, TextSize};
+use crate::utils::style::{Colors, Spacing, scaled_text_size};
 
 /// Component for displaying help information and keyboard shortcuts
 #[derive(Clone)]
-pub struct HelpOverlay;
+pub struct HelpOverlay {
+    /// Overlay transparency (0-255)
+    overlay_transparency: u8,
+    /// Font size scale multiplier
+    font_size_scale: f32,
+}
 
 impl HelpOverlay {
-    pub fn new() -> Self {
-        Self
+    pub fn new(overlay_transparency: u8, font_size_scale: f32) -> Self {
+        Self {
+            overlay_transparency,
+            font_size_scale,
+        }
     }
 
     fn render_popover_header(&self) -> impl Element {
@@ -17,7 +25,7 @@ impl HelpOverlay {
             .px(Spacing::xl())
             .pt(Spacing::xl())
             .pb(Spacing::md())
-            .text_size(TextSize::xl())
+            .text_size(scaled_text_size(20.0, self.font_size_scale))
             .text_color(Colors::text())
             .font_weight(FontWeight::BOLD)
             .child("Keyboard Shortcuts")
@@ -26,7 +34,7 @@ impl HelpOverlay {
     /// Render a section header
     fn render_section_header(&self, title: String) -> impl IntoElement {
         div()
-            .text_size(TextSize::md())
+            .text_size(scaled_text_size(14.0, self.font_size_scale))
             .text_color(Colors::text())
             .font_weight(FontWeight::BOLD)
             .mb(Spacing::sm())
@@ -44,14 +52,14 @@ impl HelpOverlay {
             .child(
                 div()
                     .min_w(px(140.0))
-                    .text_size(TextSize::sm())
+                    .text_size(scaled_text_size(12.0, self.font_size_scale))
                     .text_color(rgb(0xaaaaaa))
                     .font_family("monospace")
                     .child(keys)
             )
             .child(
                 div()
-                    .text_size(TextSize::sm())
+                    .text_size(scaled_text_size(12.0, self.font_size_scale))
                     .text_color(Colors::text())
                     .child(description)
             )
@@ -157,7 +165,7 @@ impl HelpOverlay {
             .pt(Spacing::md())
             .border_t_1()
             .border_color(rgb(0x444444))
-            .text_size(TextSize::sm())
+            .text_size(scaled_text_size(12.0, self.font_size_scale))
             .text_color(rgb(0xaaaaaa))
             .text_align(TextAlign::Center)
             .child("Press H, ?, F1, or Esc to close this help")
@@ -170,7 +178,7 @@ impl Render for HelpOverlay {
             // Full screen overlay with semi-transparent background
             .absolute()
             .inset_0()
-            .bg(rgba(0x00000099))
+            .bg(Colors::overlay_bg_alpha(self.overlay_transparency))
             .flex()
             .items_center()
             .justify_center()

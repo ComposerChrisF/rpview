@@ -1,5 +1,5 @@
 use rpview_gpui::state::app_state::{AppState, SortMode};
-use rpview_gpui::state::image_state::ImageState;
+use rpview_gpui::state::image_state::{ImageState, FilterSettings};
 use std::path::PathBuf;
 
 #[test]
@@ -178,7 +178,7 @@ fn test_save_and_get_state() {
     state.save_current_state(image_state);
     
     // Retrieve it
-    let retrieved = state.get_current_state();
+    let retrieved = state.get_current_state(FilterSettings::default());
     assert_eq!(retrieved.zoom, 2.0);
     assert_eq!(retrieved.pan, (100.0, 50.0));
 }
@@ -207,9 +207,9 @@ fn test_state_persistence_across_navigation() {
     
     // Navigate back to image1
     state.previous_image();
-    
+
     // Should retrieve image1's state
-    let retrieved = state.get_current_state();
+    let retrieved = state.get_current_state(FilterSettings::default());
     assert_eq!(retrieved.zoom, 1.5);
 }
 
@@ -248,12 +248,12 @@ fn test_image_state_default() {
     
     assert_eq!(state.zoom, 1.0);
     assert_eq!(state.pan, (0.0, 0.0));
-    assert_eq!(state.is_fit_to_window, true);
+    assert!(state.is_fit_to_window);
     assert_eq!(state.filters.brightness, 0.0);
     assert_eq!(state.filters.contrast, 0.0);
     assert_eq!(state.filters.gamma, 1.0);
-    assert_eq!(state.filters_enabled, true);
-    assert_eq!(state.animation.is_none(), true);
+    assert!(state.filters_enabled);
+    assert!(state.animation.is_none());
 }
 
 #[test]

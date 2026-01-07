@@ -61,8 +61,7 @@ actions!(app, [
     OpenInExternalViewer,
     OpenInExternalViewerAndQuit,
     OpenInExternalEditor,
-    ApplySettings,
-    CancelSettings,
+    CloseSettings,
     ResetSettingsToDefaults,
     LoadOversizedImageAnyway,
 ]);
