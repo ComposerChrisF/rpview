@@ -4,12 +4,13 @@ use gpui::*;
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
 
 /// Component for displaying help information and keyboard shortcuts
-#[derive(Clone)]
 pub struct HelpOverlay {
     /// Overlay transparency (0-255)
     overlay_transparency: u8,
     /// Font size scale multiplier
     font_size_scale: f32,
+    /// Scroll handle for the help content
+    scroll_handle: ScrollHandle,
 }
 
 impl HelpOverlay {
@@ -17,7 +18,14 @@ impl HelpOverlay {
         Self {
             overlay_transparency,
             font_size_scale,
+            scroll_handle: ScrollHandle::new(),
         }
+    }
+
+    /// Update settings that may change while the overlay is displayed
+    pub fn update_settings(&mut self, overlay_transparency: u8, font_size_scale: f32) {
+        self.overlay_transparency = overlay_transparency;
+        self.font_size_scale = font_size_scale;
     }
 
     fn render_popover_header(&self) -> impl Element {
@@ -139,20 +147,23 @@ impl HelpOverlay {
             .relative()
             .flex()
             .flex_col()
-            .w(px(400.0))
-            .h(px(400.0))
+            .flex_1()
+            .min_h_0()  // Critical for scrolling - allows flex item to shrink below content size
+            .w(px(500.0))
             .bg(rgb(0x313244))
             //.rounded_lg()
             .py(px(5.0))
-            .px(px(15.0))
+            // No horizontal padding here - put it inside scrollable so scrollbar is at edge
             .child(
                   scrollable_vertical(
                     div()
                         .flex()
                         .flex_col()
                         .gap(px(10.0))
+                        .px(px(15.0))  // Horizontal padding inside scrollable content
                         .children(self.render_actual_help_content())
                   )
+                  .with_scroll_handle(self.scroll_handle.clone())
                   .always_show_scrollbars()
                   .id("scrollable-portion")
             )
@@ -189,11 +200,12 @@ impl Render for HelpOverlay {
                     .border_1()
                     .border_color(rgb(0x444444))
                     .rounded(px(8.0))
-                    .w(px(400.0))
+                    .w(px(500.0))
                     .h(px(600.0))
                     .shadow_lg()
                     .flex()
                     .flex_col()
+                    .min_h_0()  // Critical for scrolling - allows flex children to be constrained
                     .child(self.render_popover_header())
                     .child(self.render_popover_content_area_scrollable())
                     .child(self.render_popover_footer())
