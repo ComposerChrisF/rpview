@@ -220,3 +220,288 @@ impl Default for AppState {
         Self::new(Vec::new())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test constants
+    const DEFAULT_CACHE_SIZE: usize = 1000;
+    const SMALL_CACHE_SIZE: usize = 2;
+
+    #[test]
+    fn test_sort_mode_default() {
+        // Arrange & Act
+        let mode = SortMode::default();
+
+        // Assert - default should be Alphabetical (via derive(Default) with #[default])
+        assert_eq!(mode, SortMode::Alphabetical);
+    }
+
+    #[test]
+    fn test_sort_mode_equality() {
+        // Arrange & Act & Assert
+        assert_eq!(SortMode::Alphabetical, SortMode::Alphabetical);
+        assert_eq!(SortMode::ModifiedDate, SortMode::ModifiedDate);
+        assert_ne!(SortMode::Alphabetical, SortMode::ModifiedDate);
+    }
+
+    #[test]
+    fn test_sort_mode_clone() {
+        // Arrange
+        let mode = SortMode::ModifiedDate;
+
+        // Act
+        let cloned = mode.clone();
+
+        // Assert
+        assert_eq!(mode, cloned);
+    }
+
+    #[test]
+    fn test_sort_mode_copy() {
+        // Arrange
+        let mode = SortMode::Alphabetical;
+
+        // Act - Copy trait allows direct assignment
+        let copied: SortMode = mode;
+
+        // Assert - both should be equal and mode still valid (Copy)
+        assert_eq!(mode, copied);
+        assert_eq!(mode, SortMode::Alphabetical);
+    }
+
+    #[test]
+    fn test_app_state_new_uses_default_sort_mode() {
+        // Arrange & Act
+        let state = AppState::new(Vec::new());
+
+        // Assert
+        assert_eq!(state.sort_mode, SortMode::default());
+        assert_eq!(state.sort_mode, SortMode::Alphabetical);
+    }
+
+    #[test]
+    fn test_app_state_new_with_settings() {
+        // Arrange
+        let paths = vec![
+            PathBuf::from("zebra.png"),
+            PathBuf::from("apple.jpg"),
+        ];
+
+        // Act
+        let state = AppState::new_with_settings(paths, 0, SortMode::Alphabetical, 500);
+
+        // Assert
+        assert_eq!(state.max_cache_size, 500);
+        assert_eq!(state.sort_mode, SortMode::Alphabetical);
+        // Images should be sorted alphabetically
+        assert_eq!(
+            state.image_paths[0].file_name().unwrap().to_string_lossy(),
+            "apple.jpg"
+        );
+    }
+
+    #[test]
+    fn test_app_state_new_with_settings_modified_date() {
+        // Arrange
+        let paths = vec![PathBuf::from("test.png")];
+
+        // Act
+        let state = AppState::new_with_settings(paths, 0, SortMode::ModifiedDate, DEFAULT_CACHE_SIZE);
+
+        // Assert
+        assert_eq!(state.sort_mode, SortMode::ModifiedDate);
+    }
+
+    #[test]
+    fn test_set_sort_mode_same_mode_no_resort() {
+        // Arrange
+        let paths = vec![
+            PathBuf::from("zebra.png"),
+            PathBuf::from("apple.jpg"),
+        ];
+        let mut state = AppState::new(paths.clone());
+
+        // Act - set to same mode (Alphabetical is default)
+        state.set_sort_mode(SortMode::Alphabetical);
+
+        // Assert - order should be unchanged from initial (not sorted on new())
+        assert_eq!(state.image_paths[0], paths[0]);
+        assert_eq!(state.image_paths[1], paths[1]);
+    }
+
+    #[test]
+    fn test_set_sort_mode_different_mode_triggers_sort() {
+        // Arrange
+        let paths = vec![
+            PathBuf::from("zebra.png"),
+            PathBuf::from("apple.jpg"),
+        ];
+        let mut state = AppState::new(paths);
+
+        // Act - change to ModifiedDate, then back to Alphabetical
+        state.set_sort_mode(SortMode::ModifiedDate);
+        state.set_sort_mode(SortMode::Alphabetical);
+
+        // Assert - should now be sorted alphabetically
+        assert_eq!(
+            state.image_paths[0].file_name().unwrap().to_string_lossy(),
+            "apple.jpg"
+        );
+    }
+
+    #[test]
+    fn test_next_image_with_wrap_true() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut state = AppState::new(paths);
+        state.current_index = 1; // Last image
+
+        // Act
+        state.next_image_with_wrap(true);
+
+        // Assert - should wrap to first
+        assert_eq!(state.current_index, 0);
+    }
+
+    #[test]
+    fn test_next_image_with_wrap_false() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut state = AppState::new(paths);
+        state.current_index = 1; // Last image
+
+        // Act
+        state.next_image_with_wrap(false);
+
+        // Assert - should stay at last
+        assert_eq!(state.current_index, 1);
+    }
+
+    #[test]
+    fn test_previous_image_with_wrap_true() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut state = AppState::new(paths);
+        // current_index is 0 (first image)
+
+        // Act
+        state.previous_image_with_wrap(true);
+
+        // Assert - should wrap to last
+        assert_eq!(state.current_index, 1);
+    }
+
+    #[test]
+    fn test_previous_image_with_wrap_false() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut state = AppState::new(paths);
+        // current_index is 0 (first image)
+
+        // Act
+        state.previous_image_with_wrap(false);
+
+        // Assert - should stay at first
+        assert_eq!(state.current_index, 0);
+    }
+
+    #[test]
+    fn test_get_current_state_creates_new_with_defaults() {
+        // Arrange
+        let paths = vec![PathBuf::from("test.png")];
+        let mut state = AppState::new(paths);
+        let custom_filters = FilterSettings {
+            brightness: 10.0,
+            contrast: 20.0,
+            gamma: 1.5,
+        };
+
+        // Act
+        let image_state = state.get_current_state(custom_filters);
+
+        // Assert - new state should use provided default filters
+        assert_eq!(image_state.filters.brightness, 10.0);
+        assert_eq!(image_state.filters.contrast, 20.0);
+        assert_eq!(image_state.filters.gamma, 1.5);
+    }
+
+    #[test]
+    fn test_get_current_state_returns_cached() {
+        // Arrange
+        let paths = vec![PathBuf::from("test.png")];
+        let mut state = AppState::new(paths);
+
+        // Save a custom state
+        let mut custom_state = ImageState::new();
+        custom_state.zoom = 2.5;
+        state.save_current_state(custom_state);
+
+        // Act - get state with different defaults (should return cached)
+        let image_state = state.get_current_state(FilterSettings::default());
+
+        // Assert - should return cached state, not new one
+        assert_eq!(image_state.zoom, 2.5);
+    }
+
+    #[test]
+    fn test_get_current_state_empty_list() {
+        // Arrange
+        let mut state = AppState::new(Vec::new());
+        let custom_filters = FilterSettings {
+            brightness: 5.0,
+            contrast: 5.0,
+            gamma: 1.2,
+        };
+
+        // Act
+        let image_state = state.get_current_state(custom_filters);
+
+        // Assert - should return default state with provided filters
+        assert_eq!(image_state.filters.brightness, 5.0);
+        assert_eq!(image_state.zoom, 1.0);
+    }
+
+    #[test]
+    fn test_save_current_state_evicts_on_cache_full() {
+        // Arrange
+        let mut state = AppState::new(vec![PathBuf::from("current.png")]);
+        state.max_cache_size = SMALL_CACHE_SIZE;
+
+        // Fill the cache to capacity
+        for i in 0..SMALL_CACHE_SIZE {
+            let path = PathBuf::from(format!("image{}.png", i));
+            let img_state = ImageState::new();
+            state.image_states.insert(path, img_state);
+        }
+
+        // Act - save state for current image (should trigger eviction)
+        let new_state = ImageState::new();
+        state.save_current_state(new_state);
+
+        // Assert - cache should not exceed max_cache_size
+        assert!(state.image_states.len() <= state.max_cache_size);
+    }
+
+    #[test]
+    fn test_save_current_state_empty_list_no_panic() {
+        // Arrange
+        let mut state = AppState::new(Vec::new());
+
+        // Act - should not panic
+        state.save_current_state(ImageState::new());
+
+        // Assert - cache should be empty (no current image to save for)
+        assert!(state.image_states.is_empty());
+    }
+
+    #[test]
+    fn test_app_state_default_cache_size() {
+        // Arrange & Act
+        let state = AppState::default();
+
+        // Assert
+        assert_eq!(state.max_cache_size, DEFAULT_CACHE_SIZE);
+    }
+}
