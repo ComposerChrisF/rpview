@@ -1,17 +1,23 @@
 use gpui::*;
-use crate::utils::style::{Colors, Spacing};
+use crate::utils::style::{Colors, Spacing, scaled_text_size};
 
 /// Processing indicator component
 /// Displays in the upper left corner while filters are being processed
 #[derive(Clone)]
 pub struct ProcessingIndicator {
     pub message: String,
+    /// Overlay transparency (0-255)
+    pub overlay_transparency: u8,
+    /// Font size scale multiplier
+    pub font_size_scale: f32,
 }
 
 impl ProcessingIndicator {
-    pub fn new(message: impl Into<String>) -> Self {
+    pub fn new(message: impl Into<String>, overlay_transparency: u8, font_size_scale: f32) -> Self {
         Self {
             message: message.into(),
+            overlay_transparency,
+            font_size_scale,
         }
     }
 }
@@ -23,7 +29,7 @@ impl Render for ProcessingIndicator {
             .top(Spacing::lg())
             .left(Spacing::lg())
             .p(Spacing::md())
-            .bg(rgba(0x000000AA))
+            .bg(Colors::overlay_bg_alpha(self.overlay_transparency))
             .rounded(px(6.0))
             .border_1()
             .border_color(rgba(0x444444FF))
@@ -40,7 +46,7 @@ impl Render for ProcessingIndicator {
             )
             .child(
                 div()
-                    .text_size(px(13.0))
+                    .text_size(scaled_text_size(13.0, self.font_size_scale))
                     .text_color(Colors::text())
                     .child(self.message.clone())
             )

@@ -1,13 +1,13 @@
-/// Integration tests for rpview-gpui
-/// 
-/// These tests verify end-to-end workflows including:
-/// - CLI argument parsing workflows
-/// - File loading workflows
-/// - Navigation workflows
-/// - Zoom/pan workflows
+//! Integration tests for rpview-gpui
+//!
+//! These tests verify end-to-end workflows including:
+//! - CLI argument parsing workflows
+//! - File loading workflows
+//! - Navigation workflows
+//! - Zoom/pan workflows
 
 use rpview_gpui::state::app_state::{AppState, SortMode};
-use rpview_gpui::state::image_state::ImageState;
+use rpview_gpui::state::image_state::{ImageState, FilterSettings};
 use rpview_gpui::utils::file_scanner::{scan_directory, process_dropped_path};
 use rpview_gpui::utils::zoom::*;
 use std::path::PathBuf;
@@ -154,7 +154,7 @@ fn test_file_loading_workflow_with_state_persistence() {
     state.previous_image();
     
     // Should restore first image's state
-    let restored = state.get_current_state();
+    let restored = state.get_current_state(FilterSettings::default());
     assert_eq!(restored.zoom, 2.0);
 }
 
@@ -335,16 +335,16 @@ fn test_zoom_workflow_toggle_fit_100() {
     }
     
     assert_eq!(zoom, 1.0);
-    assert_eq!(is_fit, false);
-    
+    assert!(!is_fit);
+
     // Toggle back to fit
     if !is_fit {
         zoom = fit_zoom;
         is_fit = true;
     }
-    
+
     assert_eq!(zoom, fit_zoom);
-    assert_eq!(is_fit, true);
+    assert!(is_fit);
 }
 
 #[test]
@@ -410,8 +410,8 @@ fn test_complete_workflow_load_navigate_zoom_pan() {
     let mut state = AppState::new(images);
     
     // 2. View first image at fit-to-window
-    let mut img_state = state.get_current_state();
-    assert_eq!(img_state.is_fit_to_window, true);
+    let mut img_state = state.get_current_state(FilterSettings::default());
+    assert!(img_state.is_fit_to_window);
     
     // 3. Zoom in manually
     img_state.zoom = zoom_in(img_state.zoom, ZOOM_STEP);
@@ -427,18 +427,18 @@ fn test_complete_workflow_load_navigate_zoom_pan() {
     state.next_image();
     
     // 7. Second image should have default state
-    let img_state2 = state.get_current_state();
-    assert_eq!(img_state2.is_fit_to_window, true);
+    let img_state2 = state.get_current_state(FilterSettings::default());
+    assert!(img_state2.is_fit_to_window);
     assert_eq!(img_state2.pan, (0.0, 0.0));
     
     // 8. Navigate back to first
     state.previous_image();
     
     // 9. First image should restore previous state
-    let restored = state.get_current_state();
+    let restored = state.get_current_state(FilterSettings::default());
     assert_eq!(restored.zoom, img_state.zoom);
     assert_eq!(restored.pan, (50.0, 25.0));
-    assert_eq!(restored.is_fit_to_window, false);
+    assert!(!restored.is_fit_to_window);
 }
 
 #[test]
@@ -455,7 +455,7 @@ fn test_workflow_empty_list_safety() {
     state.previous_image();
     
     // State operations should not panic
-    let img_state = state.get_current_state();
+    let img_state = state.get_current_state(FilterSettings::default());
     state.save_current_state(img_state);
 }
 

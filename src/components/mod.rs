@@ -9,7 +9,7 @@ pub mod processing_indicator;
 pub mod settings_window;
 pub mod zoom_indicator;
 
-pub use debug_overlay::DebugOverlay;
+pub use debug_overlay::{DebugOverlay, DebugOverlayConfig};
 pub use filter_controls::FilterControls;
 pub use help_overlay::HelpOverlay;
 pub use image_viewer::ImageViewer;

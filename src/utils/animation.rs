@@ -34,7 +34,7 @@ impl AnimationData {
 /// Check if a file is an animated GIF
 pub fn is_animated_gif(path: &Path) -> Result<bool, AppError> {
     let file = File::open(path)
-        .map_err(|e| AppError::Io(e))?;
+        .map_err(AppError::Io)?;
     let reader = BufReader::new(file);
     
     match GifDecoder::new(reader) {
@@ -52,7 +52,7 @@ pub fn is_animated_gif(path: &Path) -> Result<bool, AppError> {
 /// Check if a file is an animated WEBP
 pub fn is_animated_webp(path: &Path) -> Result<bool, AppError> {
     let file = File::open(path)
-        .map_err(|e| AppError::Io(e))?;
+        .map_err(AppError::Io)?;
     let reader = BufReader::new(file);
     
     match WebPDecoder::new(reader) {
@@ -64,7 +64,7 @@ pub fn is_animated_webp(path: &Path) -> Result<bool, AppError> {
 /// Load animation frames from a GIF file
 pub fn load_gif_animation(path: &Path) -> Result<AnimationData, AppError> {
     let file = File::open(path)
-        .map_err(|e| AppError::Io(e))?;
+        .map_err(AppError::Io)?;
     let reader = BufReader::new(file);
     
     let decoder = GifDecoder::new(reader)
@@ -103,7 +103,7 @@ pub fn load_gif_animation(path: &Path) -> Result<AnimationData, AppError> {
 /// Load animation frames from a WEBP file
 pub fn load_webp_animation(path: &Path) -> Result<AnimationData, AppError> {
     let file = File::open(path)
-        .map_err(|e| AppError::Io(e))?;
+        .map_err(AppError::Io)?;
     let reader = BufReader::new(file);
     
     let decoder = WebPDecoder::new(reader)

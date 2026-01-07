@@ -49,6 +49,14 @@ impl Colors {
         color
     }
 
+    /// Overlay background with custom alpha value
+    /// alpha: 0-255, where 0 is fully transparent and 255 is fully opaque
+    pub fn overlay_bg_alpha(alpha: u8) -> Hsla {
+        let mut color: Hsla = rgb(0x000000).into();
+        color.a = (alpha as f32) / 255.0;
+        color
+    }
+
     #[allow(dead_code)]
     /// Border color
     pub fn border() -> Hsla {
@@ -105,4 +113,9 @@ impl TextSize {
     pub fn xxl() -> Pixels {
         px(24.0)
     }
+}
+
+/// Apply font size scale to a base pixel size
+pub fn scaled_text_size(base_size: f32, scale: f32) -> Pixels {
+    px(base_size * scale)
 }

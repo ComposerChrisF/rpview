@@ -1,19 +1,25 @@
 use gpui::*;
-use crate::utils::style::{Colors, Spacing, TextSize};
+use crate::utils::style::{Colors, Spacing, scaled_text_size};
 
 /// Component that displays animation status and frame counter
 pub struct AnimationIndicator {
     current_frame: usize,
     total_frames: usize,
     is_playing: bool,
+    /// Overlay transparency (0-255)
+    overlay_transparency: u8,
+    /// Font size scale multiplier
+    font_size_scale: f32,
 }
 
 impl AnimationIndicator {
-    pub fn new(current_frame: usize, total_frames: usize, is_playing: bool) -> Self {
+    pub fn new(current_frame: usize, total_frames: usize, is_playing: bool, overlay_transparency: u8, font_size_scale: f32) -> Self {
         Self {
             current_frame,
             total_frames,
             is_playing,
+            overlay_transparency,
+            font_size_scale,
         }
     }
 }
@@ -29,9 +35,9 @@ impl Render for AnimationIndicator {
             .left(Spacing::md())
             .px(Spacing::md())
             .py(Spacing::sm())
-            .bg(rgba(0x000000AA))
+            .bg(Colors::overlay_bg_alpha(self.overlay_transparency))
             .rounded(px(4.0))
-            .text_size(TextSize::sm())
+            .text_size(scaled_text_size(12.0, self.font_size_scale))
             .text_color(Colors::text())
             .child(frame_text)
     }
