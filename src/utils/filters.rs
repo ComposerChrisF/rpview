@@ -130,35 +130,348 @@ pub fn apply_filters(img: &DynamicImage, brightness: f32, contrast: f32, gamma: 
 mod tests {
     use super::*;
     use image::Rgba;
-    
+
+    // Test constants
+    const MID_GRAY: u8 = 128;
+    const WHITE: u8 = 255;
+    const BLACK: u8 = 0;
+    const DEFAULT_GAMMA: f32 = 1.0;
+    const MIN_GAMMA: f32 = 0.1;
+    const MAX_GAMMA: f32 = 10.0;
+
+    /// Helper function to create a 1x1 test image with a specific color
+    fn create_test_image(r: u8, g: u8, b: u8, a: u8) -> DynamicImage {
+        DynamicImage::ImageRgba8(ImageBuffer::from_pixel(1, 1, Rgba([r, g, b, a])))
+    }
+
     #[test]
     fn test_apply_contrast_to_channel() {
         // Test with factor 1.0 (no change)
-        assert_eq!(apply_contrast_to_channel(128, 1.0), 128);
-        
+        assert_eq!(apply_contrast_to_channel(MID_GRAY, 1.0), MID_GRAY);
+
         // Test with factor > 1.0 (increase contrast)
         assert!(apply_contrast_to_channel(200, 2.0) > 200);
         assert!(apply_contrast_to_channel(50, 2.0) < 50);
-        
+
         // Test with factor < 1.0 (decrease contrast)
         let result = apply_contrast_to_channel(200, 0.5);
-        assert!(result < 200 && result > 128);
+        assert!(result < 200 && result > MID_GRAY);
     }
-    
+
+    #[test]
+    fn test_apply_contrast_to_channel_edge_values() {
+        // Arrange & Act & Assert - black and white should clamp correctly
+        assert_eq!(apply_contrast_to_channel(BLACK, 2.0), BLACK);
+        assert_eq!(apply_contrast_to_channel(WHITE, 2.0), WHITE);
+
+        // Mid-gray (128) should stay close to mid-gray regardless of factor
+        // Note: Due to floating point math, 128 may become 127 (128 is not exactly 0.5 * 255)
+        let mid_gray_low = apply_contrast_to_channel(MID_GRAY, 0.5);
+        let mid_gray_high = apply_contrast_to_channel(MID_GRAY, 2.0);
+        // Allow 1 unit of tolerance due to rounding
+        assert!((mid_gray_low as i32 - MID_GRAY as i32).abs() <= 1);
+        assert!((mid_gray_high as i32 - MID_GRAY as i32).abs() <= 1);
+    }
+
     #[test]
     fn test_brightness_clamps() {
-        // Create a simple 1x1 image
-        let img = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(1, 1, Rgba([128, 128, 128, 255])));
-        
-        // Test extreme brightness values are clamped
+        // Arrange
+        let img = create_test_image(MID_GRAY, MID_GRAY, MID_GRAY, WHITE);
+
+        // Act - test extreme brightness values are clamped
         let bright = apply_brightness(&img, 150.0); // Should clamp to 100
         let bright_rgba = bright.to_rgba8();
         let pixel = bright_rgba.get_pixel(0, 0);
-        assert_eq!(pixel[0], 255); // 128 + 255 = 383, clamped to 255
-        
+
+        // Assert
+        assert_eq!(pixel[0], WHITE); // 128 + 255 = 383, clamped to 255
+
+        // Act
         let dark = apply_brightness(&img, -150.0); // Should clamp to -100
         let dark_rgba = dark.to_rgba8();
         let pixel = dark_rgba.get_pixel(0, 0);
-        assert_eq!(pixel[0], 0); // 128 - 255 = -127, clamped to 0
+
+        // Assert
+        assert_eq!(pixel[0], BLACK); // 128 - 255 = -127, clamped to 0
+    }
+
+    #[test]
+    fn test_brightness_zero_no_change() {
+        // Arrange
+        let img = create_test_image(100, 150, 200, WHITE);
+
+        // Act
+        let result = apply_brightness(&img, 0.0);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - image should be unchanged
+        assert_eq!(pixel[0], 100);
+        assert_eq!(pixel[1], 150);
+        assert_eq!(pixel[2], 200);
+        assert_eq!(pixel[3], WHITE);
+    }
+
+    #[test]
+    fn test_brightness_preserves_alpha() {
+        // Arrange
+        let alpha_value = 128;
+        let img = create_test_image(100, 100, 100, alpha_value);
+
+        // Act
+        let result = apply_brightness(&img, 50.0);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - alpha should be preserved
+        assert_eq!(pixel[3], alpha_value);
+    }
+
+    #[test]
+    fn test_contrast_zero_no_change() {
+        // Arrange
+        let img = create_test_image(100, 150, 200, WHITE);
+
+        // Act
+        let result = apply_contrast(&img, 0.0);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - image should be unchanged
+        assert_eq!(pixel[0], 100);
+        assert_eq!(pixel[1], 150);
+        assert_eq!(pixel[2], 200);
+    }
+
+    #[test]
+    fn test_contrast_preserves_alpha() {
+        // Arrange
+        let alpha_value = 64;
+        let img = create_test_image(100, 100, 100, alpha_value);
+
+        // Act
+        let result = apply_contrast(&img, 50.0);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - alpha should be preserved
+        assert_eq!(pixel[3], alpha_value);
+    }
+
+    #[test]
+    fn test_gamma_one_no_change() {
+        // Arrange
+        let img = create_test_image(100, 150, 200, WHITE);
+
+        // Act
+        let result = apply_gamma(&img, DEFAULT_GAMMA);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - image should be unchanged
+        assert_eq!(pixel[0], 100);
+        assert_eq!(pixel[1], 150);
+        assert_eq!(pixel[2], 200);
+    }
+
+    #[test]
+    fn test_gamma_preserves_black_and_white() {
+        // Arrange - image with black and white pixels
+        let mut img_buffer = ImageBuffer::new(2, 1);
+        img_buffer.put_pixel(0, 0, Rgba([BLACK, BLACK, BLACK, WHITE]));
+        img_buffer.put_pixel(1, 0, Rgba([WHITE, WHITE, WHITE, WHITE]));
+        let img = DynamicImage::ImageRgba8(img_buffer);
+
+        // Act
+        let result = apply_gamma(&img, 2.2);
+        let result_rgba = result.to_rgba8();
+
+        // Assert - black stays black, white stays white
+        let black_pixel = result_rgba.get_pixel(0, 0);
+        let white_pixel = result_rgba.get_pixel(1, 0);
+
+        assert_eq!(black_pixel[0], BLACK);
+        assert_eq!(white_pixel[0], WHITE);
+    }
+
+    #[test]
+    fn test_gamma_greater_than_one_brightens() {
+        // Arrange
+        let img = create_test_image(MID_GRAY, MID_GRAY, MID_GRAY, WHITE);
+
+        // Act - gamma > 1 should brighten midtones
+        let result = apply_gamma(&img, 2.0);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - pixel should be brighter
+        assert!(pixel[0] > MID_GRAY);
+    }
+
+    #[test]
+    fn test_gamma_less_than_one_darkens() {
+        // Arrange
+        let img = create_test_image(MID_GRAY, MID_GRAY, MID_GRAY, WHITE);
+
+        // Act - gamma < 1 should darken midtones
+        let result = apply_gamma(&img, 0.5);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - pixel should be darker
+        assert!(pixel[0] < MID_GRAY);
+    }
+
+    #[test]
+    fn test_gamma_clamps_input() {
+        // Arrange
+        let img = create_test_image(MID_GRAY, MID_GRAY, MID_GRAY, WHITE);
+
+        // Act - gamma below MIN should clamp
+        let result_low = apply_gamma(&img, 0.01);
+        let result_min = apply_gamma(&img, MIN_GAMMA);
+
+        // Assert - both should produce same result (clamped to MIN)
+        let low_rgba = result_low.to_rgba8();
+        let min_rgba = result_min.to_rgba8();
+        assert_eq!(low_rgba.get_pixel(0, 0), min_rgba.get_pixel(0, 0));
+
+        // Act - gamma above MAX should clamp
+        let result_high = apply_gamma(&img, 20.0);
+        let result_max = apply_gamma(&img, MAX_GAMMA);
+
+        // Assert - both should produce same result (clamped to MAX)
+        let high_rgba = result_high.to_rgba8();
+        let max_rgba = result_max.to_rgba8();
+        assert_eq!(high_rgba.get_pixel(0, 0), max_rgba.get_pixel(0, 0));
+    }
+
+    #[test]
+    fn test_gamma_preserves_alpha() {
+        // Arrange
+        let alpha_value = 100;
+        let img = create_test_image(MID_GRAY, MID_GRAY, MID_GRAY, alpha_value);
+
+        // Act
+        let result = apply_gamma(&img, 2.0);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - alpha should be preserved
+        assert_eq!(pixel[3], alpha_value);
+    }
+
+    #[test]
+    fn test_gamma_lut_correctness() {
+        // Arrange - test specific gamma values and expected outputs
+        let img = create_test_image(MID_GRAY, MID_GRAY, MID_GRAY, WHITE);
+
+        // Act - gamma = 2.2 (standard sRGB gamma)
+        let result = apply_gamma(&img, 2.2);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - expected value for gamma 2.2 on mid-gray
+        // Formula: 255 * ((128/255)^(1/2.2)) = 255 * 0.7297 = 186
+        let expected = 186;
+        assert!(
+            (pixel[0] as i32 - expected as i32).abs() <= 1,
+            "Expected ~{}, got {}",
+            expected,
+            pixel[0]
+        );
+    }
+
+    #[test]
+    fn test_apply_filters_all_default_no_change() {
+        // Arrange
+        let img = create_test_image(100, 150, 200, WHITE);
+
+        // Act - all default values should not modify image
+        let result = apply_filters(&img, 0.0, 0.0, DEFAULT_GAMMA);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert
+        assert_eq!(pixel[0], 100);
+        assert_eq!(pixel[1], 150);
+        assert_eq!(pixel[2], 200);
+    }
+
+    #[test]
+    fn test_apply_filters_order_brightness_contrast_gamma() {
+        // Arrange
+        let img = create_test_image(MID_GRAY, MID_GRAY, MID_GRAY, WHITE);
+
+        // Act - apply all filters
+        let result = apply_filters(&img, 20.0, 30.0, 1.5);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - result should be different from original
+        assert_ne!(pixel[0], MID_GRAY);
+    }
+
+    #[test]
+    fn test_apply_filters_preserves_alpha() {
+        // Arrange
+        let alpha_value = 200;
+        let img = create_test_image(MID_GRAY, MID_GRAY, MID_GRAY, alpha_value);
+
+        // Act
+        let result = apply_filters(&img, 25.0, 25.0, 1.5);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - alpha should be preserved through all filters
+        assert_eq!(pixel[3], alpha_value);
+    }
+
+    #[test]
+    fn test_apply_filters_near_zero_treated_as_zero() {
+        // Arrange
+        let img = create_test_image(100, 150, 200, WHITE);
+
+        // Act - values very close to default should be treated as no-op
+        let result = apply_filters(&img, 0.0005, 0.0005, 1.0005);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - image should be unchanged (values below threshold)
+        assert_eq!(pixel[0], 100);
+        assert_eq!(pixel[1], 150);
+        assert_eq!(pixel[2], 200);
+    }
+
+    #[test]
+    fn test_contrast_positive_increases_range() {
+        // Arrange - image with mid-gray
+        let img = create_test_image(192, 64, MID_GRAY, WHITE);
+
+        // Act - positive contrast increases difference from mid-gray
+        let result = apply_contrast(&img, 50.0);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - 192 should move further from 128 (toward white)
+        assert!(pixel[0] > 192);
+        // 64 should move further from 128 (toward black)
+        assert!(pixel[1] < 64);
+    }
+
+    #[test]
+    fn test_contrast_negative_decreases_range() {
+        // Arrange - image with values far from mid-gray
+        let img = create_test_image(220, 30, MID_GRAY, WHITE);
+
+        // Act - negative contrast decreases difference from mid-gray
+        let result = apply_contrast(&img, -50.0);
+        let result_rgba = result.to_rgba8();
+        let pixel = result_rgba.get_pixel(0, 0);
+
+        // Assert - 220 should move toward 128
+        assert!(pixel[0] < 220 && pixel[0] > MID_GRAY);
+        // 30 should move toward 128
+        assert!(pixel[1] > 30 && pixel[1] < MID_GRAY);
     }
 }
