@@ -22,12 +22,6 @@ impl HelpOverlay {
         }
     }
 
-    /// Update settings that may change while the overlay is displayed
-    pub fn update_settings(&mut self, overlay_transparency: u8, font_size_scale: f32) {
-        self.overlay_transparency = overlay_transparency;
-        self.font_size_scale = font_size_scale;
-    }
-
     fn render_popover_header(&self) -> impl Element {
         div()
             .px(Spacing::xl())

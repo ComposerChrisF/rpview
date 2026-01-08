@@ -11,7 +11,7 @@ A fast, keyboard-driven image viewer built with GPUI.
 - ✅ 🔍 Advanced zoom and pan controls
 - ✅ 🎨 Real-time image filters (brightness, contrast, gamma)
 - ✅ 📁 Directory browsing with multiple sort modes
-- ✅ 💾 Per-image state persistence (zoom, pan, filters)
+- ✅ 💾 Per-image in-memory state persistence (zoom, pan, filters)
 - ✅ 🎬 Animated image support (GIF, WEBP)
 - ✅ 🖱️ Drag-and-drop file/folder support
 - ✅ 🌐 Cross-platform (macOS, Windows, Linux)
@@ -55,7 +55,7 @@ cargo build --release
 # View images in current directory
 cargo run
 
-# View a single image
+# View all images in a directory, starting with a specific image
 cargo run -- image.png
 
 # View multiple images
@@ -101,19 +101,24 @@ cargo run -- --help
 - `Ctrl/Cmd+F` - Toggle filter controls
 - `Ctrl/Cmd+1` - Disable filters
 - `Ctrl/Cmd+2` - Enable filters
-- `Ctrl/Cmd+R` - Reset filters
+- `Shift+Ctrl/Cmd+R` - Reset filters
 
 ### Animation
 - `O` - Play/pause animation
 - `[` / `]` - Previous/next frame
 
-### Sorting
+### Sorting (affects navigation to next image)
 - `Shift+Cmd/Ctrl+A` - Alphabetical sort
 - `Shift+Cmd/Ctrl+M` - Modified date sort
 
 ### File Operations
 - `Ctrl/Cmd+O` - Open file(s)
-- `Ctrl/Cmd+S` - Save file
+- `Ctrl/Cmd+S` - Save file (current folder)
+- `Ctrl/Cmd+Option+S` - Save to Downloads folder
+- `Ctrl/Cmd+R` - Reveal in Finder/Explorer
+- `Ctrl/Cmd+Option+V` - Open in external viewer
+- `Shift+Ctrl/Cmd+Option+V` - Open in viewer and quit
+- `Ctrl/Cmd+E` - Open in external editor
 
 ### Help & Info
 - `H`, `?`, `F1` - Toggle help overlay
@@ -259,6 +264,7 @@ See [TODO.md](TODO.md) for detailed phase summaries.
 
 ## Technologies
 
+- This app largely written via Claude Code 2, Sonnet 4.5
 - [GPUI](https://www.gpui.rs/) - High-performance GPU-accelerated UI framework
 - [image](https://docs.rs/image/) - Image decoding/encoding
 - [clap](https://docs.rs/clap/) - Command-line argument parsing
