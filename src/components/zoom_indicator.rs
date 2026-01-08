@@ -1,6 +1,6 @@
-use gpui::*;
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
 use crate::utils::zoom;
+use gpui::*;
 
 /// Component for displaying the current zoom level
 #[derive(Clone)]
@@ -18,7 +18,13 @@ pub struct ZoomIndicator {
 }
 
 impl ZoomIndicator {
-    pub fn new(zoom: f32, is_fit_to_window: bool, image_dimensions: Option<(u32, u32)>, overlay_transparency: u8, font_size_scale: f32) -> Self {
+    pub fn new(
+        zoom: f32,
+        is_fit_to_window: bool,
+        image_dimensions: Option<(u32, u32)>,
+        overlay_transparency: u8,
+        font_size_scale: f32,
+    ) -> Self {
         Self {
             zoom,
             is_fit_to_window,
@@ -36,7 +42,7 @@ impl Render for ZoomIndicator {
         } else {
             zoom::format_zoom_percentage(self.zoom)
         };
-        
+
         let mut container = div()
             .absolute()
             .bottom(Spacing::lg())
@@ -54,19 +60,19 @@ impl Render for ZoomIndicator {
                 div()
                     .text_size(scaled_text_size(12.0, self.font_size_scale))
                     .text_color(Colors::text())
-                    .child(zoom_text)
+                    .child(zoom_text),
             );
-        
+
         // Add dimensions line if available
         if let Some((width, height)) = self.image_dimensions {
             container = container.child(
                 div()
                     .text_size(scaled_text_size(11.0, self.font_size_scale))
                     .text_color(rgba(0xAAAAAAFF))
-                    .child(format!("{}×{}", width, height))
+                    .child(format!("{}×{}", width, height)),
             );
         }
-        
+
         container
     }
 }

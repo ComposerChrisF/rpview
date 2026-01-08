@@ -1,5 +1,5 @@
 //! Settings persistence module
-//! 
+//!
 //! Handles loading and saving settings to/from disk using JSON format.
 
 use crate::state::settings::AppSettings;
@@ -48,8 +48,7 @@ pub fn save_settings_to_path(settings: &AppSettings, path: &std::path::Path) -> 
     let json = serde_json::to_string_pretty(settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
 
-    std::fs::write(path, json)
-        .map_err(|e| format!("Failed to write settings file: {}", e))?;
+    std::fs::write(path, json).map_err(|e| format!("Failed to write settings file: {}", e))?;
 
     Ok(())
 }
@@ -89,9 +88,15 @@ pub fn load_settings_from_path(path: &std::path::Path) -> AppSettings {
             // Back up the corrupt file
             let backup_path = path.with_extension("json.backup");
             if let Err(backup_err) = std::fs::copy(path, &backup_path) {
-                eprintln!("Warning: Failed to backup corrupt settings file: {}", backup_err);
+                eprintln!(
+                    "Warning: Failed to backup corrupt settings file: {}",
+                    backup_err
+                );
             } else {
-                eprintln!("Corrupt settings file backed up to: {}", backup_path.display());
+                eprintln!(
+                    "Corrupt settings file backed up to: {}",
+                    backup_path.display()
+                );
             }
 
             eprintln!("Using default settings");

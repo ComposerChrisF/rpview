@@ -1,6 +1,6 @@
+use super::image_state::{FilterSettings, ImageState};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use super::image_state::{ImageState, FilterSettings};
 
 /// Sort mode for image list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -18,16 +18,16 @@ pub enum SortMode {
 pub struct AppState {
     /// List of image file paths
     pub image_paths: Vec<PathBuf>,
-    
+
     /// Current image index
     pub current_index: usize,
-    
+
     /// Current sort mode
     pub sort_mode: SortMode,
-    
+
     /// Cache of per-image states (LRU cache with max 1000 items)
     pub image_states: HashMap<PathBuf, ImageState>,
-    
+
     /// Maximum cache size
     pub max_cache_size: usize,
 }
@@ -37,7 +37,7 @@ impl AppState {
     pub fn new(image_paths: Vec<PathBuf>) -> Self {
         Self::new_with_index(image_paths, 0)
     }
-    
+
     /// Create a new AppState with a specific starting index
     pub fn new_with_index(image_paths: Vec<PathBuf>, start_index: usize) -> Self {
         let current_index = if start_index < image_paths.len() {
@@ -45,7 +45,7 @@ impl AppState {
         } else {
             0
         };
-        
+
         Self {
             image_paths,
             current_index,
@@ -54,10 +54,10 @@ impl AppState {
             max_cache_size: 1000,
         }
     }
-    
+
     /// Create a new AppState with settings
     pub fn new_with_settings(
-        image_paths: Vec<PathBuf>, 
+        image_paths: Vec<PathBuf>,
         start_index: usize,
         default_sort_mode: SortMode,
         cache_size: usize,
@@ -67,7 +67,7 @@ impl AppState {
         } else {
             0
         };
-        
+
         let mut state = Self {
             image_paths,
             current_index,
@@ -75,18 +75,18 @@ impl AppState {
             image_states: HashMap::new(),
             max_cache_size: cache_size,
         };
-        
+
         // Sort images according to the default sort mode
         state.sort_images();
-        
+
         state
     }
-    
+
     /// Get the current image path
     pub fn current_image(&self) -> Option<&PathBuf> {
         self.image_paths.get(self.current_index)
     }
-    
+
     /// Get the next image path (for preloading)
     pub fn next_image_path(&self) -> Option<&PathBuf> {
         if self.image_paths.is_empty() {
@@ -95,7 +95,7 @@ impl AppState {
         let next_index = (self.current_index + 1) % self.image_paths.len();
         self.image_paths.get(next_index)
     }
-    
+
     /// Get the previous image path (for preloading)
     pub fn previous_image_path(&self) -> Option<&PathBuf> {
         if self.image_paths.is_empty() {
@@ -108,13 +108,13 @@ impl AppState {
         };
         self.image_paths.get(prev_index)
     }
-    
+
     /// Navigate to the next image
     #[allow(dead_code)]
     pub fn next_image(&mut self) {
         self.next_image_with_wrap(true);
     }
-    
+
     /// Navigate to the next image with optional wrapping
     pub fn next_image_with_wrap(&mut self, wrap: bool) {
         if !self.image_paths.is_empty() {
@@ -126,13 +126,13 @@ impl AppState {
             // If not wrapping and at end, stay at current position
         }
     }
-    
+
     /// Navigate to the previous image
     #[allow(dead_code)]
     pub fn previous_image(&mut self) {
         self.previous_image_with_wrap(true);
     }
-    
+
     /// Navigate to the previous image with optional wrapping
     pub fn previous_image_with_wrap(&mut self, wrap: bool) {
         if !self.image_paths.is_empty() {
@@ -144,7 +144,7 @@ impl AppState {
             // If not wrapping and at start, stay at current position
         }
     }
-    
+
     /// Get the state for the current image, creating a default if it doesn't exist
     pub fn get_current_state(&mut self, default_filters: FilterSettings) -> ImageState {
         if let Some(path) = self.current_image() {
@@ -156,7 +156,7 @@ impl AppState {
             ImageState::new_with_filter_defaults(default_filters)
         }
     }
-    
+
     /// Save the state for the current image
     pub fn save_current_state(&mut self, state: ImageState) {
         if let Some(path) = self.current_image().cloned() {
@@ -164,14 +164,15 @@ impl AppState {
             if self.image_states.len() >= self.max_cache_size {
                 self.evict_oldest_state();
             }
-            
+
             self.image_states.insert(path, state);
         }
     }
-    
+
     /// Evict the oldest (least recently accessed) state from cache
     fn evict_oldest_state(&mut self) {
-        if let Some(oldest_path) = self.image_states
+        if let Some(oldest_path) = self
+            .image_states
             .iter()
             .min_by_key(|(_, state)| state.last_accessed)
             .map(|(path, _)| path.clone())
@@ -179,7 +180,7 @@ impl AppState {
             self.image_states.remove(&oldest_path);
         }
     }
-    
+
     /// Set the sort mode and re-sort the image list
     pub fn set_sort_mode(&mut self, mode: SortMode) {
         if self.sort_mode != mode {
@@ -187,7 +188,7 @@ impl AppState {
             self.sort_images();
         }
     }
-    
+
     /// Sort the image list according to the current sort mode
     fn sort_images(&mut self) {
         match self.sort_mode {
@@ -200,13 +201,9 @@ impl AppState {
             }
             SortMode::ModifiedDate => {
                 self.image_paths.sort_by(|a, b| {
-                    let a_modified = std::fs::metadata(a)
-                        .and_then(|m| m.modified())
-                        .ok();
-                    let b_modified = std::fs::metadata(b)
-                        .and_then(|m| m.modified())
-                        .ok();
-                    
+                    let a_modified = std::fs::metadata(a).and_then(|m| m.modified()).ok();
+                    let b_modified = std::fs::metadata(b).and_then(|m| m.modified()).ok();
+
                     // Newest first, so reverse the comparison
                     b_modified.cmp(&a_modified)
                 });
@@ -252,7 +249,7 @@ mod tests {
         let mode = SortMode::ModifiedDate;
 
         // Act
-        let cloned = mode.clone();
+        let cloned = mode;
 
         // Assert
         assert_eq!(mode, cloned);
@@ -284,10 +281,7 @@ mod tests {
     #[test]
     fn test_app_state_new_with_settings() {
         // Arrange
-        let paths = vec![
-            PathBuf::from("zebra.png"),
-            PathBuf::from("apple.jpg"),
-        ];
+        let paths = vec![PathBuf::from("zebra.png"), PathBuf::from("apple.jpg")];
 
         // Act
         let state = AppState::new_with_settings(paths, 0, SortMode::Alphabetical, 500);
@@ -308,7 +302,8 @@ mod tests {
         let paths = vec![PathBuf::from("test.png")];
 
         // Act
-        let state = AppState::new_with_settings(paths, 0, SortMode::ModifiedDate, DEFAULT_CACHE_SIZE);
+        let state =
+            AppState::new_with_settings(paths, 0, SortMode::ModifiedDate, DEFAULT_CACHE_SIZE);
 
         // Assert
         assert_eq!(state.sort_mode, SortMode::ModifiedDate);
@@ -317,10 +312,7 @@ mod tests {
     #[test]
     fn test_set_sort_mode_same_mode_no_resort() {
         // Arrange
-        let paths = vec![
-            PathBuf::from("zebra.png"),
-            PathBuf::from("apple.jpg"),
-        ];
+        let paths = vec![PathBuf::from("zebra.png"), PathBuf::from("apple.jpg")];
         let mut state = AppState::new(paths.clone());
 
         // Act - set to same mode (Alphabetical is default)
@@ -334,10 +326,7 @@ mod tests {
     #[test]
     fn test_set_sort_mode_different_mode_triggers_sort() {
         // Arrange
-        let paths = vec![
-            PathBuf::from("zebra.png"),
-            PathBuf::from("apple.jpg"),
-        ];
+        let paths = vec![PathBuf::from("zebra.png"), PathBuf::from("apple.jpg")];
         let mut state = AppState::new(paths);
 
         // Act - change to ModifiedDate, then back to Alphabetical

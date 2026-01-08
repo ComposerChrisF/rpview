@@ -12,26 +12,23 @@ mod state;
 mod utils;
 
 use cli::Cli;
-use components::{DebugOverlay, DebugOverlayConfig, FilterControls, HelpOverlay, ImageViewer, SettingsWindow};
-use state::{AppState, AppSettings};
+use components::{
+    DebugOverlay, DebugOverlayConfig, FilterControls, HelpOverlay, ImageViewer, SettingsWindow,
+};
+use state::{AppSettings, AppState};
 use utils::settings_io;
 
 // Import all actions from lib.rs (they're defined there to avoid duplication)
 use rpview_gpui::{
-    CloseWindow, Quit, EscapePressed, NextImage, PreviousImage,
-    ToggleAnimationPlayPause, NextFrame, PreviousFrame,
-    SortAlphabetical, SortByModified,
-    ZoomIn, ZoomOut, ZoomReset, ZoomResetAndCenter, ZoomInFast, ZoomOutFast, ZoomInSlow, ZoomOutSlow,
-    ZoomInIncremental, ZoomOutIncremental,
-    PanUp, PanDown, PanLeft, PanRight,
-    PanUpFast, PanDownFast, PanLeftFast, PanRightFast,
-    PanUpSlow, PanDownSlow, PanLeftSlow, PanRightSlow,
-    ToggleHelp, ToggleDebug, ToggleSettings, ToggleFilters,
-    DisableFilters, EnableFilters, ResetFilters,
-    BrightnessUp, BrightnessDown, ContrastUp, ContrastDown, GammaUp, GammaDown,
-    OpenFile, SaveFile, SaveFileToDownloads,
-    OpenInExternalViewer, OpenInExternalViewerAndQuit, OpenInExternalEditor, RevealInFinder,
-    CloseSettings, ResetSettingsToDefaults,
+    BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ContrastDown, ContrastUp,
+    DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp, NextFrame, NextImage,
+    OpenFile, OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit, PanDown,
+    PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
+    PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, ResetFilters,
+    ResetSettingsToDefaults, RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical,
+    SortByModified, ToggleAnimationPlayPause, ToggleDebug, ToggleFilters, ToggleHelp,
+    ToggleSettings, ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast,
+    ZoomOutIncremental, ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
 };
 
 struct App {
@@ -67,13 +64,13 @@ struct App {
     /// Application settings (loaded on startup)
     settings: AppSettings,
 }
- 
+
 impl App {
     /// Check if modal overlays (settings) are blocking main window interactions
     fn is_modal_open(&self) -> bool {
         self.show_settings
     }
-    
+
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // If help, debug, settings, or filter overlay is open, close it instead of counting toward quit
         if self.show_help {
@@ -100,34 +97,35 @@ impl App {
             cx.notify();
             return;
         }
-        
+
         let now = Instant::now();
-        
+
         // Remove presses older than 2 seconds
-        self.escape_presses.retain(|&time| now.duration_since(time) < Duration::from_secs(2));
-        
+        self.escape_presses
+            .retain(|&time| now.duration_since(time) < Duration::from_secs(2));
+
         // Add current press
         self.escape_presses.push(now);
-        
+
         // Check if we have 3 presses within 2 seconds
         if self.escape_presses.len() >= 3 {
             cx.quit();
         }
     }
-    
+
     fn handle_toggle_help(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.show_help = !self.show_help;
         cx.notify();
     }
-    
+
     fn handle_toggle_debug(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.show_debug = !self.show_debug;
         cx.notify();
     }
-    
+
     fn handle_toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_settings = !self.show_settings;
-        
+
         if self.show_settings {
             // Focus the settings window when opening
             self.settings_window.update(cx, |settings, inner_cx| {
@@ -138,15 +136,13 @@ impl App {
             // Restore focus to the main app when hiding settings
             self.focus_handle.focus(window);
         }
-        
+
         cx.notify();
     }
-    
+
     fn handle_close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Get current settings from the settings window and save to disk
-        let new_settings = self.settings_window.update(cx, |sw, _cx| {
-            sw.get_settings()
-        });
+        let new_settings = self.settings_window.update(cx, |sw, _cx| sw.get_settings());
 
         // Update app settings
         self.settings = new_settings.clone();
@@ -157,66 +153,71 @@ impl App {
         } else {
             println!("Settings saved successfully");
         }
-        
+
         // Close the settings window
         self.show_settings = false;
         self.focus_handle.focus(window);
-        
+
         cx.notify();
     }
-    
+
     fn handle_reset_settings_to_defaults(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         // Reset settings window to defaults
         self.settings_window.update(cx, |sw, _cx| {
             sw.reset_to_defaults();
         });
-        
+
         cx.notify();
     }
-    
+
     fn handle_load_oversized_image_anyway(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         // Get the current image path from the oversized_image state
         if let Some((ref path, _, _, _)) = self.viewer.oversized_image {
             let path = path.clone();
-            
+
             // Set the override flag in the image state cache
-            let mut state = self.app_state.image_states.get(&path).cloned().unwrap_or_else(state::ImageState::new);
+            let mut state = self
+                .app_state
+                .image_states
+                .get(&path)
+                .cloned()
+                .unwrap_or_else(state::ImageState::new);
             state.override_size_limit = true;
             self.app_state.image_states.insert(path.clone(), state);
-            
+
             // Reload the image with force_load = true
             let max_dim = Some(self.settings.performance.max_image_dimension);
             self.viewer.load_image_async(path, max_dim, true);
-            
+
             cx.notify();
         }
     }
-    
+
     fn handle_toggle_filters(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_filters = !self.show_filters;
-        
+
         // Restore focus to the main app when hiding filters
         if !self.show_filters {
             self.focus_handle.focus(window);
         }
-        
+
         cx.notify();
     }
-    
+
     fn handle_disable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.viewer.image_state.filters_enabled = false;
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_enable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.viewer.image_state.filters_enabled = true;
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_reset_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         // Reset to default values from settings
         let default_filters = state::image_state::FilterSettings {
@@ -224,97 +225,116 @@ impl App {
             contrast: self.settings.filters.default_contrast,
             gamma: self.settings.filters.default_gamma,
         };
-        
+
         self.viewer.image_state.filters = default_filters;
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
-        
+
         // Update the filter controls sliders to reflect the reset values
         self.filter_controls.update(cx, |controls, cx| {
             controls.update_from_filters(default_filters, cx);
         });
-        
+
         cx.notify();
     }
-    
+
     fn handle_brightness_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let current = self.viewer.image_state.filters.brightness;
         self.viewer.image_state.filters.brightness = (current + 5.0).min(100.0);
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_brightness_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let current = self.viewer.image_state.filters.brightness;
         self.viewer.image_state.filters.brightness = (current - 5.0).max(-100.0);
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_contrast_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let current = self.viewer.image_state.filters.contrast;
         self.viewer.image_state.filters.contrast = (current + 5.0).min(100.0);
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_contrast_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let current = self.viewer.image_state.filters.contrast;
         self.viewer.image_state.filters.contrast = (current - 5.0).max(-100.0);
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_gamma_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let current = self.viewer.image_state.filters.gamma;
         self.viewer.image_state.filters.gamma = (current + 0.1).min(10.0);
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_gamma_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let current = self.viewer.image_state.filters.gamma;
         self.viewer.image_state.filters.gamma = (current - 0.1).max(0.1);
         self.viewer.update_filtered_cache();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_open_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         // Open native file dialog for image selection
         let mut file_dialog = rfd::FileDialog::new()
-            .add_filter("Images", &["png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp"])
+            .add_filter(
+                "Images",
+                &[
+                    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp",
+                ],
+            )
             .set_title("Open Image");
-        
+
         // Set default directory to current image's parent directory if available
         if let Some(current_path) = self.app_state.current_image() {
             if let Some(parent) = current_path.parent() {
                 file_dialog = file_dialog.set_directory(parent);
             }
         }
-        
+
         // Get selected files (supports multiple selection)
         if let Some(files) = file_dialog.pick_files() {
             if !files.is_empty() {
                 // Convert to PathBuf vector
                 let new_paths: Vec<PathBuf> = files.into_iter().collect();
-                
+
                 // Replace the current image list with the new selection
                 self.app_state.image_paths = new_paths;
                 self.app_state.current_index = 0;
-                
+
                 // Update viewer with first image from new selection
                 self.update_viewer(window, cx);
                 self.update_window_title(window);
@@ -322,19 +342,23 @@ impl App {
             }
         }
     }
-    
+
     fn handle_save_file(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.handle_save_file_impl(None, cx);
     }
-    
+
     fn handle_save_file_to_downloads(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         // Get the Downloads directory
         let downloads_dir = dirs::download_dir();
         self.handle_save_file_impl(downloads_dir, cx);
     }
-    
+
     fn handle_save_file_impl(&mut self, default_dir: Option<PathBuf>, cx: &mut Context<Self>) {
         // Only save if we have a current image
         if let Some(current_path) = self.app_state.current_image() {
@@ -343,7 +367,7 @@ impl App {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("image");
-            
+
             // Determine extension from settings when filters are enabled
             let save_ext = if self.viewer.image_state.filters_enabled {
                 // Use default save format from settings
@@ -369,14 +393,14 @@ impl App {
                     .and_then(|e| e.to_str())
                     .unwrap_or("png")
             };
-            
+
             // Generate suggested filename with _filtered suffix if filters are enabled
             let suggested_name = if self.viewer.image_state.filters_enabled {
                 format!("{}_filtered.{}", original_stem, save_ext)
             } else {
                 format!("{}.{}", original_stem, save_ext)
             };
-            
+
             // Open save dialog
             let mut file_dialog = rfd::FileDialog::new()
                 .add_filter("PNG", &["png"])
@@ -386,18 +410,20 @@ impl App {
                 .add_filter("WEBP", &["webp"])
                 .set_file_name(&suggested_name)
                 .set_title("Save Image");
-            
+
             // Set default directory based on parameter or settings
             if let Some(dir) = default_dir {
                 file_dialog = file_dialog.set_directory(dir);
-            } else if let Some(ref default_save_dir) = self.settings.file_operations.default_save_directory {
+            } else if let Some(ref default_save_dir) =
+                self.settings.file_operations.default_save_directory
+            {
                 // Use default save directory from settings
                 file_dialog = file_dialog.set_directory(default_save_dir);
             } else if let Some(parent) = current_path.parent() {
                 // Fall back to current image's parent directory
                 file_dialog = file_dialog.set_directory(parent);
             }
-            
+
             if let Some(save_path) = file_dialog.save_file() {
                 // Determine what to save based on filter state
                 let save_result = if self.viewer.image_state.filters_enabled {
@@ -436,7 +462,7 @@ impl App {
                         Err("No image loaded".to_string())
                     }
                 };
-                
+
                 // Handle save result
                 match save_result {
                     Ok(()) => {
@@ -448,18 +474,22 @@ impl App {
                 }
             }
         }
-        
+
         cx.notify();
     }
-    
-    fn save_dynamic_image_to_path(&self, image_data: &image::DynamicImage, save_path: &PathBuf) -> Result<(), String> {
+
+    fn save_dynamic_image_to_path(
+        &self,
+        image_data: &image::DynamicImage,
+        save_path: &PathBuf,
+    ) -> Result<(), String> {
         // Determine output format from file extension
         let extension = save_path
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("png")
             .to_lowercase();
-        
+
         let save_result = match extension.as_str() {
             "png" => image_data.save_with_format(save_path, image::ImageFormat::Png),
             "jpg" | "jpeg" => {
@@ -475,12 +505,14 @@ impl App {
                 image_data.save_with_format(save_path, image::ImageFormat::Png)
             }
         };
-        
+
         save_result.map_err(|e| format!("Failed to save image: {}", e))
     }
-    
+
     fn handle_open_in_external_viewer(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         if let Some(current_path) = self.app_state.current_image() {
             if let Err(e) = self.open_in_system_viewer(current_path) {
                 eprintln!("Failed to open image in external viewer: {}", e);
@@ -488,9 +520,15 @@ impl App {
         }
         cx.notify();
     }
-    
-    fn handle_open_in_external_viewer_and_quit(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+
+    fn handle_open_in_external_viewer_and_quit(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_modal_open() {
+            return;
+        }
         if let Some(current_path) = self.app_state.current_image() {
             if let Err(e) = self.open_in_system_viewer(current_path) {
                 eprintln!("Failed to open image in external viewer: {}", e);
@@ -500,9 +538,11 @@ impl App {
             }
         }
     }
-    
+
     fn handle_open_in_external_editor(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         if let Some(current_path) = self.app_state.current_image() {
             if let Err(e) = self.open_in_external_editor(current_path) {
                 eprintln!("Failed to open image in external editor: {}", e);
@@ -512,7 +552,9 @@ impl App {
     }
 
     fn handle_reveal_in_finder(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         if let Some(current_path) = self.app_state.current_image() {
             if let Err(e) = self.reveal_in_finder(current_path) {
                 eprintln!("Failed to reveal in file manager: {}", e);
@@ -566,23 +608,25 @@ impl App {
     fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
         // Get the configured external viewers from settings
         let viewers = &self.settings.external_tools.external_viewers;
-        
+
         // Try each enabled viewer in order
         for viewer_config in viewers.iter().filter(|v| v.enabled) {
             // Replace {path} placeholder with actual image path
-            let path_str = image_path.to_str().ok_or_else(|| {
-                "Invalid image path: cannot convert to string".to_string()
-            })?;
-            
-            let args: Vec<String> = viewer_config.args.iter()
+            let path_str = image_path
+                .to_str()
+                .ok_or_else(|| "Invalid image path: cannot convert to string".to_string())?;
+
+            let args: Vec<String> = viewer_config
+                .args
+                .iter()
                 .map(|arg| arg.replace("{path}", path_str))
                 .collect();
-            
+
             // Try to launch the viewer
             let result = std::process::Command::new(&viewer_config.command)
                 .args(&args)
                 .spawn();
-            
+
             match result {
                 Ok(_) => {
                     eprintln!("Opened image with: {}", viewer_config.name);
@@ -594,10 +638,10 @@ impl App {
                 }
             }
         }
-        
+
         // All configured viewers failed, try platform defaults as fallback
         eprintln!("All configured viewers failed, trying platform defaults...");
-        
+
         #[cfg(target_os = "macos")]
         {
             std::process::Command::new("open")
@@ -606,7 +650,7 @@ impl App {
                 .map_err(|e| format!("Failed to open with default viewer: {}", e))?;
             return Ok(());
         }
-        
+
         #[cfg(target_os = "windows")]
         {
             std::process::Command::new("cmd")
@@ -615,7 +659,7 @@ impl App {
                 .map_err(|e| format!("Failed to open with default viewer: {}", e))?;
             return Ok(());
         }
-        
+
         #[cfg(target_os = "linux")]
         {
             std::process::Command::new("xdg-open")
@@ -624,58 +668,65 @@ impl App {
                 .map_err(|e| format!("Failed to open with default viewer: {}", e))?;
             return Ok(());
         }
-        
+
         #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
         {
             Err("No suitable image viewer found for this platform".to_string())
         }
     }
-    
+
     fn open_in_external_editor(&self, image_path: &std::path::Path) -> Result<(), String> {
         // Check if an external editor is configured
         if let Some(editor_config) = &self.settings.external_tools.external_editor {
             if !editor_config.enabled {
                 return Err("External editor is configured but disabled".to_string());
             }
-            
+
             // Replace {path} placeholder with actual image path
-            let path_str = image_path.to_str().ok_or_else(|| {
-                "Invalid image path: cannot convert to string".to_string()
-            })?;
-            
-            let args: Vec<String> = editor_config.args.iter()
+            let path_str = image_path
+                .to_str()
+                .ok_or_else(|| "Invalid image path: cannot convert to string".to_string())?;
+
+            let args: Vec<String> = editor_config
+                .args
+                .iter()
                 .map(|arg| arg.replace("{path}", path_str))
                 .collect();
-            
+
             // Try to launch the editor
             std::process::Command::new(&editor_config.command)
                 .args(&args)
                 .spawn()
                 .map_err(|e| format!("Failed to launch {}: {}", editor_config.name, e))?;
-            
+
             eprintln!("Opened image in external editor: {}", editor_config.name);
             Ok(())
         } else {
             Err("No external editor configured. Please set one in Settings (Cmd+,)".to_string())
         }
     }
-    
-    fn handle_dropped_files(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
+
+    fn handle_dropped_files(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let dropped_paths: Vec<&PathBuf> = paths.paths().iter().collect();
-        
+
         // Determine the drop strategy based on what was dropped
         // If only 1 file: scan parent directory and set index to that file
         // If multiple files: use only those files (don't scan directories)
         // If 1 directory: scan that directory and start at index 0
         // If multiple items with directories: scan each directory and collect files
-        
+
         let mut all_images: Vec<PathBuf> = Vec::new();
         let mut target_index: usize = 0;
-        
+
         if dropped_paths.len() == 1 {
             // Single item dropped: use the smart scanning logic
             let path = dropped_paths[0];
-            
+
             match utils::file_scanner::process_dropped_path(path) {
                 Ok((images, index)) => {
                     all_images = images;
@@ -700,57 +751,63 @@ impl App {
                     }
                 }
             }
-            
+
             // Remove duplicates
             all_images.sort();
             all_images.dedup();
-            
+
             // Sort alphabetically (case-insensitive)
             utils::file_scanner::sort_alphabetically(&mut all_images);
-            
+
             // Start at the first image
             target_index = 0;
         }
-        
+
         // Only update if we found at least one image
         if !all_images.is_empty() {
             // Update app state with new image list
             self.app_state.image_paths = all_images;
             self.app_state.current_index = target_index;
-            
+
             // Update viewer and window title
             self.update_viewer(window, cx);
             self.update_window_title(window);
-            
+
             // Refocus the window to ensure render triggers
             self.focus_handle.focus(window);
-            
+
             // Force a re-render
             cx.notify();
         }
     }
-    
+
     fn handle_next_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
-        
+        if self.is_modal_open() {
+            return;
+        }
+
         let wrap = self.settings.sort_navigation.wrap_navigation;
         self.app_state.next_image_with_wrap(wrap);
         self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
-    
+
     fn handle_previous_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let wrap = self.settings.sort_navigation.wrap_navigation;
         self.app_state.previous_image_with_wrap(wrap);
         self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
-    
+
     fn handle_toggle_animation(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
             anim_state.is_playing = !anim_state.is_playing;
             if anim_state.is_playing {
@@ -762,7 +819,9 @@ impl App {
     }
 
     fn handle_next_frame(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
             // Pause animation when manually navigating frames
             anim_state.is_playing = false;
@@ -770,9 +829,11 @@ impl App {
             cx.notify();
         }
     }
-    
+
     fn handle_previous_frame(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
             // Pause animation when manually navigating frames
             anim_state.is_playing = false;
@@ -784,81 +845,103 @@ impl App {
             cx.notify();
         }
     }
-    
+
     fn handle_sort_alphabetical(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.app_state.set_sort_mode(state::SortMode::Alphabetical);
         self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
-    
+
     fn handle_sort_by_modified(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.app_state.set_sort_mode(state::SortMode::ModifiedDate);
         self.update_viewer(window, cx);
         self.update_window_title(window);
         cx.notify();
     }
-    
+
     fn handle_zoom_in(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.viewer.zoom_in(utils::zoom::ZOOM_STEP);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_out(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.viewer.zoom_out(utils::zoom::ZOOM_STEP);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_reset(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.viewer.reset_zoom();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_reset_and_center(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.viewer.reset_zoom_and_pan();
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_in_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.viewer.zoom_in(utils::zoom::ZOOM_STEP_FAST);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_out_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.viewer.zoom_out(utils::zoom::ZOOM_STEP_FAST);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_in_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.viewer.zoom_in(utils::zoom::ZOOM_STEP_SLOW);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_out_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         self.viewer.zoom_out(utils::zoom::ZOOM_STEP_SLOW);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_in_incremental(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         // Incremental zoom: add 1% (0.01) to current zoom
         let current_zoom = self.viewer.image_state.zoom;
         let new_zoom = utils::zoom::clamp_zoom(current_zoom + utils::zoom::ZOOM_STEP_INCREMENTAL);
@@ -867,9 +950,11 @@ impl App {
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_zoom_out_incremental(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         // Incremental zoom: subtract 1% (0.01) from current zoom
         let current_zoom = self.viewer.image_state.zoom;
         let new_zoom = utils::zoom::clamp_zoom(current_zoom - utils::zoom::ZOOM_STEP_INCREMENTAL);
@@ -878,106 +963,129 @@ impl App {
         self.save_current_image_state();
         cx.notify();
     }
-    
 
     fn handle_pan_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_normal;
-        self.viewer.pan(0.0, -speed);  // Pan up = move viewport up = image moves down (positive Y)
+        self.viewer.pan(0.0, -speed); // Pan up = move viewport up = image moves down (positive Y)
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_down(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_normal;
-        self.viewer.pan(0.0, speed);  // Pan down = move viewport down = image moves up (negative Y)
+        self.viewer.pan(0.0, speed); // Pan down = move viewport down = image moves up (negative Y)
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_left(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_normal;
-        self.viewer.pan(-speed, 0.0);  // Pan left = move image right (negative X)
+        self.viewer.pan(-speed, 0.0); // Pan left = move image right (negative X)
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_right(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_normal;
-        self.viewer.pan(speed, 0.0);  // Pan right = move image left (positive X)
+        self.viewer.pan(speed, 0.0); // Pan right = move image left (positive X)
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     // Fast pan with Shift modifier
     fn handle_pan_up_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_fast;
         self.viewer.pan(0.0, -speed);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_down_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_fast;
         self.viewer.pan(0.0, speed);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_left_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_fast;
         self.viewer.pan(-speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_right_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_fast;
         self.viewer.pan(speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     // Slow pan with Ctrl/Cmd modifier
     fn handle_pan_up_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_slow;
         self.viewer.pan(0.0, -speed);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_down_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_slow;
         self.viewer.pan(0.0, speed);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_left_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_slow;
         self.viewer.pan(-speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn handle_pan_right_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_modal_open() { return; }
+        if self.is_modal_open() {
+            return;
+        }
         let speed = self.settings.keyboard_mouse.pan_speed_slow;
         self.viewer.pan(speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
-    
+
     fn save_current_image_state(&mut self) {
         // Only save state if enabled in settings
         if self.settings.viewer_behavior.remember_per_image_state {
@@ -985,7 +1093,7 @@ impl App {
             self.app_state.save_current_state(state);
         }
     }
-    
+
     fn load_current_image_state(&mut self, cx: &mut Context<Self>) {
         let default_filters = state::image_state::FilterSettings {
             brightness: self.settings.filters.default_brightness,
@@ -994,73 +1102,78 @@ impl App {
         };
         let state = self.app_state.get_current_state(default_filters);
         self.viewer.set_image_state(state.clone());
-        
+
         // Update filter controls UI to reflect the loaded filter values
         self.filter_controls.update(cx, |controls, cx| {
             controls.update_from_filters(state.filters, cx);
         });
-        
+
         // Restore cached filtered image if it exists (AFTER state is loaded)
         self.viewer.restore_filtered_image_from_state();
-        
+
         // Only trigger filter processing if filters are applied AND we don't have a cached filtered image
-        if state.filters_enabled && 
-           (state.filters.brightness.abs() >= 0.001 || 
-            state.filters.contrast.abs() >= 0.001 || 
-            (state.filters.gamma - 1.0).abs() >= 0.001) &&
-           state.filtered_image_path.is_none() {
+        if state.filters_enabled
+            && (state.filters.brightness.abs() >= 0.001
+                || state.filters.contrast.abs() >= 0.001
+                || (state.filters.gamma - 1.0).abs() >= 0.001)
+            && state.filtered_image_path.is_none()
+        {
             self.viewer.update_filtered_cache();
         }
     }
-    
+
     fn update_viewer(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
         if let Some(path) = self.app_state.current_image().cloned() {
             // Ensure viewport size is set before loading
             let viewport_size = window.viewport_size();
             self.viewer.update_viewport_size(viewport_size);
-            
+
             // Check if user has overridden size limit for this image
-            let force_load = self.app_state.image_states
+            let force_load = self
+                .app_state
+                .image_states
                 .get(&path)
                 .map(|state| state.override_size_limit)
                 .unwrap_or(false);
-            
+
             // Load the image asynchronously (non-blocking)
             let max_dim = Some(self.settings.performance.max_image_dimension);
-            self.viewer.load_image_async(path.clone(), max_dim, force_load);
-            
+            self.viewer
+                .load_image_async(path.clone(), max_dim, force_load);
+
             // State will be loaded when async load completes (in render loop)
         } else {
             self.viewer.clear();
         }
     }
-    
+
     fn update_window_title(&mut self, window: &mut Window) {
         if let Some(path) = self.app_state.current_image() {
-            let filename = path.file_name()
+            let filename = path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("Unknown");
-            
+
             let position = self.app_state.current_index + 1;
             let total = self.app_state.image_paths.len();
-            
+
             // Apply window title format from settings
             let title = if self.settings.sort_navigation.show_image_counter {
-                self.settings.appearance.window_title_format
+                self.settings
+                    .appearance
+                    .window_title_format
                     .replace("{filename}", filename)
                     .replace("{index}", &position.to_string())
                     .replace("{total}", &total.to_string())
             } else {
                 filename.to_string()
             };
-            
+
             window.set_window_title(&title);
         } else {
             window.set_window_title("rpview-gpui");
         }
     }
-    
-
 }
 
 impl Render for App {
@@ -1070,8 +1183,9 @@ impl Render for App {
             // Image loaded successfully or failed - load state and setup animation
             if let Some(path) = self.app_state.current_image().cloned() {
                 // Load cached state if available and enabled in settings
-                if self.settings.viewer_behavior.remember_per_image_state 
-                    && self.app_state.image_states.contains_key(&path) {
+                if self.settings.viewer_behavior.remember_per_image_state
+                    && self.app_state.image_states.contains_key(&path)
+                {
                     self.load_current_image_state(cx);
                 } else {
                     // Apply default zoom mode from settings for new images
@@ -1084,7 +1198,7 @@ impl Render for App {
                             self.viewer.set_one_hundred_percent();
                         }
                     }
-                    
+
                     // Reset filter controls to default (no filters)
                     let default_filters = state::image_state::FilterSettings {
                         brightness: 0.0,
@@ -1095,25 +1209,26 @@ impl Render for App {
                         controls.update_from_filters(default_filters, cx);
                     });
                 }
-                
+
                 // Apply animation auto-play setting
                 if let Some(ref mut anim_state) = self.viewer.image_state.animation {
                     // Set is_playing based on settings (unless we loaded cached state)
-                    if !self.settings.viewer_behavior.remember_per_image_state 
-                        || !self.app_state.image_states.contains_key(&path) {
+                    if !self.settings.viewer_behavior.remember_per_image_state
+                        || !self.app_state.image_states.contains_key(&path)
+                    {
                         anim_state.is_playing = self.settings.viewer_behavior.animation_auto_play;
                     }
-                    
+
                     if anim_state.is_playing {
                         self.last_frame_update = Instant::now();
                     }
                 }
             }
-            
+
             // Request re-render to show the loaded image
             cx.notify();
         }
-        
+
         // Check if filter processing has completed
         let just_finished_processing = self.viewer.check_filter_processing();
         if just_finished_processing {
@@ -1123,13 +1238,13 @@ impl Render for App {
             window.request_animation_frame();
             cx.notify();
         }
-        
+
         // Track preload frames and apply pending filtered image after GPU has loaded texture
         if self.viewer.pending_filtered_path.is_some() {
             if !just_finished_processing {
                 self.viewer.pending_filter_preload_frames += 1;
             }
-            
+
             // Apply after 3 frames of preloading to ensure GPU has texture loaded
             // Frame 0: Set pending, start invisible render
             // Frame 1-2: Continue invisible render (GPU loads texture)
@@ -1143,16 +1258,16 @@ impl Render for App {
                 window.request_animation_frame();
             }
         }
-        
+
         // If still loading or processing filters, request another render to check again
         if self.viewer.is_loading || self.viewer.is_processing_filters {
             window.request_animation_frame();
         }
-        
+
         // Update viewer's viewport size from window's drawable content area
         let viewport_size = window.viewport_size();
         self.viewer.update_viewport_size(viewport_size);
-        
+
         // Set preload paths for next/previous images to prime GPU cache
         // This must happen in render() so images are preloaded BEFORE navigation occurs
         // This eliminates black flashing by ensuring textures are already in GPU memory
@@ -1164,13 +1279,16 @@ impl Render for App {
             preload_paths.push(prev_path.clone());
         }
         self.viewer.set_preload_paths(preload_paths);
-        
+
         // Update animation frame if playing (GPUI's suggested pattern)
-        let should_update_animation = self.viewer.image_state.animation
+        let should_update_animation = self
+            .viewer
+            .image_state
+            .animation
             .as_ref()
             .map(|a| a.is_playing && a.frame_count > 0)
             .unwrap_or(false);
-        
+
         if should_update_animation {
             // Progressive frame caching: cache next 3 frames ahead of playback
             // This is part of the animation loading strategy:
@@ -1180,132 +1298,145 @@ impl Render for App {
             if let Some(ref anim_state) = self.viewer.image_state.animation {
                 let current = anim_state.current_frame;
                 let total = anim_state.frame_count;
-                
+
                 // Cache next 3 frames ahead (look-ahead caching)
                 for offset in 1..=3 {
                     let frame_to_cache = (current + offset) % total;
                     self.viewer.cache_frame(frame_to_cache);
                 }
             }
-            
+
             if let Some(ref mut anim_state) = self.viewer.image_state.animation {
                 let now = Instant::now();
                 let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
-                
+
                 // Get current frame duration
-                let frame_duration = anim_state.frame_durations
+                let frame_duration = anim_state
+                    .frame_durations
                     .get(anim_state.current_frame)
                     .copied()
                     .unwrap_or(100);
-                
+
                 // Advance to next frame when duration has elapsed
                 if elapsed >= frame_duration {
                     let next_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
-                    eprintln!("[ANIMATION] Advancing from frame {} to frame {}", anim_state.current_frame, next_frame);
+                    eprintln!(
+                        "[ANIMATION] Advancing from frame {} to frame {}",
+                        anim_state.current_frame, next_frame
+                    );
                     anim_state.current_frame = next_frame;
                     self.last_frame_update = now;
                 }
             }
-            
+
             // Request next animation frame (GPUI's pattern for continuous animation)
             window.request_animation_frame();
         }
-        
+
         // Poll filter controls for changes
         if self.show_filters {
             eprintln!("[App::render] Polling filter controls...");
-            let (current_filters, changed) = self.filter_controls.update(cx, |fc, cx| {
-                fc.get_filters_and_detect_change(cx)
-            });
-            
+            let (current_filters, changed) = self
+                .filter_controls
+                .update(cx, |fc, cx| fc.get_filters_and_detect_change(cx));
+
             if changed {
-                eprintln!("[App::render] Filters changed! Updating viewer with brightness={:.1}, contrast={:.1}, gamma={:.2}", 
-                    current_filters.brightness, current_filters.contrast, current_filters.gamma);
-                eprintln!("[App::render] Old viewer filters: brightness={:.1}, contrast={:.1}, gamma={:.2}",
+                eprintln!(
+                    "[App::render] Filters changed! Updating viewer with brightness={:.1}, contrast={:.1}, gamma={:.2}",
+                    current_filters.brightness, current_filters.contrast, current_filters.gamma
+                );
+                eprintln!(
+                    "[App::render] Old viewer filters: brightness={:.1}, contrast={:.1}, gamma={:.2}",
                     self.viewer.image_state.filters.brightness,
                     self.viewer.image_state.filters.contrast,
-                    self.viewer.image_state.filters.gamma);
-                
+                    self.viewer.image_state.filters.gamma
+                );
+
                 self.viewer.image_state.filters = current_filters;
                 self.viewer.update_filtered_cache();
                 self.save_current_image_state();
-                
+
                 // If we just started filter processing, request animation frames to poll for completion
                 if self.viewer.is_processing_filters {
                     window.request_animation_frame();
                 }
             }
         }
-        
+
         // Update Z-drag state based on z_key_held
         if self.z_key_held && self.viewer.z_drag_state.is_none() {
             self.viewer.z_drag_state = Some((0.0, 0.0, 0.0, 0.0));
         } else if !self.z_key_held && self.viewer.z_drag_state.is_some() {
             self.viewer.z_drag_state = None;
         }
-        
+
         // Update spacebar-drag state based on spacebar_held
         if self.spacebar_held && self.viewer.spacebar_drag_state.is_none() {
             self.viewer.spacebar_drag_state = Some((0.0, 0.0));
         } else if !self.spacebar_held && self.viewer.spacebar_drag_state.is_some() {
             self.viewer.spacebar_drag_state = None;
         }
-        
+
         div()
             .track_focus(&self.focus_handle)
             .size_full()
-            .bg(rgb(
-                ((self.settings.appearance.background_color[0] as u32) << 16) |
-                ((self.settings.appearance.background_color[1] as u32) << 8) |
-                (self.settings.appearance.background_color[2] as u32)
-            ))
+            .bg(rgb(((self.settings.appearance.background_color[0] as u32)
+                << 16)
+                | ((self.settings.appearance.background_color[1] as u32)
+                    << 8)
+                | (self.settings.appearance.background_color[2] as u32)))
             .when(self.drag_over, |div| {
                 // Show highlighted border when dragging files over the window
-                div.border_4()
-                    .border_color(gpui::rgb(0x50fa7b)) // Green highlight
+                div.border_4().border_color(gpui::rgb(0x50fa7b)) // Green highlight
             })
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, event: &MouseDownEvent, _window, cx| {
-                this.mouse_button_down = true;
-                
-                // Start spacebar-drag pan if spacebar is being held
-                if this.viewer.spacebar_drag_state.is_some() {
-                    let x: f32 = event.position.x.into();
-                    let y: f32 = event.position.y.into();
-                    // Store: (last_x, last_y) for 1:1 pixel movement
-                    this.viewer.spacebar_drag_state = Some((x, y));
-                    cx.notify();
-                }
-                // Start Z-drag zoom if Z key is being held (and spacebar is not)
-                else if this.viewer.z_drag_state.is_some() {
-                    let y: f32 = event.position.y.into();
-                    let x: f32 = event.position.x.into();
-                    // Store: (last_x, last_y, center_x, center_y) for zoom centering
-                    this.viewer.z_drag_state = Some((x, y, x, y));
-                    cx.notify();
-                }
-            }))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
-                this.mouse_button_down = false;
-                
-                // End spacebar-drag pan (but keep spacebar state active if still held)
-                if let Some((_, _)) = this.viewer.spacebar_drag_state {
-                    // Save state after panning
-                    this.save_current_image_state();
-                    // Reset to sentinel value to indicate spacebar is held but not dragging
-                    this.viewer.spacebar_drag_state = Some((0.0, 0.0));
-                    cx.notify();
-                }
-                // End Z-drag zoom (but keep Z key state active if still held)
-                else if let Some((_, _, _, _)) = this.viewer.z_drag_state {
-                    // Reset to sentinel value to indicate Z is held but not dragging
-                    this.viewer.z_drag_state = Some((0.0, 0.0, 0.0, 0.0));
-                    cx.notify();
-                }
-            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, _window, cx| {
+                    this.mouse_button_down = true;
+
+                    // Start spacebar-drag pan if spacebar is being held
+                    if this.viewer.spacebar_drag_state.is_some() {
+                        let x: f32 = event.position.x.into();
+                        let y: f32 = event.position.y.into();
+                        // Store: (last_x, last_y) for 1:1 pixel movement
+                        this.viewer.spacebar_drag_state = Some((x, y));
+                        cx.notify();
+                    }
+                    // Start Z-drag zoom if Z key is being held (and spacebar is not)
+                    else if this.viewer.z_drag_state.is_some() {
+                        let y: f32 = event.position.y.into();
+                        let x: f32 = event.position.x.into();
+                        // Store: (last_x, last_y, center_x, center_y) for zoom centering
+                        this.viewer.z_drag_state = Some((x, y, x, y));
+                        cx.notify();
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                    this.mouse_button_down = false;
+
+                    // End spacebar-drag pan (but keep spacebar state active if still held)
+                    if let Some((_, _)) = this.viewer.spacebar_drag_state {
+                        // Save state after panning
+                        this.save_current_image_state();
+                        // Reset to sentinel value to indicate spacebar is held but not dragging
+                        this.viewer.spacebar_drag_state = Some((0.0, 0.0));
+                        cx.notify();
+                    }
+                    // End Z-drag zoom (but keep Z key state active if still held)
+                    else if let Some((_, _, _, _)) = this.viewer.z_drag_state {
+                        // Reset to sentinel value to indicate Z is held but not dragging
+                        this.viewer.z_drag_state = Some((0.0, 0.0, 0.0, 0.0));
+                        cx.notify();
+                    }
+                }),
+            )
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
                 // Check if mouse button is actually pressed (safety check for button released outside window)
                 let button_actually_pressed = event.pressed_button.is_some();
-                
+
                 // If we think the button is down but the event says it's not, correct our state
                 if this.mouse_button_down && !button_actually_pressed {
                     this.mouse_button_down = false;
@@ -1318,7 +1449,7 @@ impl Render for App {
                         this.viewer.z_drag_state = Some((0.0, 0.0, 0.0, 0.0));
                     }
                 }
-                
+
                 // Handle spacebar-drag pan (only if mouse button is down and we have valid drag data)
                 if this.mouse_button_down && button_actually_pressed {
                     if let Some((last_x, last_y)) = this.viewer.spacebar_drag_state {
@@ -1326,23 +1457,23 @@ impl Render for App {
                         if last_x != 0.0 || last_y != 0.0 {
                             let current_x: f32 = event.position.x.into();
                             let current_y: f32 = event.position.y.into();
-                            
+
                             // Calculate 1:1 pixel movement delta
                             let delta_x = current_x - last_x;
                             let delta_y = current_y - last_y;
-                            
+
                             // Apply pan directly (1:1 pixel movement)
                             this.viewer.pan(delta_x, delta_y);
-                            
+
                             // Update last position for next delta calculation
                             this.viewer.spacebar_drag_state = Some((current_x, current_y));
-                            
+
                             cx.notify();
                             return; // Don't process Z-drag if we're spacebar-dragging
                         }
                     }
                 }
-                
+
                 // Handle Z-drag zoom (only if mouse button is down and we have valid drag data)
                 if this.mouse_button_down && button_actually_pressed {
                     if let Some((last_x, last_y, center_x, center_y)) = this.viewer.z_drag_state {
@@ -1350,15 +1481,15 @@ impl Render for App {
                         if center_x != 0.0 || center_y != 0.0 {
                             let current_y: f32 = event.position.y.into();
                             let current_x: f32 = event.position.x.into();
-                            
+
                             // Calculate INCREMENTAL delta from LAST position (not initial)
                             let delta_y = last_y - current_y; // Up is positive (zoom in)
-                            let delta_x = current_x - last_x;  // Right is positive (zoom in)
+                            let delta_x = current_x - last_x; // Right is positive (zoom in)
                             let combined_delta = delta_y + delta_x;
-                            
+
                             // Get the current zoom level (which changes during drag)
                             let current_zoom = this.viewer.image_state.zoom;
-                            
+
                             // Scale zoom change proportionally to CURRENT zoom level
                             // At 100% zoom (1.0): sensitivity% per pixel
                             // At 200% zoom (2.0): 2*sensitivity% per pixel (more sensitive)
@@ -1366,24 +1497,25 @@ impl Render for App {
                             let sensitivity = this.settings.keyboard_mouse.z_drag_sensitivity;
                             let zoom_change = combined_delta * sensitivity * current_zoom;
                             let new_zoom = utils::zoom::clamp_zoom(current_zoom + zoom_change);
-                            
+
                             // Apply zoom centered on initial click position
                             let old_zoom = this.viewer.image_state.zoom;
                             this.viewer.image_state.zoom = new_zoom;
-                            
+
                             // Adjust pan to keep the click position at the same location
                             let (pan_x, pan_y) = this.viewer.image_state.pan;
                             let cursor_in_image_x = (center_x - pan_x) / old_zoom;
                             let cursor_in_image_y = (center_y - pan_y) / old_zoom;
                             let new_pan_x = center_x - cursor_in_image_x * new_zoom;
                             let new_pan_y = center_y - cursor_in_image_y * new_zoom;
-                            
+
                             this.viewer.image_state.pan = (new_pan_x, new_pan_y);
                             this.viewer.image_state.is_fit_to_window = false;
-                            
+
                             // Update last position for next delta calculation
-                            this.viewer.z_drag_state = Some((current_x, current_y, center_x, center_y));
-                            
+                            this.viewer.z_drag_state =
+                                Some((current_x, current_y, center_x, center_y));
+
                             cx.notify();
                         }
                     }
@@ -1396,18 +1528,19 @@ impl Render for App {
                     // Get scroll delta in pixels (use window line height for conversion if needed)
                     let line_height = px(16.0); // Standard line height
                     let delta_y: f32 = event.delta.pixel_delta(line_height).y.into();
-                    
+
                     // Positive delta_y means scrolling down (zoom out)
                     // Negative delta_y means scrolling up (zoom in)
                     let zoom_in = delta_y < 0.0;
-                    
+
                     // Get cursor position relative to the viewport
                     let cursor_x: f32 = event.position.x.into();
                     let cursor_y: f32 = event.position.y.into();
-                    
+
                     // Use scroll wheel sensitivity from settings
                     let zoom_step = this.settings.keyboard_mouse.scroll_wheel_sensitivity;
-                    this.viewer.zoom_toward_point(cursor_x, cursor_y, zoom_in, zoom_step);
+                    this.viewer
+                        .zoom_toward_point(cursor_x, cursor_y, zoom_in, zoom_step);
                     this.save_current_image_state();
                     cx.notify();
                 }
@@ -1417,23 +1550,25 @@ impl Render for App {
                 if this.is_modal_open() {
                     return;
                 }
-                
+
                 // Check for spacebar press (without modifiers)
-                if event.keystroke.key.as_str() == "space" 
-                    && !event.keystroke.modifiers.shift 
-                    && !event.keystroke.modifiers.control 
-                    && !event.keystroke.modifiers.platform 
-                    && !event.keystroke.modifiers.alt {
+                if event.keystroke.key.as_str() == "space"
+                    && !event.keystroke.modifiers.shift
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.alt
+                {
                     // Enable spacebar-drag pan mode
                     this.spacebar_held = true;
                     cx.notify();
                 }
                 // Check for Z key press (without modifiers)
-                else if event.keystroke.key.as_str() == "z" 
-                    && !event.keystroke.modifiers.shift 
-                    && !event.keystroke.modifiers.control 
-                    && !event.keystroke.modifiers.platform 
-                    && !event.keystroke.modifiers.alt {
+                else if event.keystroke.key.as_str() == "z"
+                    && !event.keystroke.modifiers.shift
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.alt
+                {
                     // Enable Z-drag zoom mode
                     this.z_key_held = true;
                     cx.notify();
@@ -1459,13 +1594,15 @@ impl Render for App {
                     }
                 }
             }))
-            .on_drag_move(cx.listener(|this, _event: &DragMoveEvent<ExternalPaths>, _window, cx| {
-                // Set drag-over state to show visual feedback
-                if !this.drag_over {
-                    this.drag_over = true;
-                    cx.notify();
-                }
-            }))
+            .on_drag_move(cx.listener(
+                |this, _event: &DragMoveEvent<ExternalPaths>, _window, cx| {
+                    // Set drag-over state to show visual feedback
+                    if !this.drag_over {
+                        this.drag_over = true;
+                        cx.notify();
+                    }
+                },
+            ))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 // Clear drag-over state
                 this.drag_over = false;
@@ -1475,24 +1612,28 @@ impl Render for App {
                 self.settings.appearance.background_color,
                 self.settings.appearance.overlay_transparency,
                 self.settings.appearance.font_size_scale,
-                cx
+                cx,
             ))
             // Render overlays on top with proper z-order
-            .when(self.show_help, |el| {
-                el.child(self.help_overlay.clone())
-            })
+            .when(self.show_help, |el| el.child(self.help_overlay.clone()))
             .when(self.show_debug, |el| {
-                let image_dimensions = self.viewer.current_image.as_ref().map(|img| (img.width, img.height));
-                el.child(cx.new(|_cx| DebugOverlay::new(DebugOverlayConfig {
-                    current_path: self.app_state.current_image().cloned(),
-                    current_index: self.app_state.current_index,
-                    total_images: self.app_state.image_paths.len(),
-                    image_state: self.viewer.image_state.clone(),
-                    image_dimensions,
-                    viewport_size: self.viewer.viewport_size,
-                    overlay_transparency: self.settings.appearance.overlay_transparency,
-                    font_size_scale: self.settings.appearance.font_size_scale,
-                })))
+                let image_dimensions = self
+                    .viewer
+                    .current_image
+                    .as_ref()
+                    .map(|img| (img.width, img.height));
+                el.child(cx.new(|_cx| {
+                    DebugOverlay::new(DebugOverlayConfig {
+                        current_path: self.app_state.current_image().cloned(),
+                        current_index: self.app_state.current_index,
+                        total_images: self.app_state.image_paths.len(),
+                        image_state: self.viewer.image_state.clone(),
+                        image_dimensions,
+                        viewport_size: self.viewer.viewport_size,
+                        overlay_transparency: self.settings.appearance.overlay_transparency,
+                        font_size_scale: self.settings.appearance.font_size_scale,
+                    })
+                }))
             })
             .when(self.show_settings, |el| {
                 el.child(self.settings_window.clone())
@@ -1512,9 +1653,11 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &PreviousImage, window, cx| {
                 this.handle_previous_image(window, cx);
             }))
-            .on_action(cx.listener(|this, _: &ToggleAnimationPlayPause, window, cx| {
-                this.handle_toggle_animation(window, cx);
-            }))
+            .on_action(
+                cx.listener(|this, _: &ToggleAnimationPlayPause, window, cx| {
+                    this.handle_toggle_animation(window, cx);
+                }),
+            )
             .on_action(cx.listener(|this, _: &NextFrame, window, cx| {
                 this.handle_next_frame(window, cx);
             }))
@@ -1605,12 +1748,16 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &CloseSettings, window, cx| {
                 this.handle_close_settings(window, cx);
             }))
-            .on_action(cx.listener(|this, _: &ResetSettingsToDefaults, window, cx| {
-                this.handle_reset_settings_to_defaults(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &rpview_gpui::LoadOversizedImageAnyway, window, cx| {
-                this.handle_load_oversized_image_anyway(window, cx);
-            }))
+            .on_action(
+                cx.listener(|this, _: &ResetSettingsToDefaults, window, cx| {
+                    this.handle_reset_settings_to_defaults(window, cx);
+                }),
+            )
+            .on_action(cx.listener(
+                |this, _: &rpview_gpui::LoadOversizedImageAnyway, window, cx| {
+                    this.handle_load_oversized_image_anyway(window, cx);
+                },
+            ))
             .on_action(cx.listener(|this, _: &ToggleFilters, window, cx| {
                 this.handle_toggle_filters(window, cx);
             }))
@@ -1653,9 +1800,11 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &OpenInExternalViewer, window, cx| {
                 this.handle_open_in_external_viewer(window, cx);
             }))
-            .on_action(cx.listener(|this, _: &OpenInExternalViewerAndQuit, window, cx| {
-                this.handle_open_in_external_viewer_and_quit(window, cx);
-            }))
+            .on_action(
+                cx.listener(|this, _: &OpenInExternalViewerAndQuit, window, cx| {
+                    this.handle_open_in_external_viewer_and_quit(window, cx);
+                }),
+            )
             .on_action(cx.listener(|this, _: &OpenInExternalEditor, window, cx| {
                 this.handle_open_in_external_editor(window, cx);
             }))
@@ -1679,7 +1828,7 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-cmd-a", SortAlphabetical, None),
         KeyBinding::new("shift-cmd-m", SortByModified, None),
         // Zoom controls - base (normal speed)
-        KeyBinding::new("=", ZoomIn, None),  // = key (same as +)
+        KeyBinding::new("=", ZoomIn, None), // = key (same as +)
         KeyBinding::new("+", ZoomIn, None),
         KeyBinding::new("-", ZoomOut, None),
         KeyBinding::new("0", ZoomReset, None),
@@ -1769,9 +1918,7 @@ fn setup_menus(cx: &mut gpui::App) {
         #[cfg(not(target_os = "macos"))]
         Menu {
             name: "Edit".into(),
-            items: vec![
-                MenuItem::action("Settings...", ToggleSettings),
-            ],
+            items: vec![MenuItem::action("Settings...", ToggleSettings)],
         },
         Menu {
             name: "File".into(),
@@ -1828,8 +1975,11 @@ fn setup_menus(cx: &mut gpui::App) {
 fn main() {
     // Load settings from disk (or use defaults if file doesn't exist)
     let settings = settings_io::load_settings();
-    println!("Settings loaded from: {}", settings_io::get_settings_path().display());
-    
+    println!(
+        "Settings loaded from: {}",
+        settings_io::get_settings_path().display()
+    );
+
     // Parse command-line arguments to get image paths and starting index
     let (image_paths, start_index) = match Cli::parse_image_paths() {
         Ok(result) => result,
@@ -1838,7 +1988,7 @@ fn main() {
             std::process::exit(1);
         }
     };
-    
+
     // Determine the search directory for error messages
     let search_dir = if image_paths.is_empty() {
         // Try to get the directory from command-line args
@@ -1858,44 +2008,44 @@ fn main() {
     } else {
         std::path::PathBuf::new()
     };
-    
+
     // Initialize application state with the starting index and settings
     let app_state = AppState::new_with_settings(
-        image_paths.clone(), 
+        image_paths.clone(),
         start_index,
         settings.sort_navigation.default_sort_mode.into(),
         settings.viewer_behavior.state_cache_size,
     );
-    
+
     // Print startup info
     println!("rpview-gpui starting...");
     println!("Loaded {} image(s)", app_state.image_paths.len());
     if let Some(first_image) = app_state.current_image() {
         println!("Current image: {}", first_image.display());
     }
-    
+
     // Get the first image path to load (or None if no images)
     let first_image_path = app_state.current_image().cloned();
-    
+
     Application::new().run(move |cx: &mut gpui::App| {
         adabraka_ui::init(cx);
-        
+
         cx.on_window_closed(|cx| {
             if cx.windows().is_empty() {
                 cx.quit();
             }
         })
         .detach();
-        
+
         setup_key_bindings(cx);
         setup_menus(cx);
-        
+
         cx.on_action(|_: &Quit, cx| {
             cx.quit();
         });
-        
+
         cx.activate(true);
-        
+
         cx.open_window(
             WindowOptions {
                 ..Default::default()
@@ -1904,7 +2054,7 @@ fn main() {
                 cx.new::<App>(|inner_cx| {
                     let focus_handle = inner_cx.focus_handle();
                     focus_handle.focus(window);
-                    
+
                     // Create the viewer and load the first image if available
                     let mut viewer = ImageViewer {
                         current_image: None,
@@ -1924,21 +2074,26 @@ fn main() {
                         pending_filtered_path: None,
                         pending_filter_preload_frames: 0,
                     };
-                    
+
                     if let Some(ref path) = first_image_path {
                         let max_dim = Some(settings.performance.max_image_dimension);
                         viewer.load_image_async(path.clone(), max_dim, false);
                     } else {
                         // No images found - show error with canonical directory path
-                        let canonical_dir = search_dir.canonicalize()
+                        let canonical_dir = search_dir
+                            .canonicalize()
                             .unwrap_or_else(|_| search_dir.clone());
-                        viewer.error_message = Some(format!("No images found in directory:\n{}", canonical_dir.display()));
+                        viewer.error_message = Some(format!(
+                            "No images found in directory:\n{}",
+                            canonical_dir.display()
+                        ));
                         viewer.error_path = None;
                     }
-                    
+
                     // Set initial window title
                     if let Some(path) = app_state.current_image() {
-                        let filename = path.file_name()
+                        let filename = path
+                            .file_name()
                             .and_then(|n| n.to_str())
                             .unwrap_or("Unknown");
                         let position = app_state.current_index + 1;
@@ -1948,21 +2103,20 @@ fn main() {
                     } else {
                         window.set_window_title("rpview-gpui");
                     }
-                    
+
                     // Create filter controls
                     let filter_controls = inner_cx.new(|cx| {
                         FilterControls::new(
-                            viewer.image_state.filters, 
+                            viewer.image_state.filters,
                             settings.appearance.overlay_transparency,
                             settings.appearance.font_size_scale,
-                            cx
+                            cx,
                         )
                     });
-                    
+
                     // Create settings window
-                    let settings_window = inner_cx.new(|cx| {
-                        SettingsWindow::new(settings.clone(), cx)
-                    });
+                    let settings_window =
+                        inner_cx.new(|cx| SettingsWindow::new(settings.clone(), cx));
 
                     // Create help overlay
                     let help_overlay = inner_cx.new(|_cx| {
@@ -1992,7 +2146,8 @@ fn main() {
                         settings: settings.clone(),
                     }
                 })
-        })
+            },
+        )
         .unwrap();
     });
 }

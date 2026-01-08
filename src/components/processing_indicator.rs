@@ -1,5 +1,5 @@
-use gpui::*;
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
+use gpui::*;
 
 /// Processing indicator component
 /// Displays in the upper left corner while filters are being processed
@@ -39,16 +39,13 @@ impl Render for ProcessingIndicator {
             .gap(Spacing::sm())
             .child(
                 // Spinner/processing indicator (pulsing dot)
-                div()
-                    .size(px(12.0))
-                    .rounded(px(6.0))
-                    .bg(rgb(0x50fa7b)) // Green color
+                div().size(px(12.0)).rounded(px(6.0)).bg(rgb(0x50fa7b)), // Green color
             )
             .child(
                 div()
                     .text_size(scaled_text_size(13.0, self.font_size_scale))
                     .text_color(Colors::text())
-                    .child(self.message.clone())
+                    .child(self.message.clone()),
             )
     }
 }

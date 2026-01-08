@@ -1,10 +1,10 @@
-use image::{AnimationDecoder, DynamicImage};
+use crate::error::AppError;
 use image::codecs::gif::GifDecoder;
 use image::codecs::webp::WebPDecoder;
+use image::{AnimationDecoder, DynamicImage};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use crate::error::AppError;
 
 /// Represents a single animation frame with its timing
 #[derive(Clone)]
@@ -33,10 +33,9 @@ impl AnimationData {
 
 /// Check if a file is an animated GIF
 pub fn is_animated_gif(path: &Path) -> Result<bool, AppError> {
-    let file = File::open(path)
-        .map_err(AppError::Io)?;
+    let file = File::open(path).map_err(AppError::Io)?;
     let reader = BufReader::new(file);
-    
+
     match GifDecoder::new(reader) {
         Ok(decoder) => {
             // Try to get frames to check if it's animated
@@ -51,10 +50,9 @@ pub fn is_animated_gif(path: &Path) -> Result<bool, AppError> {
 
 /// Check if a file is an animated WEBP
 pub fn is_animated_webp(path: &Path) -> Result<bool, AppError> {
-    let file = File::open(path)
-        .map_err(AppError::Io)?;
+    let file = File::open(path).map_err(AppError::Io)?;
     let reader = BufReader::new(file);
-    
+
     match WebPDecoder::new(reader) {
         Ok(decoder) => Ok(decoder.has_animation()),
         Err(_) => Ok(false),
@@ -63,16 +61,16 @@ pub fn is_animated_webp(path: &Path) -> Result<bool, AppError> {
 
 /// Load animation frames from a GIF file
 pub fn load_gif_animation(path: &Path) -> Result<AnimationData, AppError> {
-    let file = File::open(path)
-        .map_err(AppError::Io)?;
+    let file = File::open(path).map_err(AppError::Io)?;
     let reader = BufReader::new(file);
-    
-    let decoder = GifDecoder::new(reader)
+
+    let decoder = GifDecoder::new(reader).map_err(|e| AppError::Generic(e.to_string()))?;
+
+    let frames_result = decoder
+        .into_frames()
+        .collect_frames()
         .map_err(|e| AppError::Generic(e.to_string()))?;
-    
-    let frames_result = decoder.into_frames().collect_frames()
-        .map_err(|e| AppError::Generic(e.to_string()))?;
-    
+
     let animation_frames: Vec<AnimationFrame> = frames_result
         .into_iter()
         .map(|frame| {
@@ -80,20 +78,17 @@ pub fn load_gif_animation(path: &Path) -> Result<AnimationData, AppError> {
             let delay = frame.delay();
             let (numer, denom) = delay.numer_denom_ms();
             let duration_ms = if denom == 0 { 100 } else { numer / denom }; // Default to 100ms if invalid
-            
+
             // Convert frame to DynamicImage
             let buffer = frame.into_buffer();
             let image = DynamicImage::ImageRgba8(buffer);
-            
-            AnimationFrame {
-                image,
-                duration_ms,
-            }
+
+            AnimationFrame { image, duration_ms }
         })
         .collect();
-    
+
     let frame_count = animation_frames.len();
-    
+
     Ok(AnimationData {
         frames: animation_frames,
         frame_count,
@@ -102,20 +97,20 @@ pub fn load_gif_animation(path: &Path) -> Result<AnimationData, AppError> {
 
 /// Load animation frames from a WEBP file
 pub fn load_webp_animation(path: &Path) -> Result<AnimationData, AppError> {
-    let file = File::open(path)
-        .map_err(AppError::Io)?;
+    let file = File::open(path).map_err(AppError::Io)?;
     let reader = BufReader::new(file);
-    
-    let decoder = WebPDecoder::new(reader)
-        .map_err(|e| AppError::Generic(e.to_string()))?;
-    
+
+    let decoder = WebPDecoder::new(reader).map_err(|e| AppError::Generic(e.to_string()))?;
+
     if !decoder.has_animation() {
         return Err(AppError::Generic("WEBP is not animated".to_string()));
     }
-    
-    let frames_result = decoder.into_frames().collect_frames()
+
+    let frames_result = decoder
+        .into_frames()
+        .collect_frames()
         .map_err(|e| AppError::Generic(e.to_string()))?;
-    
+
     let animation_frames: Vec<AnimationFrame> = frames_result
         .into_iter()
         .map(|frame| {
@@ -123,20 +118,17 @@ pub fn load_webp_animation(path: &Path) -> Result<AnimationData, AppError> {
             let delay = frame.delay();
             let (numer, denom) = delay.numer_denom_ms();
             let duration_ms = if denom == 0 { 100 } else { numer / denom }; // Default to 100ms if invalid
-            
+
             // Convert frame to DynamicImage
             let buffer = frame.into_buffer();
             let image = DynamicImage::ImageRgba8(buffer);
-            
-            AnimationFrame {
-                image,
-                duration_ms,
-            }
+
+            AnimationFrame { image, duration_ms }
         })
         .collect();
-    
+
     let frame_count = animation_frames.len();
-    
+
     Ok(AnimationData {
         frames: animation_frames,
         frame_count,
@@ -147,7 +139,8 @@ pub fn load_webp_animation(path: &Path) -> Result<AnimationData, AppError> {
 /// Returns None if the file is not animated
 pub fn load_animation(path: &Path) -> Result<Option<AnimationData>, AppError> {
     // Determine format from extension
-    let extension = path.extension()
+    let extension = path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase());
 
@@ -173,10 +166,10 @@ pub fn load_animation(path: &Path) -> Result<Option<AnimationData>, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use tempfile::TempDir;
     use std::fs::File;
     use std::io::Write;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
 
     // Test constants
     const DEFAULT_FRAME_DURATION_MS: u32 = 100;
@@ -189,10 +182,7 @@ mod tests {
         let duration_ms = 50;
 
         // Act
-        let frame = AnimationFrame {
-            image,
-            duration_ms,
-        };
+        let frame = AnimationFrame { image, duration_ms };
 
         // Assert
         assert_eq!(frame.duration_ms, 50);
@@ -373,12 +363,10 @@ mod tests {
     #[test]
     fn test_animation_data_clone() {
         // Arrange
-        let frames = vec![
-            AnimationFrame {
-                image: image::DynamicImage::new_rgba8(5, 5),
-                duration_ms: DEFAULT_FRAME_DURATION_MS,
-            },
-        ];
+        let frames = vec![AnimationFrame {
+            image: image::DynamicImage::new_rgba8(5, 5),
+            duration_ms: DEFAULT_FRAME_DURATION_MS,
+        }];
         let animation = AnimationData {
             frames,
             frame_count: 1,
