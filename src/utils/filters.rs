@@ -7,23 +7,23 @@ pub fn apply_brightness(img: &DynamicImage, brightness: f32) -> DynamicImage {
     if brightness.abs() < 0.001 {
         return img.clone();
     }
-    
+
     let adjustment = (brightness * 2.55) as i32; // Map -100..100 to -255..255
-    
+
     let rgba_img = img.to_rgba8();
     let (width, height) = rgba_img.dimensions();
-    
+
     let mut output = ImageBuffer::new(width, height);
-    
+
     for (x, y, pixel) in rgba_img.enumerate_pixels() {
         let r = (pixel[0] as i32 + adjustment).clamp(0, 255) as u8;
         let g = (pixel[1] as i32 + adjustment).clamp(0, 255) as u8;
         let b = (pixel[2] as i32 + adjustment).clamp(0, 255) as u8;
         let a = pixel[3];
-        
+
         output.put_pixel(x, y, Rgba([r, g, b, a]));
     }
-    
+
     DynamicImage::ImageRgba8(output)
 }
 
@@ -34,7 +34,7 @@ pub fn apply_contrast(img: &DynamicImage, contrast: f32) -> DynamicImage {
     if contrast.abs() < 0.001 {
         return img.clone();
     }
-    
+
     // Convert contrast value to a factor
     // Formula: factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
     // Simplified for our range: factor ranges from ~0.1 (very low) to ~10.0 (very high)
@@ -43,21 +43,21 @@ pub fn apply_contrast(img: &DynamicImage, contrast: f32) -> DynamicImage {
     } else {
         1.0 + (contrast / 100.0) * 0.9 // 0.1 to 1.0
     };
-    
+
     let rgba_img = img.to_rgba8();
     let (width, height) = rgba_img.dimensions();
-    
+
     let mut output = ImageBuffer::new(width, height);
-    
+
     for (x, y, pixel) in rgba_img.enumerate_pixels() {
         let r = apply_contrast_to_channel(pixel[0], factor);
         let g = apply_contrast_to_channel(pixel[1], factor);
         let b = apply_contrast_to_channel(pixel[2], factor);
         let a = pixel[3];
-        
+
         output.put_pixel(x, y, Rgba([r, g, b, a]));
     }
-    
+
     DynamicImage::ImageRgba8(output)
 }
 
@@ -75,12 +75,12 @@ pub fn apply_gamma(img: &DynamicImage, gamma: f32) -> DynamicImage {
     if (gamma - 1.0).abs() < 0.001 {
         return img.clone();
     }
-    
+
     let rgba_img = img.to_rgba8();
     let (width, height) = rgba_img.dimensions();
-    
+
     let mut output = ImageBuffer::new(width, height);
-    
+
     // Pre-calculate gamma lookup table for performance
     let mut gamma_lut = [0u8; 256];
     for (i, lut_entry) in gamma_lut.iter_mut().enumerate() {
@@ -88,41 +88,46 @@ pub fn apply_gamma(img: &DynamicImage, gamma: f32) -> DynamicImage {
         let corrected = normalized.powf(1.0 / gamma);
         *lut_entry = (corrected * 255.0).clamp(0.0, 255.0) as u8;
     }
-    
+
     for (x, y, pixel) in rgba_img.enumerate_pixels() {
         let r = gamma_lut[pixel[0] as usize];
         let g = gamma_lut[pixel[1] as usize];
         let b = gamma_lut[pixel[2] as usize];
         let a = pixel[3];
-        
+
         output.put_pixel(x, y, Rgba([r, g, b, a]));
     }
-    
+
     DynamicImage::ImageRgba8(output)
 }
 
 /// Apply all filters to an image
-pub fn apply_filters(img: &DynamicImage, brightness: f32, contrast: f32, gamma: f32) -> DynamicImage {
+pub fn apply_filters(
+    img: &DynamicImage,
+    brightness: f32,
+    contrast: f32,
+    gamma: f32,
+) -> DynamicImage {
     // Short-circuit if no filters are applied
     if brightness.abs() < 0.001 && contrast.abs() < 0.001 && (gamma - 1.0).abs() < 0.001 {
         return img.clone();
     }
-    
+
     let mut result = img.clone();
-    
+
     // Apply filters in order: brightness -> contrast -> gamma
     if brightness.abs() >= 0.001 {
         result = apply_brightness(&result, brightness);
     }
-    
+
     if contrast.abs() >= 0.001 {
         result = apply_contrast(&result, contrast);
     }
-    
+
     if (gamma - 1.0).abs() >= 0.001 {
         result = apply_gamma(&result, gamma);
     }
-    
+
     result
 }
 
@@ -375,7 +380,7 @@ mod tests {
         // Formula: 255 * ((128/255)^(1/2.2)) = 255 * 0.7297 = 186
         let expected = 186;
         assert!(
-            (pixel[0] as i32 - expected as i32).abs() <= 1,
+            (pixel[0] as i32 - expected).abs() <= 1,
             "Expected ~{}, got {}",
             expected,
             pixel[0]

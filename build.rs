@@ -2,9 +2,9 @@ use std::env;
 
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-    
+
     println!("cargo:rerun-if-changed=build.rs");
-    
+
     match target_os.as_str() {
         "macos" => {
             println!("cargo:rustc-env=TARGET_PLATFORM=macOS");

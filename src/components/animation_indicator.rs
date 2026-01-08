@@ -1,5 +1,5 @@
-use gpui::*;
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
+use gpui::*;
 
 /// Component that displays animation status and frame counter
 pub struct AnimationIndicator {
@@ -13,7 +13,13 @@ pub struct AnimationIndicator {
 }
 
 impl AnimationIndicator {
-    pub fn new(current_frame: usize, total_frames: usize, is_playing: bool, overlay_transparency: u8, font_size_scale: f32) -> Self {
+    pub fn new(
+        current_frame: usize,
+        total_frames: usize,
+        is_playing: bool,
+        overlay_transparency: u8,
+        font_size_scale: f32,
+    ) -> Self {
         Self {
             current_frame,
             total_frames,
@@ -27,8 +33,13 @@ impl AnimationIndicator {
 impl Render for AnimationIndicator {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let play_status = if self.is_playing { "▶" } else { "⏸" };
-        let frame_text = format!("{} Frame {}/{}", play_status, self.current_frame + 1, self.total_frames);
-        
+        let frame_text = format!(
+            "{} Frame {}/{}",
+            play_status,
+            self.current_frame + 1,
+            self.total_frames
+        );
+
         div()
             .absolute()
             .bottom(Spacing::md())

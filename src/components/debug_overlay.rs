@@ -1,7 +1,7 @@
+use crate::state::ImageState;
+use crate::utils::style::{Colors, Spacing, scaled_text_size};
 use gpui::*;
 use std::path::PathBuf;
-use crate::utils::style::{Colors, Spacing, scaled_text_size};
-use crate::state::ImageState;
 
 /// Configuration for creating a DebugOverlay
 #[derive(Clone)]
@@ -28,7 +28,7 @@ impl DebugOverlay {
     pub fn new(config: DebugOverlayConfig) -> Self {
         Self { config }
     }
-    
+
     /// Render a debug info line
     fn render_info_line(&self, label: &str, value: String) -> impl IntoElement {
         div()
@@ -41,14 +41,14 @@ impl DebugOverlay {
                     .min_w(px(140.0))
                     .text_size(scaled_text_size(12.0, self.config.font_size_scale))
                     .text_color(rgb(0x888888))
-                    .child(format!("{}:", label))
+                    .child(format!("{}:", label)),
             )
             .child(
                 div()
                     .text_size(scaled_text_size(12.0, self.config.font_size_scale))
                     .text_color(Colors::text())
                     .font_family("monospace")
-                    .child(value)
+                    .child(value),
             )
     }
 
@@ -63,7 +63,7 @@ impl DebugOverlay {
                     .text_size(scaled_text_size(12.0, self.config.font_size_scale))
                     .text_color(rgb(0x888888))
                     .mb(px(2.0))
-                    .child(format!("{}:", label))
+                    .child(format!("{}:", label)),
             )
             .child(
                 div()
@@ -71,7 +71,7 @@ impl DebugOverlay {
                     .text_color(Colors::text())
                     .font_family("monospace")
                     .line_height(relative(1.4))
-                    .child(value)
+                    .child(value),
             )
     }
 }
@@ -79,10 +79,12 @@ impl DebugOverlay {
 impl Render for DebugOverlay {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let (filename_str, folder_str) = if let Some(ref path) = self.config.current_path {
-            let filename = path.file_name()
+            let filename = path
+                .file_name()
                 .map(|f| f.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Unknown".to_string());
-            let folder = path.parent()
+            let folder = path
+                .parent()
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "None".to_string());
             (filename, folder)
@@ -91,19 +93,28 @@ impl Render for DebugOverlay {
         };
 
         let index_str = if self.config.total_images > 0 {
-            format!("{} / {}", self.config.current_index + 1, self.config.total_images)
+            format!(
+                "{} / {}",
+                self.config.current_index + 1,
+                self.config.total_images
+            )
         } else {
             "0 / 0".to_string()
         };
 
-        let zoom_str = format!("{:.2}% ({})",
+        let zoom_str = format!(
+            "{:.2}% ({})",
             self.config.image_state.zoom * 100.0,
-            if self.config.image_state.is_fit_to_window { "fit" } else { "manual" }
+            if self.config.image_state.is_fit_to_window {
+                "fit"
+            } else {
+                "manual"
+            }
         );
 
-        let pan_str = format!("({:.1}, {:.1})",
-            self.config.image_state.pan.0,
-            self.config.image_state.pan.1
+        let pan_str = format!(
+            "({:.1}, {:.1})",
+            self.config.image_state.pan.0, self.config.image_state.pan.1
         );
 
         let image_dims_str = if let Some((w, h)) = self.config.image_dimensions {
@@ -157,14 +168,13 @@ impl Render for DebugOverlay {
                             .pb(Spacing::xs())
                             .border_b_1()
                             .border_color(rgb(0x444444))
-                            .child("Debug Information")
+                            .child("Debug Information"),
                     )
                     // Image info
                     .child(self.render_info_line_wrapping("Image Filename", filename_str))
                     .child(self.render_info_line_wrapping("Image Folder", folder_str))
                     .child(self.render_info_line("Image Index", index_str))
                     .child(self.render_info_line("Image Size", image_dims_str))
-
                     // Zoom & Pan info
                     .child(
                         div()
@@ -173,11 +183,10 @@ impl Render for DebugOverlay {
                             .text_size(scaled_text_size(12.0, self.config.font_size_scale))
                             .text_color(rgb(0x888888))
                             .font_weight(FontWeight::BOLD)
-                            .child("Transform")
+                            .child("Transform"),
                     )
                     .child(self.render_info_line("Zoom", zoom_str))
                     .child(self.render_info_line("Pan (x, y)", pan_str))
-
                     // Viewport info
                     .child(
                         div()
@@ -186,10 +195,9 @@ impl Render for DebugOverlay {
                             .text_size(scaled_text_size(12.0, self.config.font_size_scale))
                             .text_color(rgb(0x888888))
                             .font_weight(FontWeight::BOLD)
-                            .child("Viewport")
+                            .child("Viewport"),
                     )
                     .child(self.render_info_line("Viewport Size", viewport_str))
-
                     // Close instructions
                     .child(
                         div()
@@ -200,8 +208,8 @@ impl Render for DebugOverlay {
                             .text_size(scaled_text_size(12.0, self.config.font_size_scale))
                             .text_color(rgb(0x888888))
                             .text_align(TextAlign::Center)
-                            .child("Press F12 to close")
-                    )
+                            .child("Press F12 to close"),
+                    ),
             )
     }
 }

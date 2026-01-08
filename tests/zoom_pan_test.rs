@@ -195,12 +195,12 @@ fn test_format_zoom_percentage_fractional() {
 #[test]
 fn test_multiple_zoom_in_steps() {
     let mut zoom = 1.0;
-    
+
     // 5 zoom in steps
     for _ in 0..5 {
         zoom = zoom_in(zoom, ZOOM_STEP);
     }
-    
+
     // 1.0 * 1.2^5 ≈ 2.488
     assert!((zoom - 2.488).abs() < 0.01);
 }
@@ -208,12 +208,12 @@ fn test_multiple_zoom_in_steps() {
 #[test]
 fn test_multiple_zoom_out_steps() {
     let mut zoom = 2.0;
-    
+
     // 5 zoom out steps
     for _ in 0..5 {
         zoom = zoom_out(zoom, ZOOM_STEP);
     }
-    
+
     // 2.0 / 1.2^5 ≈ 0.804
     assert!((zoom - 0.804).abs() < 0.01);
 }
@@ -223,7 +223,7 @@ fn test_zoom_at_boundaries() {
     // At MIN_ZOOM, zooming out should stay at MIN_ZOOM
     let zoom = zoom_out(MIN_ZOOM, ZOOM_STEP);
     assert_eq!(zoom, MIN_ZOOM);
-    
+
     // At MAX_ZOOM, zooming in should stay at MAX_ZOOM
     let zoom = zoom_in(MAX_ZOOM, ZOOM_STEP);
     assert_eq!(zoom, MAX_ZOOM);
@@ -232,10 +232,10 @@ fn test_zoom_at_boundaries() {
 #[test]
 fn test_wheel_zoom_smaller_steps() {
     let current = 1.0;
-    
+
     let wheel_zoomed = zoom_in(current, ZOOM_STEP_WHEEL);
     let keyboard_zoomed = zoom_in(current, ZOOM_STEP);
-    
+
     // Wheel zoom should be smaller than keyboard zoom
     assert!(wheel_zoomed < keyboard_zoomed);
     assert_eq!(wheel_zoomed, 1.1);

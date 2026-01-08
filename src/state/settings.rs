@@ -1,11 +1,11 @@
 //! Settings module for rpview-gpui
-//! 
+//!
 //! This module defines all user-configurable settings for the application.
 //! Settings are serialized to JSON and saved in the platform-appropriate config directory.
 
+use super::app_state::SortMode;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use super::app_state::SortMode;
 
 /// Main application settings container
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -183,7 +183,7 @@ impl Default for Appearance {
     fn default() -> Self {
         Self {
             background_color: [0x1e, 0x1e, 0x1e], // #1e1e1e
-            overlay_transparency: 204, // ~80% opacity
+            overlay_transparency: 204,            // ~80% opacity
             font_size_scale: 1.0,
             window_title_format: "{filename} ({index}/{total})".to_string(),
         }
@@ -301,11 +301,15 @@ impl ExternalTools {
             vec![ViewerConfig {
                 name: "Preview".to_string(),
                 command: "open".to_string(),
-                args: vec!["-a".to_string(), "Preview".to_string(), "{path}".to_string()],
+                args: vec![
+                    "-a".to_string(),
+                    "Preview".to_string(),
+                    "{path}".to_string(),
+                ],
                 enabled: true,
             }]
         }
-        
+
         #[cfg(target_os = "windows")]
         {
             vec![
@@ -326,18 +330,43 @@ impl ExternalTools {
                 },
             ]
         }
-        
+
         #[cfg(target_os = "linux")]
         {
             vec![
-                ViewerConfig { name: "Eye of GNOME".to_string(), command: "eog".to_string(), args: vec!["{path}".to_string()], enabled: true },
-                ViewerConfig { name: "Xviewer".to_string(), command: "xviewer".to_string(), args: vec!["{path}".to_string()], enabled: true },
-                ViewerConfig { name: "Gwenview".to_string(), command: "gwenview".to_string(), args: vec!["{path}".to_string()], enabled: true },
-                ViewerConfig { name: "feh".to_string(), command: "feh".to_string(), args: vec!["{path}".to_string()], enabled: true },
-                ViewerConfig { name: "Default Viewer".to_string(), command: "xdg-open".to_string(), args: vec!["{path}".to_string()], enabled: true },
+                ViewerConfig {
+                    name: "Eye of GNOME".to_string(),
+                    command: "eog".to_string(),
+                    args: vec!["{path}".to_string()],
+                    enabled: true,
+                },
+                ViewerConfig {
+                    name: "Xviewer".to_string(),
+                    command: "xviewer".to_string(),
+                    args: vec!["{path}".to_string()],
+                    enabled: true,
+                },
+                ViewerConfig {
+                    name: "Gwenview".to_string(),
+                    command: "gwenview".to_string(),
+                    args: vec!["{path}".to_string()],
+                    enabled: true,
+                },
+                ViewerConfig {
+                    name: "feh".to_string(),
+                    command: "feh".to_string(),
+                    args: vec!["{path}".to_string()],
+                    enabled: true,
+                },
+                ViewerConfig {
+                    name: "Default Viewer".to_string(),
+                    command: "xdg-open".to_string(),
+                    args: vec!["{path}".to_string()],
+                    enabled: true,
+                },
             ]
         }
-        
+
         #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
         {
             vec![]
@@ -446,9 +475,15 @@ mod tests {
 
         // Assert
         assert_eq!(appearance.background_color, [0x1e, 0x1e, 0x1e]);
-        assert_eq!(appearance.overlay_transparency, DEFAULT_OVERLAY_TRANSPARENCY);
+        assert_eq!(
+            appearance.overlay_transparency,
+            DEFAULT_OVERLAY_TRANSPARENCY
+        );
         assert_eq!(appearance.font_size_scale, DEFAULT_FONT_SIZE_SCALE);
-        assert_eq!(appearance.window_title_format, "{filename} ({index}/{total})");
+        assert_eq!(
+            appearance.window_title_format,
+            "{filename} ({index}/{total})"
+        );
     }
 
     #[test]
@@ -491,15 +526,27 @@ mod tests {
     #[test]
     fn test_sort_mode_wrapper_to_sort_mode() {
         // Arrange & Act & Assert
-        assert_eq!(SortMode::from(SortModeWrapper::Alphabetical), SortMode::Alphabetical);
-        assert_eq!(SortMode::from(SortModeWrapper::ModifiedDate), SortMode::ModifiedDate);
+        assert_eq!(
+            SortMode::from(SortModeWrapper::Alphabetical),
+            SortMode::Alphabetical
+        );
+        assert_eq!(
+            SortMode::from(SortModeWrapper::ModifiedDate),
+            SortMode::ModifiedDate
+        );
     }
 
     #[test]
     fn test_sort_mode_to_wrapper() {
         // Arrange & Act & Assert
-        assert_eq!(SortModeWrapper::from(SortMode::Alphabetical), SortModeWrapper::Alphabetical);
-        assert_eq!(SortModeWrapper::from(SortMode::ModifiedDate), SortModeWrapper::ModifiedDate);
+        assert_eq!(
+            SortModeWrapper::from(SortMode::Alphabetical),
+            SortModeWrapper::Alphabetical
+        );
+        assert_eq!(
+            SortModeWrapper::from(SortMode::ModifiedDate),
+            SortModeWrapper::ModifiedDate
+        );
     }
 
     #[test]
@@ -520,7 +567,10 @@ mod tests {
     #[test]
     fn test_save_format_display_name() {
         // Arrange & Act & Assert
-        assert_eq!(SaveFormat::SameAsLoaded.display_name(), "Same as loaded image");
+        assert_eq!(
+            SaveFormat::SameAsLoaded.display_name(),
+            "Same as loaded image"
+        );
         assert_eq!(SaveFormat::Png.display_name(), "PNG");
         assert_eq!(SaveFormat::Jpeg.display_name(), "JPEG");
         assert_eq!(SaveFormat::Bmp.display_name(), "BMP");
