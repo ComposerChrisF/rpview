@@ -1,2 +1,34 @@
+# Build artifacts
 target/
-Cargo.lock
+
+# Cargo.lock is intentionally excluded for library crates but included for binaries
+# Since this is a binary application, you may want to commit Cargo.lock
+# Uncomment the line below if you want to ignore it:
+# Cargo.lock
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment and local configuration
+.env
+.env.local
+*.local
+
+# Test artifacts
+*.profraw
+lcov.info
+coverage/
+
+# Debug files
+*.log
+*.pdb
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

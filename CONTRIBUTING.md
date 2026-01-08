@@ -29,11 +29,11 @@ This project adheres to a code of conduct that all contributors are expected to 
 2. **Clone your fork** locally:
    ```bash
    git clone https://github.com/YOUR_USERNAME/rpview-gpui.git
-   cd rpview-gpui/rpview-gpui
+   cd rpview-gpui
    ```
 3. **Add the upstream repository**:
    ```bash
-   git remote add upstream https://github.com/ORIGINAL_OWNER/rpview-gpui.git
+   git remote add upstream https://github.com/ComposerChrisF/rpview.git
    ```
 
 ## Development Setup
@@ -249,7 +249,7 @@ The project is being developed in phases as outlined in [TODO.md](TODO.md). When
 
 ## License
 
-By contributing to rpview-gpui, you agree that your contributions will be licensed under the same license as the project.
+By contributing to rpview-gpui, you agree that your contributions will be dual-licensed under the MIT and Apache-2.0 licenses.
 
 ---
 
