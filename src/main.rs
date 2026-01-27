@@ -57,6 +57,9 @@ struct App {
     settings_window: Entity<SettingsWindow>,
     /// Help overlay component
     help_overlay: Entity<HelpOverlay>,
+    /// Menu bar component (Windows/Linux only)
+    #[cfg(not(target_os = "macos"))]
+    menu_bar: Entity<components::MenuBar>,
     /// Last time animation frame was updated (for animation playback)
     last_frame_update: Instant,
     /// Whether files are being dragged over the window
@@ -67,11 +70,22 @@ struct App {
 
 impl App {
     /// Check if modal overlays (settings) are blocking main window interactions
+    /// Note: Menu bar state is handled separately via escape key
     fn is_modal_open(&self) -> bool {
         self.show_settings
     }
 
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Close menu bar if open (Windows/Linux)
+        #[cfg(not(target_os = "macos"))]
+        {
+            let menu_open = self.menu_bar.read_with(&cx, |mb, _| mb.is_menu_open());
+            if menu_open {
+                self.menu_bar.update(cx, |mb, cx| mb.close_menu(cx));
+                return;
+            }
+        }
+
         // If help, debug, settings, or filter overlay is open, close it instead of counting toward quit
         if self.show_help {
             self.show_help = false;
@@ -1377,14 +1391,18 @@ impl Render for App {
             self.viewer.spacebar_drag_state = None;
         }
 
-        div()
-            .track_focus(&self.focus_handle)
-            .size_full()
-            .bg(rgb(((self.settings.appearance.background_color[0] as u32)
-                << 16)
-                | ((self.settings.appearance.background_color[1] as u32)
-                    << 8)
-                | (self.settings.appearance.background_color[2] as u32)))
+        // Calculate background color once
+        let bg_color = rgb(
+            ((self.settings.appearance.background_color[0] as u32) << 16)
+                | ((self.settings.appearance.background_color[1] as u32) << 8)
+                | (self.settings.appearance.background_color[2] as u32),
+        );
+
+        // Main content area (takes remaining space after menu bar)
+        let content = div()
+            .flex_1()
+            .min_h_0() // Allow shrinking below content size
+            .bg(bg_color)
             .when(self.drag_over, |div| {
                 // Show highlighted border when dragging files over the window
                 div.border_4().border_color(gpui::rgb(0x50fa7b)) // Green highlight
@@ -1393,6 +1411,10 @@ impl Render for App {
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, _window, cx| {
                     this.mouse_button_down = true;
+
+                    // Close menu bar when clicking on main content (Windows/Linux)
+                    #[cfg(not(target_os = "macos"))]
+                    this.menu_bar.update(cx, |mb, cx| mb.close_menu(cx));
 
                     // Start spacebar-drag pan if spacebar is being held
                     if this.viewer.spacebar_drag_state.is_some() {
@@ -1640,7 +1662,29 @@ impl Render for App {
             })
             .when(self.show_filters, |el| {
                 el.child(self.filter_controls.clone())
+            });
+
+        // Outer container with menu bar (Windows/Linux) and content
+        // Action handlers are registered here so they're available for menu items
+        div()
+            .track_focus(&self.focus_handle)
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(bg_color)
+            // Add menu bar for Windows/Linux
+            .when(cfg!(not(target_os = "macos")), |el| {
+                #[cfg(not(target_os = "macos"))]
+                {
+                    el.child(self.menu_bar.clone())
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    el
+                }
             })
+            .child(content)
+            // Action handlers - registered on focused element so menu items work
             .on_action(|_: &CloseWindow, window, _| {
                 window.remove_window();
             })
@@ -1864,15 +1908,15 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-j", PanLeftFast, None),
         KeyBinding::new("shift-k", PanDownFast, None),
         KeyBinding::new("shift-l", PanRightFast, None),
-        // Slow pan with Ctrl/Cmd (1px)
-        KeyBinding::new("cmd-w", PanUpSlow, None),
-        KeyBinding::new("cmd-a", PanLeftSlow, None),
-        KeyBinding::new("cmd-s", PanDownSlow, None),
-        KeyBinding::new("cmd-d", PanRightSlow, None),
-        KeyBinding::new("cmd-i", PanUpSlow, None),
-        KeyBinding::new("cmd-j", PanLeftSlow, None),
-        KeyBinding::new("cmd-k", PanDownSlow, None),
-        KeyBinding::new("cmd-l", PanRightSlow, None),
+        // Slow pan with Alt (1px) - using Alt to avoid conflicts with Cmd/Ctrl shortcuts
+        KeyBinding::new("alt-w", PanUpSlow, None),
+        KeyBinding::new("alt-a", PanLeftSlow, None),
+        KeyBinding::new("alt-s", PanDownSlow, None),
+        KeyBinding::new("alt-d", PanRightSlow, None),
+        KeyBinding::new("alt-i", PanUpSlow, None),
+        KeyBinding::new("alt-j", PanLeftSlow, None),
+        KeyBinding::new("alt-k", PanDownSlow, None),
+        KeyBinding::new("alt-l", PanRightSlow, None),
         // Help and debug overlays
         KeyBinding::new("h", ToggleHelp, None),
         KeyBinding::new("?", ToggleHelp, None),
@@ -1897,6 +1941,55 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-cmd-alt-v", OpenInExternalViewerAndQuit, None),
         // External editor
         KeyBinding::new("cmd-e", OpenInExternalEditor, None),
+        // Windows/Linux explicit Ctrl bindings (GPUI 0.2.2 doesn't translate cmd to ctrl)
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-w", CloseWindow, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-q", Quit, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-a", SortAlphabetical, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-m", SortByModified, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-0", ZoomResetAndCenter, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-=", ZoomInSlow, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-+", ZoomInSlow, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl--", ZoomOutSlow, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-=", ZoomInIncremental, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-+", ZoomInIncremental, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl--", ZoomOutIncremental, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-,", ToggleSettings, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-enter", CloseSettings, Some("SettingsWindow")),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-f", ToggleFilters, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-1", DisableFilters, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-2", EnableFilters, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-r", ResetFilters, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-o", OpenFile, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-s", SaveFile, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-alt-s", SaveFileToDownloads, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-r", RevealInFinder, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-alt-v", OpenInExternalViewer, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-alt-v", OpenInExternalViewerAndQuit, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-e", OpenInExternalEditor, None),
     ]);
 }
 
@@ -2126,6 +2219,10 @@ fn main() {
                         )
                     });
 
+                    // Create menu bar for Windows/Linux
+                    #[cfg(not(target_os = "macos"))]
+                    let menu_bar = cx.new(|cx| components::MenuBar::new(cx));
+
                     App {
                         app_state,
                         viewer,
@@ -2141,6 +2238,8 @@ fn main() {
                         filter_controls,
                         settings_window,
                         help_overlay,
+                        #[cfg(not(target_os = "macos"))]
+                        menu_bar,
                         last_frame_update: Instant::now(),
                         drag_over: false,
                         settings: settings.clone(),
