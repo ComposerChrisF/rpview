@@ -21,18 +21,25 @@ RPView uses intelligent platform-aware keyboard shortcuts:
 - **macOS**: Uses Command (⌘) key for shortcuts
 - **Windows/Linux**: Uses Control (Ctrl) key for shortcuts
 
-The application uses GPUI's cross-platform modifier handling. When you see "Cmd" in the code or documentation, GPUI automatically maps it to:
-- Command key on macOS
-- Control key on Windows/Linux
-
 **Implementation Detail:**
+
+GPUI 0.2.2 does not automatically translate the `"cmd"` modifier to `"ctrl"` on Windows/Linux.
+To ensure cross-platform compatibility, we define bindings for both modifiers:
+
 ```rust
 // In src/main.rs
-KeyBinding::new("cmd-o", OpenFile, None)  // Opens files on ALL platforms
-KeyBinding::new("cmd-s", SaveFile, None)  // Saves files on ALL platforms
+// macOS uses "cmd-" bindings
+KeyBinding::new("cmd-o", OpenFile, None)
+KeyBinding::new("cmd-s", SaveFile, None)
+
+// Windows/Linux need explicit "ctrl-" bindings
+#[cfg(not(target_os = "macos"))]
+KeyBinding::new("ctrl-o", OpenFile, None)
+#[cfg(not(target_os = "macos"))]
+KeyBinding::new("ctrl-s", SaveFile, None)
 ```
 
-GPUI's keystroke parser translates "cmd" to `modifiers.platform`, which each platform interprets correctly.
+**Note:** Pan controls use `Alt` modifier for slow pan (instead of Cmd/Ctrl) to avoid conflicts with common shortcuts like Ctrl+S (Save) and Ctrl+W (Close).
 
 #### Display in UI
 
@@ -49,26 +56,24 @@ pub fn modifier_key() -> &'static str {
 }
 ```
 
-### Native Menus
+### Menus
 
-RPView provides native menu bar integration on all platforms:
+RPView provides menu bar integration on all platforms:
 
 #### macOS
-- Full menu bar integration with RPView, File, View, Navigate, and Animation menus
+- Uses native macOS menu bar (via `cx.set_menus()`)
 - Application menu (RPView) contains Quit command
 - Menus appear in the system menu bar at the top of the screen
-- Standard macOS keyboard shortcuts work automatically
 
-#### Windows
-- Menu bar appears in the application window
-- Standard Windows keyboard shortcuts (Ctrl+O, Ctrl+S, etc.)
-
-#### Linux
-- Menu integration depends on desktop environment
-- Works with GNOME, KDE, XFCE, and others
-- Keyboard shortcuts follow standard conventions
+#### Windows and Linux
+- Uses an in-app menu bar component (GPUI 0.2.2 doesn't fully support native menus)
+- Menu bar appears at the top of the application window
+- Dropdown menus open on click, close on click outside or pressing Escape
+- Hover between menus when one is open
 
 **Implementation:**
+
+On macOS, native menus are configured via GPUI:
 ```rust
 // From src/main.rs
 fn setup_menus(cx: &mut gpui::App) {
@@ -91,6 +96,17 @@ fn setup_menus(cx: &mut gpui::App) {
         },
         // ... more menus
     ]);
+}
+```
+
+On Windows and Linux, an in-app menu bar component is used:
+```rust
+// From src/components/menu_bar.rs
+#[cfg(not(target_os = "macos"))]
+pub struct MenuBar {
+    open_menu: Option<usize>,  // Currently open dropdown
+    menus: Vec<MenuDef>,       // Menu definitions
+    // ...
 }
 ```
 

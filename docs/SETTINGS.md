@@ -154,7 +154,7 @@ Distance in pixels the image moves when holding Shift while pressing WASD/IJKL k
 **Default**: `3.0`  
 **Range**: 0.1 - 100.0
 
-Distance in pixels the image moves when holding Cmd/Ctrl while pressing WASD/IJKL keys. Useful for precise positioning.
+Distance in pixels the image moves when holding Alt while pressing WASD/IJKL keys. Useful for precise positioning.
 
 ```json
 "pan_speed_slow": 3.0

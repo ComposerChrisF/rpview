@@ -95,7 +95,7 @@ cargo run -- --help
 ### Pan
 - `W/A/S/D` or `I/J/K/L` - Pan image
 - Space + Mouse Drag - Pan image
-- Shift/Ctrl modifiers for speed control
+- Shift for fast pan, Alt for slow pan
 
 ### Filters
 - `Ctrl/Cmd+F` - Toggle filter controls

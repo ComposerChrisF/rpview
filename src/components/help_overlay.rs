@@ -132,7 +132,7 @@ impl HelpOverlay {
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{} + WASD/IJKL", platform_key),
+                "Alt + WASD/IJKL".to_string(),
                 "Slow pan (0.3x speed)".to_string(),
             )
             .into_any_element(),

@@ -630,9 +630,9 @@ impl SettingsWindow {
                 cx,
             ))
             .child(self.render_numeric_input(
-                "Pan speed (slow, with Cmd/Ctrl)".to_string(),
+                "Pan speed (slow, with Alt)".to_string(),
                 format!("{:.1} px", pan_speed_slow),
-                Some("Pan speed with Cmd/Ctrl modifier".to_string()),
+                Some("Pan speed with Alt modifier".to_string()),
                 |this, _cx| {
                     this.working_settings.keyboard_mouse.pan_speed_slow =
                         (this.working_settings.keyboard_mouse.pan_speed_slow + 0.5).min(50.0);
