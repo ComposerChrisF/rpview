@@ -158,15 +158,15 @@ impl App {
         // Get current settings from the settings window and save to disk
         let new_settings = self.settings_window.update(cx, |sw, _cx| sw.get_settings());
 
-        // Update app settings
-        self.settings = new_settings.clone();
-
         // Save settings to disk
         if let Err(e) = settings_io::save_settings(&new_settings) {
             eprintln!("Error saving settings: {}", e);
         } else {
             println!("Settings saved successfully");
         }
+
+        // Update app settings
+        self.settings = new_settings;
 
         // Close the settings window
         self.show_settings = false;
@@ -322,7 +322,7 @@ impl App {
         if self.is_modal_open() {
             return;
         }
-        // Open native file dialog for image selection
+        // Open native file dialog for image selection (single file)
         let mut file_dialog = rfd::FileDialog::new()
             .add_filter(
                 "Images",
@@ -339,20 +339,31 @@ impl App {
             }
         }
 
-        // Get selected files (supports multiple selection)
-        if let Some(files) = file_dialog.pick_files() {
-            if !files.is_empty() {
-                // Convert to PathBuf vector
-                let new_paths: Vec<PathBuf> = files.into_iter().collect();
+        // Get selected file (single selection)
+        if let Some(file) = file_dialog.pick_file() {
+            // Use process_dropped_path to scan the entire directory
+            // and find the index of the selected file
+            match utils::file_scanner::process_dropped_path(&file) {
+                Ok((all_images, start_index)) => {
+                    // Replace the current image list with all images from the directory
+                    self.app_state.image_paths = all_images;
+                    self.app_state.current_index = start_index;
 
-                // Replace the current image list with the new selection
-                self.app_state.image_paths = new_paths;
-                self.app_state.current_index = 0;
+                    // Re-apply current sort mode to maintain consistency
+                    let current_sort_mode = self.app_state.sort_mode;
+                    self.app_state.sort_mode = state::app_state::SortMode::Alphabetical; // Reset to force re-sort
+                    self.app_state.set_sort_mode(current_sort_mode);
 
-                // Update viewer with first image from new selection
-                self.update_viewer(window, cx);
-                self.update_window_title(window);
-                cx.notify();
+                    // Update viewer with selected image
+                    self.update_viewer(window, cx);
+                    self.update_window_title(window);
+                    cx.notify();
+                }
+                Err(e) => {
+                    eprintln!("Error opening file: {:?}", e);
+                    self.viewer.error_message = Some(format!("Error opening file: {}", e));
+                    cx.notify();
+                }
             }
         }
     }
@@ -1285,7 +1296,7 @@ impl Render for App {
         // Set preload paths for next/previous images to prime GPU cache
         // This must happen in render() so images are preloaded BEFORE navigation occurs
         // This eliminates black flashing by ensuring textures are already in GPU memory
-        let mut preload_paths = Vec::new();
+        let mut preload_paths = Vec::with_capacity(2);
         if let Some(next_path) = self.app_state.next_image_path() {
             preload_paths.push(next_path.clone());
         }
@@ -2104,7 +2115,7 @@ fn main() {
 
     // Initialize application state with the starting index and settings
     let app_state = AppState::new_with_settings(
-        image_paths.clone(),
+        image_paths,
         start_index,
         settings.sort_navigation.default_sort_mode.into(),
         settings.viewer_behavior.state_cache_size,
@@ -2139,7 +2150,7 @@ fn main() {
 
         cx.activate(true);
 
-        cx.open_window(
+        if let Err(e) = cx.open_window(
             WindowOptions {
                 ..Default::default()
             },
@@ -2246,7 +2257,8 @@ fn main() {
                     }
                 })
             },
-        )
-        .unwrap();
+        ) {
+            eprintln!("Failed to open window: {:?}", e);
+        }
     });
 }
