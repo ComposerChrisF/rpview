@@ -2,6 +2,7 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 /// Apply brightness adjustment to an image
 /// brightness: -100.0 to +100.0
+#[allow(dead_code)]
 pub fn apply_brightness(img: &DynamicImage, brightness: f32) -> DynamicImage {
     let brightness = brightness.clamp(-100.0, 100.0);
     if brightness.abs() < 0.001 {
@@ -29,6 +30,7 @@ pub fn apply_brightness(img: &DynamicImage, brightness: f32) -> DynamicImage {
 
 /// Apply contrast adjustment to an image
 /// contrast: -100.0 to +100.0
+#[allow(dead_code)]
 pub fn apply_contrast(img: &DynamicImage, contrast: f32) -> DynamicImage {
     let contrast = contrast.clamp(-100.0, 100.0);
     if contrast.abs() < 0.001 {
@@ -62,6 +64,7 @@ pub fn apply_contrast(img: &DynamicImage, contrast: f32) -> DynamicImage {
 }
 
 /// Apply contrast to a single channel
+#[allow(dead_code)]
 fn apply_contrast_to_channel(value: u8, factor: f32) -> u8 {
     let normalized = (value as f32) / 255.0;
     let adjusted = ((normalized - 0.5) * factor + 0.5) * 255.0;
@@ -70,6 +73,7 @@ fn apply_contrast_to_channel(value: u8, factor: f32) -> u8 {
 
 /// Apply gamma correction to an image
 /// gamma: 0.1 to 10.0 (1.0 = no change, <1.0 = darker, >1.0 = brighter)
+#[allow(dead_code)]
 pub fn apply_gamma(img: &DynamicImage, gamma: f32) -> DynamicImage {
     let gamma = gamma.clamp(0.1, 10.0);
     if (gamma - 1.0).abs() < 0.001 {
@@ -101,7 +105,11 @@ pub fn apply_gamma(img: &DynamicImage, gamma: f32) -> DynamicImage {
     DynamicImage::ImageRgba8(output)
 }
 
-/// Apply all filters to an image
+/// Apply all filters to an image in a single pass using a combined LUT
+/// This is more efficient than applying filters sequentially, as it:
+/// 1. Only iterates through pixels once instead of up to 3 times
+/// 2. Only allocates one output buffer instead of up to 3
+/// 3. Pre-computes all transformations into a single 256-entry lookup table
 pub fn apply_filters(
     img: &DynamicImage,
     brightness: f32,
@@ -109,26 +117,73 @@ pub fn apply_filters(
     gamma: f32,
 ) -> DynamicImage {
     // Short-circuit if no filters are applied
-    if brightness.abs() < 0.001 && contrast.abs() < 0.001 && (gamma - 1.0).abs() < 0.001 {
+    let has_brightness = brightness.abs() >= 0.001;
+    let has_contrast = contrast.abs() >= 0.001;
+    let has_gamma = (gamma - 1.0).abs() >= 0.001;
+
+    if !has_brightness && !has_contrast && !has_gamma {
         return img.clone();
     }
 
-    let mut result = img.clone();
+    // Clamp input values
+    let brightness = brightness.clamp(-100.0, 100.0);
+    let contrast = contrast.clamp(-100.0, 100.0);
+    let gamma = gamma.clamp(0.1, 10.0);
 
-    // Apply filters in order: brightness -> contrast -> gamma
-    if brightness.abs() >= 0.001 {
-        result = apply_brightness(&result, brightness);
+    // Pre-calculate combined lookup table for all filters
+    // This applies brightness -> contrast -> gamma in order
+    let mut lut = [0u8; 256];
+
+    // Pre-calculate contrast factor
+    let contrast_factor = if contrast > 0.0 {
+        1.0 + (contrast / 100.0) * 2.0 // 1.0 to 3.0
+    } else {
+        1.0 + (contrast / 100.0) * 0.9 // 0.1 to 1.0
+    };
+
+    // Brightness adjustment (maps -100..100 to -255..255)
+    let brightness_adjustment = brightness * 2.55;
+
+    for (i, lut_entry) in lut.iter_mut().enumerate() {
+        let mut value = i as f32;
+
+        // Step 1: Apply brightness
+        if has_brightness {
+            value = (value + brightness_adjustment).clamp(0.0, 255.0);
+        }
+
+        // Step 2: Apply contrast
+        if has_contrast {
+            let normalized = value / 255.0;
+            value = ((normalized - 0.5) * contrast_factor + 0.5) * 255.0;
+            value = value.clamp(0.0, 255.0);
+        }
+
+        // Step 3: Apply gamma
+        if has_gamma {
+            let normalized = value / 255.0;
+            let corrected = normalized.powf(1.0 / gamma);
+            value = corrected * 255.0;
+        }
+
+        *lut_entry = value.clamp(0.0, 255.0) as u8;
     }
 
-    if contrast.abs() >= 0.001 {
-        result = apply_contrast(&result, contrast);
+    // Apply combined LUT in a single pass
+    let rgba_img = img.to_rgba8();
+    let (width, height) = rgba_img.dimensions();
+    let mut output = ImageBuffer::new(width, height);
+
+    for (x, y, pixel) in rgba_img.enumerate_pixels() {
+        let r = lut[pixel[0] as usize];
+        let g = lut[pixel[1] as usize];
+        let b = lut[pixel[2] as usize];
+        let a = pixel[3]; // Alpha preserved
+
+        output.put_pixel(x, y, Rgba([r, g, b, a]));
     }
 
-    if (gamma - 1.0).abs() >= 0.001 {
-        result = apply_gamma(&result, gamma);
-    }
-
-    result
+    DynamicImage::ImageRgba8(output)
 }
 
 #[cfg(test)]

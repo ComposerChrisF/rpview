@@ -668,10 +668,10 @@ impl ImageViewer {
                                 .canonicalize()
                                 .map_err(|e| format!("Failed to get temp dir: {}", e))?;
 
-                            use std::time::{SystemTime, UNIX_EPOCH};
+                            use std::time::{Duration, SystemTime, UNIX_EPOCH};
                             let timestamp = SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
-                                .unwrap()
+                                .unwrap_or(Duration::from_secs(0))
                                 .as_nanos();
                             let temp_path = temp_dir.join(format!(
                                 "rpview_filtered_{}_{}.png",
