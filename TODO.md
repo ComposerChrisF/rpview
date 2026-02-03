@@ -626,7 +626,7 @@ This phase implements a comprehensive settings system allowing users to customiz
   - [x] Test all checkboxes (toggle, state persistence) - ✅ All 10+ boolean settings working
   - [x] Test all radio buttons (selection, default values) - ✅ Enum selections working
   - [-] Test text inputs (validation, placeholder text) - ⏳ Deferred (manual JSON editing)
-  - [-] Test color picker (if implemented) - ⏳ Deferred (manual JSON editing)
+  - [x] Test color picker - ✅ Using ccf-gpui-widgets ColorSwatch
   - [-] Test file picker for directories - ⏳ Deferred (manual JSON editing)
 - [x] **External Viewer Testing**
   - [-] Test viewer list reordering - ⏳ Deferred (manual JSON editing)
@@ -676,11 +676,12 @@ This phase implements a comprehensive settings system allowing users to customiz
   - Cache sizes and thread counts
   - Filter defaults (brightness, contrast, gamma)
   - Appearance settings (transparency, font scale)
-- **RGB Color Picker for background color** ✅ NEW
-  - Interactive sliders with +/- buttons for Red, Green, Blue channels
-  - Live color preview swatch (60x60 pixels)
-  - Hex color display (#RRGGBB format)
-  - Real-time updates throughout entire UI
+- **Color Picker for background color** ✅ UPGRADED
+  - Using ccf-gpui-widgets ColorSwatch component
+  - Hex color input (#RGB, #RRGGBB, CSS named colors)
+  - Full color picker popup with 2D saturation/value canvas
+  - Hue rainbow slider and RGB sliders
+  - Old/new color comparison preview
   - Background color applied to:
     - Main application window
     - Image viewer container
@@ -844,11 +845,11 @@ div()
   - [ ] Update working_settings.default_save_directory with selected path
   - [ ] Update display to show new path
 
-- [ ] **Step 7: Color Picker** (optional, low priority)
-  - [ ] Research if adabraka-ui or GPUI provides color picker
-  - [ ] If not, defer or use hex text input as alternative
-  - [ ] Allow RGB selection for background_color
-  - [ ] Update color preview square
+- [x] **Step 7: Color Picker** ✅ COMPLETE
+  - [x] Using ccf-gpui-widgets ColorSwatch component
+  - [x] Full-featured picker with hex input, 2D canvas, hue slider, RGB sliders
+  - [x] Supports CSS named colors (140+ colors)
+  - [x] Updates background_color setting in real-time
 
 - [ ] **Step 8: External Viewer List Editor** (Most complex)
   - [ ] Add "Add Viewer" button with click handler
