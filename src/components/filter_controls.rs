@@ -1,25 +1,29 @@
 use crate::state::image_state::FilterSettings;
 use crate::utils::style::{Colors, Spacing, TextSize, scaled_text_size};
-use adabraka_ui::components::slider::{Slider, SliderState};
+use ccf_gpui_widgets::prelude::{Slider, SliderEvent};
 use gpui::*;
+
+/// Events emitted by FilterControls
+#[derive(Clone, Debug)]
+pub enum FilterControlsEvent {
+    /// Filter settings changed via slider interaction
+    FiltersChanged,
+}
 
 /// Filter controls overlay component
 pub struct FilterControls {
-    /// Slider states for each filter
-    pub brightness_slider: Entity<SliderState>,
-    pub contrast_slider: Entity<SliderState>,
-    pub gamma_slider: Entity<SliderState>,
-
-    /// Last known filter values (to detect changes)
-    last_brightness: f32,
-    last_contrast: f32,
-    last_gamma: f32,
+    /// Slider entities for each filter
+    pub brightness_slider: Entity<Slider>,
+    pub contrast_slider: Entity<Slider>,
+    pub gamma_slider: Entity<Slider>,
 
     /// Overlay transparency (0-255)
     pub overlay_transparency: u8,
     /// Font size scale multiplier
     pub font_size_scale: f32,
 }
+
+impl EventEmitter<FilterControlsEvent> for FilterControls {}
 
 impl FilterControls {
     pub fn new(
@@ -30,41 +34,62 @@ impl FilterControls {
     ) -> Self {
         // Create brightness slider (-100 to +100, current value)
         let brightness_slider = cx.new(|cx| {
-            let mut state = SliderState::new(cx);
-            state.set_min(-100.0, cx);
-            state.set_max(100.0, cx);
-            state.set_value(filters.brightness, cx);
-            state.set_step(1.0, cx);
-            state
+            Slider::new(cx)
+                .with_value(filters.brightness as f64)
+                .min(-100.0)
+                .max(100.0)
+                .step(1.0)
+                .display_precision(0)
         });
+
+        // Subscribe to brightness slider changes
+        cx.subscribe(&brightness_slider, |_this, _slider, event: &SliderEvent, cx| {
+            if let SliderEvent::Change(_) = event {
+                cx.emit(FilterControlsEvent::FiltersChanged);
+            }
+        })
+        .detach();
 
         // Create contrast slider (-100 to +100, current value)
         let contrast_slider = cx.new(|cx| {
-            let mut state = SliderState::new(cx);
-            state.set_min(-100.0, cx);
-            state.set_max(100.0, cx);
-            state.set_value(filters.contrast, cx);
-            state.set_step(1.0, cx);
-            state
+            Slider::new(cx)
+                .with_value(filters.contrast as f64)
+                .min(-100.0)
+                .max(100.0)
+                .step(1.0)
+                .display_precision(0)
         });
+
+        // Subscribe to contrast slider changes
+        cx.subscribe(&contrast_slider, |_this, _slider, event: &SliderEvent, cx| {
+            if let SliderEvent::Change(_) = event {
+                cx.emit(FilterControlsEvent::FiltersChanged);
+            }
+        })
+        .detach();
 
         // Create gamma slider (0.1 to 10.0, current value)
         let gamma_slider = cx.new(|cx| {
-            let mut state = SliderState::new(cx);
-            state.set_min(0.1, cx);
-            state.set_max(10.0, cx);
-            state.set_value(filters.gamma, cx);
-            state.set_step(0.01, cx);
-            state
+            Slider::new(cx)
+                .with_value(filters.gamma as f64)
+                .min(0.1)
+                .max(10.0)
+                .step(0.01)
+                .display_precision(2)
         });
+
+        // Subscribe to gamma slider changes
+        cx.subscribe(&gamma_slider, |_this, _slider, event: &SliderEvent, cx| {
+            if let SliderEvent::Change(_) = event {
+                cx.emit(FilterControlsEvent::FiltersChanged);
+            }
+        })
+        .detach();
 
         Self {
             brightness_slider,
             contrast_slider,
             gamma_slider,
-            last_brightness: filters.brightness,
-            last_contrast: filters.contrast,
-            last_gamma: filters.gamma,
             overlay_transparency,
             font_size_scale,
         }
@@ -72,53 +97,24 @@ impl FilterControls {
 
     /// Update slider values from filter settings (e.g., when filters are reset)
     pub fn update_from_filters(&mut self, filters: FilterSettings, cx: &mut Context<Self>) {
-        self.last_brightness = filters.brightness;
-        self.last_contrast = filters.contrast;
-        self.last_gamma = filters.gamma;
-
-        self.brightness_slider.update(cx, |state, cx| {
-            state.set_value(filters.brightness, cx);
+        self.brightness_slider.update(cx, |slider, cx| {
+            slider.set_value(filters.brightness as f64, cx);
         });
-        self.contrast_slider.update(cx, |state, cx| {
-            state.set_value(filters.contrast, cx);
+        self.contrast_slider.update(cx, |slider, cx| {
+            slider.set_value(filters.contrast as f64, cx);
         });
-        self.gamma_slider.update(cx, |state, cx| {
-            state.set_value(filters.gamma, cx);
+        self.gamma_slider.update(cx, |slider, cx| {
+            slider.set_value(filters.gamma as f64, cx);
         });
     }
 
-    /// Get current filter settings from sliders and detect if they changed
-    /// Returns (current_filters, has_changed)
-    pub fn get_filters_and_detect_change(&mut self, cx: &App) -> (FilterSettings, bool) {
-        let current = FilterSettings {
-            brightness: self.brightness_slider.read(cx).value(),
-            contrast: self.contrast_slider.read(cx).value(),
-            gamma: self.gamma_slider.read(cx).value(),
-        };
-
-        eprintln!(
-            "[FilterControls] Current values: brightness={:.1}, contrast={:.1}, gamma={:.2}",
-            current.brightness, current.contrast, current.gamma
-        );
-        eprintln!(
-            "[FilterControls] Last values: brightness={:.1}, contrast={:.1}, gamma={:.2}",
-            self.last_brightness, self.last_contrast, self.last_gamma
-        );
-
-        let changed = current.brightness != self.last_brightness
-            || current.contrast != self.last_contrast
-            || current.gamma != self.last_gamma;
-
-        eprintln!("[FilterControls] Changed: {}", changed);
-
-        if changed {
-            self.last_brightness = current.brightness;
-            self.last_contrast = current.contrast;
-            self.last_gamma = current.gamma;
-            eprintln!("[FilterControls] Updated last values");
+    /// Get current filter settings from sliders
+    pub fn get_filters(&self, cx: &App) -> FilterSettings {
+        FilterSettings {
+            brightness: self.brightness_slider.read(cx).value() as f32,
+            contrast: self.contrast_slider.read(cx).value() as f32,
+            gamma: self.gamma_slider.read(cx).value() as f32,
         }
-
-        (current, changed)
     }
 }
 
@@ -177,7 +173,7 @@ impl Render for FilterControls {
                                             .child(format!("{:+.0}", brightness_value)),
                                     ),
                             )
-                            .child(Slider::new(self.brightness_slider.clone())),
+                            .child(self.brightness_slider.clone()),
                     )
                     // Contrast slider
                     .child(
@@ -204,7 +200,7 @@ impl Render for FilterControls {
                                             .child(format!("{:+.0}", contrast_value)),
                                     ),
                             )
-                            .child(Slider::new(self.contrast_slider.clone())),
+                            .child(self.contrast_slider.clone()),
                     )
                     // Gamma slider
                     .child(
@@ -231,7 +227,7 @@ impl Render for FilterControls {
                                             .child(format!("{:.2}", gamma_value)),
                                     ),
                             )
-                            .child(Slider::new(self.gamma_slider.clone())),
+                            .child(self.gamma_slider.clone()),
                     )
                     .child(div().h(px(1.0)).bg(rgba(0x44_44_44_FF)).mt(Spacing::sm()))
                     .child(

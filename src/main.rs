@@ -65,7 +65,8 @@ mod utils;
 
 use cli::Cli;
 use components::{
-    DebugOverlay, DebugOverlayConfig, FilterControls, HelpOverlay, ImageViewer, SettingsWindow,
+    DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, HelpOverlay,
+    ImageViewer, SettingsWindow,
 };
 use state::{AppSettings, AppState};
 use utils::settings_io;
@@ -1477,36 +1478,6 @@ impl Render for App {
             window.request_animation_frame();
         }
 
-        // Poll filter controls for changes
-        if self.show_filters {
-            eprintln!("[App::render] Polling filter controls...");
-            let (current_filters, changed) = self
-                .filter_controls
-                .update(cx, |fc, cx| fc.get_filters_and_detect_change(cx));
-
-            if changed {
-                eprintln!(
-                    "[App::render] Filters changed! Updating viewer with brightness={:.1}, contrast={:.1}, gamma={:.2}",
-                    current_filters.brightness, current_filters.contrast, current_filters.gamma
-                );
-                eprintln!(
-                    "[App::render] Old viewer filters: brightness={:.1}, contrast={:.1}, gamma={:.2}",
-                    self.viewer.image_state.filters.brightness,
-                    self.viewer.image_state.filters.contrast,
-                    self.viewer.image_state.filters.gamma
-                );
-
-                self.viewer.image_state.filters = current_filters;
-                self.viewer.update_filtered_cache();
-                self.save_current_image_state();
-
-                // If we just started filter processing, request animation frames to poll for completion
-                if self.viewer.is_processing_filters {
-                    window.request_animation_frame();
-                }
-            }
-        }
-
         // Update Z-drag state based on z_key_held
         if self.z_key_held && self.viewer.z_drag_state.is_none() {
             self.viewer.z_drag_state = Some((0.0, 0.0, 0.0, 0.0));
@@ -2280,7 +2251,7 @@ fn main() {
     });
 
     application.run(move |cx: &mut gpui::App| {
-        adabraka_ui::init(cx);
+        ccf_gpui_widgets::register_all_keybindings(cx);
 
         cx.on_window_closed(|cx| {
             if cx.windows().is_empty() {
@@ -2365,6 +2336,22 @@ fn main() {
                             cx,
                         )
                     });
+
+                    // Subscribe to filter control changes (event-based, not polling)
+                    inner_cx
+                        .subscribe(
+                            &filter_controls,
+                            |this, _fc, _event: &FilterControlsEvent, cx| {
+                                // Update viewer with new filter values
+                                let current_filters =
+                                    this.filter_controls.read(cx).get_filters(cx);
+                                this.viewer.image_state.filters = current_filters;
+                                this.viewer.update_filtered_cache();
+                                this.save_current_image_state();
+                                cx.notify();
+                            },
+                        )
+                        .detach();
 
                     // Create settings window
                     let settings_window =

@@ -12,7 +12,7 @@ pub mod settings_window;
 pub mod zoom_indicator;
 
 pub use debug_overlay::{DebugOverlay, DebugOverlayConfig};
-pub use filter_controls::FilterControls;
+pub use filter_controls::{FilterControls, FilterControlsEvent};
 pub use help_overlay::HelpOverlay;
 pub use image_viewer::ImageViewer;
 #[cfg(not(target_os = "macos"))]
