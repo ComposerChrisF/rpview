@@ -8,7 +8,7 @@
 //! The settings window provides interactive controls for all numeric and boolean settings:
 //!
 //! ### Working Features:
-//! - ✅ **Checkboxes**: Toggle boolean settings (10+ settings including animation auto-play, pan acceleration, etc.)
+//! - ✅ **Toggle switches**: Toggle boolean settings (10+ settings including animation auto-play, pan acceleration, etc.)
 //! - ✅ **Radio buttons**: Select enum values (zoom mode, sort mode, save format)
 //! - ✅ **Numeric inputs**: Increment/decrement buttons for all numeric settings (15+ settings)
 //!   - Pan speeds (normal, fast, slow)
@@ -44,8 +44,8 @@ use crate::utils::settings_io;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::{CloseSettings, ResetSettingsToDefaults};
 use ccf_gpui_widgets::prelude::{
-    scrollable_vertical, Checkbox, CheckboxEvent, NumberStepper, NumberStepperEvent,
-    SegmentedControl, SegmentedControlEvent, Theme,
+    scrollable_vertical, NumberStepper, NumberStepperEvent,
+    SegmentedControl, SegmentedControlEvent, Theme, ToggleSwitch, ToggleSwitchEvent,
 };
 use gpui::prelude::*;
 use gpui::*;
@@ -124,17 +124,17 @@ pub struct SettingsWindow {
     // Segmented controls
     zoom_mode_control: Entity<SegmentedControl>,
 
-    // Checkboxes for boolean settings
-    remember_per_image_state_checkbox: Entity<Checkbox>,
-    animation_auto_play_checkbox: Entity<Checkbox>,
-    preload_adjacent_images_checkbox: Entity<Checkbox>,
-    spacebar_pan_accelerated_checkbox: Entity<Checkbox>,
-    auto_save_filtered_cache_checkbox: Entity<Checkbox>,
-    remember_last_directory_checkbox: Entity<Checkbox>,
-    remember_filter_state_checkbox: Entity<Checkbox>,
-    wrap_navigation_checkbox: Entity<Checkbox>,
-    show_image_counter_checkbox: Entity<Checkbox>,
-    file_manager_integration_checkbox: Entity<Checkbox>,
+    // Toggle switches for boolean settings
+    remember_per_image_state_toggle: Entity<ToggleSwitch>,
+    animation_auto_play_toggle: Entity<ToggleSwitch>,
+    preload_adjacent_images_toggle: Entity<ToggleSwitch>,
+    spacebar_pan_accelerated_toggle: Entity<ToggleSwitch>,
+    auto_save_filtered_cache_toggle: Entity<ToggleSwitch>,
+    remember_last_directory_toggle: Entity<ToggleSwitch>,
+    remember_filter_state_toggle: Entity<ToggleSwitch>,
+    wrap_navigation_toggle: Entity<ToggleSwitch>,
+    show_image_counter_toggle: Entity<ToggleSwitch>,
+    file_manager_integration_toggle: Entity<ToggleSwitch>,
 }
 
 impl SettingsWindow {
@@ -370,154 +370,131 @@ impl SettingsWindow {
             cx.notify();
         }).detach();
 
-        // Custom theme for checkboxes with green checked state and lime green focus
-        let checkbox_theme = Theme::dark()
-            .with_primary(0x50fa7b)
-            .with_border_focus(0x50fa7b);
+        // Custom theme for toggle switches with lime green theme
+        // On state: saturated lime, Off state: very dark lime
+        let toggle_theme = Theme::dark()
+            .with_primary(0x2ecc71)
+            .with_border_focus(0x2ecc71)
+            .with_bg_input(0x143d14);
 
-        // Helper to get checkbox label based on state
-        fn checkbox_label(checked: bool) -> &'static str {
-            if checked { "Enabled" } else { "Disabled" }
-        }
-
-        // Create checkbox entities for boolean settings
-        let checked = settings.viewer_behavior.remember_per_image_state;
-        let remember_per_image_state_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        // Create toggle switch entities for boolean settings
+        let remember_per_image_state_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.viewer_behavior.remember_per_image_state)
+                .label("Remember per-image state")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&remember_per_image_state_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.viewer_behavior.remember_per_image_state = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&remember_per_image_state_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.viewer_behavior.remember_per_image_state = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.viewer_behavior.animation_auto_play;
-        let animation_auto_play_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let animation_auto_play_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.viewer_behavior.animation_auto_play)
+                .label("Auto-play animations")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&animation_auto_play_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.viewer_behavior.animation_auto_play = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&animation_auto_play_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.viewer_behavior.animation_auto_play = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.performance.preload_adjacent_images;
-        let preload_adjacent_images_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let preload_adjacent_images_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.performance.preload_adjacent_images)
+                .label("Preload adjacent images")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&preload_adjacent_images_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.performance.preload_adjacent_images = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&preload_adjacent_images_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.performance.preload_adjacent_images = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.keyboard_mouse.spacebar_pan_accelerated;
-        let spacebar_pan_accelerated_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let spacebar_pan_accelerated_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.keyboard_mouse.spacebar_pan_accelerated)
+                .label("Spacebar pan acceleration")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&spacebar_pan_accelerated_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.keyboard_mouse.spacebar_pan_accelerated = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&spacebar_pan_accelerated_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.keyboard_mouse.spacebar_pan_accelerated = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.file_operations.auto_save_filtered_cache;
-        let auto_save_filtered_cache_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let auto_save_filtered_cache_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.file_operations.auto_save_filtered_cache)
+                .label("Auto-save filtered cache")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&auto_save_filtered_cache_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.file_operations.auto_save_filtered_cache = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&auto_save_filtered_cache_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.file_operations.auto_save_filtered_cache = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.file_operations.remember_last_directory;
-        let remember_last_directory_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let remember_last_directory_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.file_operations.remember_last_directory)
+                .label("Remember last directory")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&remember_last_directory_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.file_operations.remember_last_directory = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&remember_last_directory_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.file_operations.remember_last_directory = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.filters.remember_filter_state;
-        let remember_filter_state_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let remember_filter_state_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.filters.remember_filter_state)
+                .label("Remember filter state per-image")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&remember_filter_state_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.filters.remember_filter_state = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&remember_filter_state_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.filters.remember_filter_state = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.sort_navigation.wrap_navigation;
-        let wrap_navigation_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let wrap_navigation_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.sort_navigation.wrap_navigation)
+                .label("Wrap navigation")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&wrap_navigation_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.sort_navigation.wrap_navigation = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&wrap_navigation_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.sort_navigation.wrap_navigation = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.sort_navigation.show_image_counter;
-        let show_image_counter_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let show_image_counter_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.sort_navigation.show_image_counter)
+                .label("Show image counter")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&show_image_counter_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.sort_navigation.show_image_counter = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&show_image_counter_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.sort_navigation.show_image_counter = *on;
             cx.notify();
         }).detach();
 
-        let checked = settings.external_tools.enable_file_manager_integration;
-        let file_manager_integration_checkbox = cx.new(|cx| {
-            Checkbox::new(cx)
-                .with_checked(checked)
-                .label(checkbox_label(checked))
-                .theme(checkbox_theme)
+        let file_manager_integration_toggle = cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on(settings.external_tools.enable_file_manager_integration)
+                .label("File manager integration")
+                .theme(toggle_theme)
         });
-        cx.subscribe(&file_manager_integration_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
-            let CheckboxEvent::Change(checked) = event;
-            this.working_settings.external_tools.enable_file_manager_integration = *checked;
-            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+        cx.subscribe(&file_manager_integration_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            this.working_settings.external_tools.enable_file_manager_integration = *on;
             cx.notify();
         }).detach();
 
@@ -541,16 +518,16 @@ impl SettingsWindow {
             default_contrast_stepper,
             default_gamma_stepper,
             zoom_mode_control,
-            remember_per_image_state_checkbox,
-            animation_auto_play_checkbox,
-            preload_adjacent_images_checkbox,
-            spacebar_pan_accelerated_checkbox,
-            auto_save_filtered_cache_checkbox,
-            remember_last_directory_checkbox,
-            remember_filter_state_checkbox,
-            wrap_navigation_checkbox,
-            show_image_counter_checkbox,
-            file_manager_integration_checkbox,
+            remember_per_image_state_toggle,
+            animation_auto_play_toggle,
+            preload_adjacent_images_toggle,
+            spacebar_pan_accelerated_toggle,
+            auto_save_filtered_cache_toggle,
+            remember_last_directory_toggle,
+            remember_filter_state_toggle,
+            wrap_navigation_toggle,
+            show_image_counter_toggle,
+            file_manager_integration_toggle,
         }
     }
 
@@ -616,56 +593,36 @@ impl SettingsWindow {
             control.set_selected(zoom_value, cx);
         });
 
-        // Reset checkboxes (set both checked state and label)
-        let checked = defaults.viewer_behavior.remember_per_image_state;
-        self.remember_per_image_state_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        // Reset toggle switches
+        self.remember_per_image_state_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.viewer_behavior.remember_per_image_state, cx);
         });
-        let checked = defaults.viewer_behavior.animation_auto_play;
-        self.animation_auto_play_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.animation_auto_play_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.viewer_behavior.animation_auto_play, cx);
         });
-        let checked = defaults.performance.preload_adjacent_images;
-        self.preload_adjacent_images_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.preload_adjacent_images_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.performance.preload_adjacent_images, cx);
         });
-        let checked = defaults.keyboard_mouse.spacebar_pan_accelerated;
-        self.spacebar_pan_accelerated_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.spacebar_pan_accelerated_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.keyboard_mouse.spacebar_pan_accelerated, cx);
         });
-        let checked = defaults.file_operations.auto_save_filtered_cache;
-        self.auto_save_filtered_cache_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.auto_save_filtered_cache_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.file_operations.auto_save_filtered_cache, cx);
         });
-        let checked = defaults.file_operations.remember_last_directory;
-        self.remember_last_directory_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.remember_last_directory_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.file_operations.remember_last_directory, cx);
         });
-        let checked = defaults.filters.remember_filter_state;
-        self.remember_filter_state_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.remember_filter_state_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.filters.remember_filter_state, cx);
         });
-        let checked = defaults.sort_navigation.wrap_navigation;
-        self.wrap_navigation_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.wrap_navigation_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.sort_navigation.wrap_navigation, cx);
         });
-        let checked = defaults.sort_navigation.show_image_counter;
-        self.show_image_counter_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.show_image_counter_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.sort_navigation.show_image_counter, cx);
         });
-        let checked = defaults.external_tools.enable_file_manager_integration;
-        self.file_manager_integration_checkbox.update(cx, |checkbox, cx| {
-            checkbox.set_checked(checked, cx);
-            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        self.file_manager_integration_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.external_tools.enable_file_manager_integration, cx);
         });
     }
 
@@ -818,19 +775,26 @@ impl SettingsWindow {
             )
     }
 
-    /// Render a row with a label and Checkbox widget
-    fn render_checkbox_row(
+    /// Render a row with a ToggleSwitch widget (label is part of the toggle)
+    fn render_toggle_row(
         &self,
-        label: String,
         description: Option<String>,
-        checkbox: &Entity<Checkbox>,
+        toggle: &Entity<ToggleSwitch>,
     ) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
             .mb(Spacing::md())
-            .child(self.render_label(label, description))
-            .child(checkbox.clone())
+            .child(toggle.clone())
+            .when_some(description, |el, desc| {
+                el.child(
+                    div()
+                        .text_size(TextSize::sm())
+                        .text_color(rgb(0x888888))
+                        .mt(Spacing::xs())
+                        .child(desc)
+                )
+            })
     }
 
     /// Render viewer behavior section
@@ -848,20 +812,18 @@ impl SettingsWindow {
                     ))
                     .child(self.zoom_mode_control.clone()),
             )
-            .child(self.render_checkbox_row(
-                "Remember per-image state".to_string(),
+            .child(self.render_toggle_row(
                 Some("Remember zoom, pan, and filters for each image".to_string()),
-                &self.remember_per_image_state_checkbox,
+                &self.remember_per_image_state_toggle,
             ))
             .child(self.render_stepper_row(
                 "State cache size".to_string(),
                 Some("Maximum number of images to cache state for".to_string()),
                 &self.state_cache_size_stepper,
             ))
-            .child(self.render_checkbox_row(
-                "Auto-play animations".to_string(),
+            .child(self.render_toggle_row(
                 Some("Start animated GIFs/WEBPs playing automatically".to_string()),
-                &self.animation_auto_play_checkbox,
+                &self.animation_auto_play_toggle,
             ))
     }
 
@@ -871,10 +833,9 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .child(self.render_section_header("Performance".to_string()))
-            .child(self.render_checkbox_row(
-                "Preload adjacent images".to_string(),
+            .child(self.render_toggle_row(
                 Some("Load next/previous images in background for faster navigation".to_string()),
-                &self.preload_adjacent_images_checkbox,
+                &self.preload_adjacent_images_toggle,
             ))
             .child(self.render_stepper_row(
                 "Filter processing threads".to_string(),
@@ -919,10 +880,9 @@ impl SettingsWindow {
                 Some("Zoom percentage change per pixel when Z-dragging".to_string()),
                 &self.z_drag_sensitivity_stepper,
             ))
-            .child(self.render_checkbox_row(
-                "Spacebar pan acceleration".to_string(),
+            .child(self.render_toggle_row(
                 Some("Enable acceleration for spacebar+mouse panning".to_string()),
-                &self.spacebar_pan_accelerated_checkbox,
+                &self.spacebar_pan_accelerated_toggle,
             ))
     }
 
@@ -1023,15 +983,13 @@ impl SettingsWindow {
                         ),
                     )),
             )
-            .child(self.render_checkbox_row(
-                "Auto-save filtered cache".to_string(),
+            .child(self.render_toggle_row(
                 Some("Permanently save filtered image cache to disk".to_string()),
-                &self.auto_save_filtered_cache_checkbox,
+                &self.auto_save_filtered_cache_toggle,
             ))
-            .child(self.render_checkbox_row(
-                "Remember last directory".to_string(),
+            .child(self.render_toggle_row(
                 Some("Remember last used directory in file dialogs".to_string()),
-                &self.remember_last_directory_checkbox,
+                &self.remember_last_directory_toggle,
             ))
     }
 
@@ -1379,10 +1337,9 @@ impl SettingsWindow {
                 Some("Default gamma value when resetting (0.1 to 10.0)".to_string()),
                 &self.default_gamma_stepper,
             ))
-            .child(self.render_checkbox_row(
-                "Remember filter state per-image".to_string(),
+            .child(self.render_toggle_row(
                 Some("Remember filter settings for each image separately".to_string()),
-                &self.remember_filter_state_checkbox,
+                &self.remember_filter_state_toggle,
             ))
             .child(
                 div()
@@ -1497,15 +1454,13 @@ impl SettingsWindow {
                             ),
                     ),
             )
-            .child(self.render_checkbox_row(
-                "Wrap navigation".to_string(),
+            .child(self.render_toggle_row(
                 Some("Navigate from last image to first (and vice versa)".to_string()),
-                &self.wrap_navigation_checkbox,
+                &self.wrap_navigation_toggle,
             ))
-            .child(self.render_checkbox_row(
-                "Show image counter".to_string(),
+            .child(self.render_toggle_row(
                 Some("Display image position in window title".to_string()),
-                &self.show_image_counter_checkbox,
+                &self.show_image_counter_toggle,
             ))
     }
 
@@ -1643,10 +1598,9 @@ impl SettingsWindow {
                             ),
                     ),
             )
-            .child(self.render_checkbox_row(
-                "File manager integration".to_string(),
+            .child(self.render_toggle_row(
                 Some("Show 'Reveal in Finder/Explorer' menu option".to_string()),
-                &self.file_manager_integration_checkbox,
+                &self.file_manager_integration_toggle,
             ))
     }
 
