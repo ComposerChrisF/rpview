@@ -1395,6 +1395,16 @@ Key implementation details:
 - Tested and working on macOS with Finder
 - Ready for testing on Windows (File Explorer) and Linux (Nautilus/Dolphin)
 
+**macOS "Open With" Support** (added after Phase 11.5):
+- **Problem**: Right-click → "Open With" → RPView.app didn't load the selected image
+- **Root Cause**: macOS sends `application:openFiles:` delegate method for "Open With", but GPUI only implements `application:openURLs:` (for URL schemes)
+- **Solution**: Two-pronged approach implemented in src/macos_open_handler.rs:
+  1. Hook into GPUI's `on_open_urls` callback which receives file:// URLs on modern macOS
+  2. Use Objective-C runtime to add `application:openFiles:` method to GPUI's delegate class as fallback
+- **URL Decoding**: Implemented proper UTF-8 URL decoding for filenames with special characters
+- **Polling Timer**: Added 250ms polling loop to process pending file open requests
+- **Result**: "Open With" now works correctly, loading the selected image and scanning its directory for navigation
+
 **Critical GPUI Image Rendering Fix**:
 - **Problem**: Dropped images would load successfully but not display on screen until navigation
 - **Root Cause**: GPUI's `img()` component caches based on component position in the UI tree, not image path

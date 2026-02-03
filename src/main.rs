@@ -3,7 +3,59 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+#[cfg(target_os = "macos")]
+mod macos_open_handler;
+
+/// Global storage for pending file open requests from macOS "Open With" events.
+/// This is necessary because the `on_open_urls` callback doesn't receive GPUI context,
+/// so we store the paths here and process them when the app context is available.
+static PENDING_OPEN_PATHS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+///// Parse a file:// URL to a PathBuf
+fn parse_file_url(url: &str) -> Option<PathBuf> {
+    if let Some(path_str) = url.strip_prefix("file://") {
+        // URL decode the path (handle %XX encoding for spaces, etc.)
+        let decoded = url_decode(path_str);
+        Some(PathBuf::from(decoded))
+    } else {
+        None
+    }
+}
+
+/// URL decoder for file paths that properly handles UTF-8
+fn url_decode(input: &str) -> String {
+    let mut bytes = Vec::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            // Try to read two hex digits
+            let hex: String = chars.by_ref().take(2).collect();
+            if hex.len() == 2 {
+                if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                    bytes.push(byte);
+                    continue;
+                }
+            }
+            // If decoding failed, keep the original %XX as bytes
+            bytes.push(b'%');
+            bytes.extend(hex.as_bytes());
+        } else {
+            // Regular ASCII character - add its UTF-8 bytes
+            let mut buf = [0u8; 4];
+            let encoded = c.encode_utf8(&mut buf);
+            bytes.extend(encoded.as_bytes());
+        }
+    }
+
+    // Convert bytes to UTF-8 string, replacing invalid sequences
+    String::from_utf8(bytes).unwrap_or_else(|e| {
+        String::from_utf8_lossy(e.as_bytes()).into_owned()
+    })
+}
 
 mod cli;
 mod components;
@@ -802,6 +854,73 @@ impl App {
             self.focus_handle.focus(window);
 
             // Force a re-render
+            cx.notify();
+        }
+    }
+
+    /// Check for and process any pending file open requests from macOS "Open With" events.
+    /// This is called when the app becomes active or on a timer.
+    fn process_pending_open_paths(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Take ownership of pending paths from the global storage
+        let mut pending_paths: Vec<PathBuf> = {
+            let mut pending = PENDING_OPEN_PATHS.lock().unwrap();
+            std::mem::take(&mut *pending)
+        };
+
+        // Also collect paths from the macOS-specific handler
+        #[cfg(target_os = "macos")]
+        {
+            pending_paths.extend(macos_open_handler::take_pending_paths());
+        }
+
+        if pending_paths.is_empty() {
+            return;
+        }
+
+        // Process the paths similar to handle_dropped_files
+        let mut all_images: Vec<PathBuf> = Vec::new();
+        let mut target_index: usize = 0;
+
+        if pending_paths.len() == 1 {
+            // Single file: scan parent directory and set index to that file
+            let path = &pending_paths[0];
+            match utils::file_scanner::process_dropped_path(path) {
+                Ok((images, index)) => {
+                    all_images = images;
+                    target_index = index;
+                }
+                Err(_e) => {
+                    // Error processing path
+                }
+            }
+        } else {
+            // Multiple files: collect only the specific files
+            for path in &pending_paths {
+                if path.is_file() {
+                    if utils::file_scanner::is_supported_image(path) {
+                        all_images.push(path.clone());
+                    }
+                } else if path.is_dir() {
+                    if let Ok(dir_images) = utils::file_scanner::scan_directory(path) {
+                        all_images.extend(dir_images);
+                    }
+                }
+            }
+
+            // Remove duplicates and sort
+            all_images.sort();
+            all_images.dedup();
+            utils::file_scanner::sort_alphabetically(&mut all_images);
+            target_index = 0;
+        }
+
+        // Update if we found images
+        if !all_images.is_empty() {
+            self.app_state.image_paths = all_images;
+            self.app_state.current_index = target_index;
+            self.update_viewer(window, cx);
+            self.update_window_title(window);
+            self.focus_handle.focus(window);
             cx.notify();
         }
     }
@@ -2131,7 +2250,36 @@ fn main() {
     // Get the first image path to load (or None if no images)
     let first_image_path = app_state.current_image().cloned();
 
-    Application::new().run(move |cx: &mut gpui::App| {
+    let application = Application::new();
+
+    // Register the application:openFiles: handler on GPUI's delegate class
+    // This must be done after Application::new() creates the delegate class
+    #[cfg(target_os = "macos")]
+    {
+        macos_open_handler::register_open_files_handler();
+    }
+
+    // Register handler for macOS "Open With" events
+    application.on_open_urls(|urls| {
+        let paths: Vec<PathBuf> = urls
+            .iter()
+            .filter_map(|url| parse_file_url(url))
+            .collect();
+
+        if !paths.is_empty() {
+            if let Ok(mut pending) = PENDING_OPEN_PATHS.lock() {
+                pending.extend(paths);
+            }
+        }
+    });
+
+    // Handle app reactivation (e.g., clicking dock icon while running)
+    // This also processes any pending open paths
+    application.on_reopen(|cx| {
+        check_and_process_pending_paths(cx);
+    });
+
+    application.run(move |cx: &mut gpui::App| {
         adabraka_ui::init(cx);
 
         cx.on_window_closed(|cx| {
@@ -2259,6 +2407,48 @@ fn main() {
             },
         ) {
             eprintln!("Failed to open window: {:?}", e);
+            return;
         }
+
+        // Check for pending open paths from macOS "Open With" events
+        // Use defer to ensure the window is fully set up first
+        cx.defer(|cx| {
+            check_and_process_pending_paths(cx);
+        });
+
+        // Set up a recurring timer to check for pending open paths
+        // This handles the case where files are opened while the app is already running
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |cx| {
+            loop {
+                executor.timer(Duration::from_millis(250)).await;
+
+                let has_pending = PENDING_OPEN_PATHS.lock()
+                    .map(|p| !p.is_empty())
+                    .unwrap_or(false);
+
+                #[cfg(target_os = "macos")]
+                let has_pending = has_pending || macos_open_handler::has_pending_paths();
+
+                if has_pending {
+                    let _ = cx.update(|cx| {
+                        check_and_process_pending_paths(cx);
+                    });
+                }
+            }
+        }).detach();
     });
+}
+
+/// Helper function to check for and process pending file open paths
+fn check_and_process_pending_paths(cx: &mut gpui::App) {
+    if let Some(window) = cx.windows().first() {
+        let _ = window.update(cx, |view, window, cx| {
+            if let Ok(app) = view.downcast::<App>() {
+                app.update(cx, |app, cx| {
+                    app.process_pending_open_paths(window, cx);
+                });
+            }
+        });
+    }
 }
