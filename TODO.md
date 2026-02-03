@@ -793,18 +793,18 @@ div()
 
 ## Implementation Tasks
 
-- [ ] **Step 0: Explore adabraka-ui Components**
-  - [ ] Check what interactive components are available in adabraka-ui
-  - [ ] Document available: Checkbox, Input, Button, Select, NumberInput
-  - [ ] Identify any missing components we need to build custom
+- [x] **Step 0: Explore adabraka-ui Components** (Migrated to ccf-gpui-widgets)
+  - [x] Check what interactive components are available in ccf-gpui-widgets
+  - [x] Document available: Checkbox, NumberStepper, SegmentedControl, etc.
+  - [x] Identify any missing components we need to build custom
 
-- [ ] **Step 1: Interactive Checkboxes** (Easiest first!)
-  - [ ] Import checkbox component from adabraka-ui
-  - [ ] Replace `render_checkbox()` static divs with interactive component
-  - [ ] Add event handlers to toggle boolean values in working_settings
-  - [ ] Call cx.notify() to trigger re-render
-  - [ ] Test with one checkbox, then apply to all
-  - [ ] Affected settings: remember_per_image_state, animation_auto_play, preload_adjacent_images, wrap_navigation, etc.
+- [x] **Step 1: Interactive Checkboxes** (Completed!)
+  - [x] Import Checkbox component from ccf-gpui-widgets
+  - [x] Replace `render_checkbox()` static divs with interactive Checkbox widget
+  - [x] Add event handlers to toggle boolean values in working_settings
+  - [x] Dynamic labels show "Enabled"/"Disabled" state
+  - [x] Green theme for checked state with black checkmark
+  - [x] All 10 boolean settings converted: remember_per_image_state, animation_auto_play, preload_adjacent_images, spacebar_pan_accelerated, auto_save_filtered_cache, remember_last_directory, remember_filter_state, wrap_navigation, show_image_counter, file_manager_integration
 
 - [ ] **Step 2: Interactive Radio Buttons / Toggle Groups**
   - [ ] Update radio button divs with on_mouse_up handlers
