@@ -230,8 +230,8 @@ impl App {
 
     fn handle_reset_settings_to_defaults(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         // Reset settings window to defaults
-        self.settings_window.update(cx, |sw, _cx| {
-            sw.reset_to_defaults();
+        self.settings_window.update(cx, |sw, cx| {
+            sw.reset_to_defaults(cx);
         });
 
         cx.notify();

@@ -43,7 +43,10 @@ use crate::state::settings::*;
 use crate::utils::settings_io;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::{CloseSettings, ResetSettingsToDefaults};
-use ccf_gpui_widgets::prelude::scrollable_vertical;
+use ccf_gpui_widgets::prelude::{
+    scrollable_vertical, NumberStepper, NumberStepperEvent, SegmentedControl,
+    SegmentedControlEvent, Theme,
+};
 use gpui::prelude::*;
 use gpui::*;
 
@@ -102,17 +105,279 @@ pub struct SettingsWindow {
     window_title_input: String,
     /// Focus handle for the text input
     text_input_focus: FocusHandle,
+
+    // Number steppers for numeric settings
+    state_cache_size_stepper: Entity<NumberStepper>,
+    filter_processing_threads_stepper: Entity<NumberStepper>,
+    max_image_dimension_stepper: Entity<NumberStepper>,
+    pan_speed_normal_stepper: Entity<NumberStepper>,
+    pan_speed_fast_stepper: Entity<NumberStepper>,
+    pan_speed_slow_stepper: Entity<NumberStepper>,
+    scroll_wheel_sensitivity_stepper: Entity<NumberStepper>,
+    z_drag_sensitivity_stepper: Entity<NumberStepper>,
+    overlay_transparency_stepper: Entity<NumberStepper>,
+    font_size_scale_stepper: Entity<NumberStepper>,
+    default_brightness_stepper: Entity<NumberStepper>,
+    default_contrast_stepper: Entity<NumberStepper>,
+    default_gamma_stepper: Entity<NumberStepper>,
+
+    // Segmented controls
+    zoom_mode_control: Entity<SegmentedControl>,
 }
 
 impl SettingsWindow {
     /// Create a new settings window with the given settings
     pub fn new(settings: AppSettings, cx: &mut Context<Self>) -> Self {
+        // Custom theme for steppers with lime green focus color
+        let stepper_theme = Theme::dark().with_border_focus(0x50fa7b);
+
+        // Create number steppers for each numeric setting
+        // step_small is set to give "lesser of 1 or normal step" behavior
+        let state_cache_size_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.viewer_behavior.state_cache_size as f64)
+                .min(10.0)
+                .max(10000.0)
+                .step(100.0)
+                .step_small(0.01)  // Alt+click steps by 1
+                .display_precision(0)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&state_cache_size_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.viewer_behavior.state_cache_size = *value as usize;
+            cx.notify();
+        }).detach();
+
+        let filter_processing_threads_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.performance.filter_processing_threads as f64)
+                .min(1.0)
+                .max(32.0)
+                .step(1.0)
+                .display_precision(0)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&filter_processing_threads_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.performance.filter_processing_threads = *value as usize;
+            cx.notify();
+        }).detach();
+
+        let max_image_dimension_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.performance.max_image_dimension as f64)
+                .min(1000.0)
+                .max(100000.0)
+                .step(1000.0)
+                .step_small(0.001)  // Alt+click steps by 1
+                .display_precision(0)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&max_image_dimension_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.performance.max_image_dimension = *value as u32;
+            cx.notify();
+        }).detach();
+
+        let pan_speed_normal_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.keyboard_mouse.pan_speed_normal.into())
+                .min(1.0)
+                .max(100.0)
+                .step(1.0)
+                .display_precision(1)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&pan_speed_normal_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.keyboard_mouse.pan_speed_normal = *value as f32;
+            cx.notify();
+        }).detach();
+
+        let pan_speed_fast_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.keyboard_mouse.pan_speed_fast.into())
+                .min(1.0)
+                .max(200.0)
+                .step(5.0)
+                .step_small(0.2)  // Alt+click steps by 1
+                .display_precision(1)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&pan_speed_fast_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.keyboard_mouse.pan_speed_fast = *value as f32;
+            cx.notify();
+        }).detach();
+
+        let pan_speed_slow_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.keyboard_mouse.pan_speed_slow.into())
+                .min(0.5)
+                .max(50.0)
+                .step(0.5)
+                .display_precision(1)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&pan_speed_slow_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.keyboard_mouse.pan_speed_slow = *value as f32;
+            cx.notify();
+        }).detach();
+
+        let scroll_wheel_sensitivity_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.keyboard_mouse.scroll_wheel_sensitivity.into())
+                .min(1.01)
+                .max(2.0)
+                .step(0.05)
+                .display_precision(2)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&scroll_wheel_sensitivity_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.keyboard_mouse.scroll_wheel_sensitivity = *value as f32;
+            cx.notify();
+        }).detach();
+
+        let z_drag_sensitivity_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.keyboard_mouse.z_drag_sensitivity.into())
+                .min(0.001)
+                .max(0.1)
+                .step(0.001)
+                .display_precision(3)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&z_drag_sensitivity_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.keyboard_mouse.z_drag_sensitivity = *value as f32;
+            cx.notify();
+        }).detach();
+
+        let overlay_transparency_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.appearance.overlay_transparency as f64)
+                .min(0.0)
+                .max(255.0)
+                .step(10.0)
+                .step_small(0.1)  // Alt+click steps by 1
+                .display_precision(0)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&overlay_transparency_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.appearance.overlay_transparency = *value as u8;
+            cx.notify();
+        }).detach();
+
+        let font_size_scale_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.appearance.font_size_scale.into())
+                .min(0.5)
+                .max(8.0)
+                .step(0.1)
+                .display_precision(1)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&font_size_scale_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.appearance.font_size_scale = *value as f32;
+            cx.notify();
+        }).detach();
+
+        let default_brightness_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.filters.default_brightness.into())
+                .min(-100.0)
+                .max(100.0)
+                .step(5.0)
+                .step_small(0.2)  // Alt+click steps by 1
+                .display_precision(0)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&default_brightness_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.filters.default_brightness = *value as f32;
+            cx.notify();
+        }).detach();
+
+        let default_contrast_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.filters.default_contrast.into())
+                .min(-100.0)
+                .max(100.0)
+                .step(5.0)
+                .step_small(0.2)  // Alt+click steps by 1
+                .display_precision(0)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&default_contrast_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.filters.default_contrast = *value as f32;
+            cx.notify();
+        }).detach();
+
+        let default_gamma_stepper = cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value(settings.filters.default_gamma.into())
+                .min(0.1)
+                .max(10.0)
+                .step(0.1)
+                .display_precision(2)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&default_gamma_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
+            let NumberStepperEvent::Change(value) = event;
+            this.working_settings.filters.default_gamma = *value as f32;
+            cx.notify();
+        }).detach();
+
+        // Segmented control for zoom mode
+        let initial_zoom = match settings.viewer_behavior.default_zoom_mode {
+            ZoomMode::FitToWindow => "fit",
+            ZoomMode::OneHundredPercent => "100",
+        };
+        let zoom_mode_control = cx.new(|cx| {
+            SegmentedControl::new(cx)
+                .options(vec![
+                    ("fit", "Fit to Window"),
+                    ("100", "100% (Actual Size)"),
+                ])
+                .with_selected(initial_zoom)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&zoom_mode_control, |this, _control, event: &SegmentedControlEvent, cx| {
+            let SegmentedControlEvent::Change(value) = event;
+            this.working_settings.viewer_behavior.default_zoom_mode = match value.as_str() {
+                "fit" => ZoomMode::FitToWindow,
+                "100" => ZoomMode::OneHundredPercent,
+                _ => ZoomMode::FitToWindow,
+            };
+            cx.notify();
+        }).detach();
+
         Self {
             window_title_input: settings.appearance.window_title_format.clone(),
             working_settings: settings,
             current_section: SettingsSection::ViewerBehavior,
             focus_handle: cx.focus_handle(),
             text_input_focus: cx.focus_handle(),
+            state_cache_size_stepper,
+            filter_processing_threads_stepper,
+            max_image_dimension_stepper,
+            pan_speed_normal_stepper,
+            pan_speed_fast_stepper,
+            pan_speed_slow_stepper,
+            scroll_wheel_sensitivity_stepper,
+            z_drag_sensitivity_stepper,
+            overlay_transparency_stepper,
+            font_size_scale_stepper,
+            default_brightness_stepper,
+            default_contrast_stepper,
+            default_gamma_stepper,
+            zoom_mode_control,
         }
     }
 
@@ -123,9 +388,60 @@ impl SettingsWindow {
     }
 
     /// Reset all settings to defaults
-    pub fn reset_to_defaults(&mut self) {
-        self.working_settings = AppSettings::default();
-        self.window_title_input = AppSettings::default().appearance.window_title_format;
+    pub fn reset_to_defaults(&mut self, cx: &mut Context<Self>) {
+        let defaults = AppSettings::default();
+        self.working_settings = defaults.clone();
+        self.window_title_input = defaults.appearance.window_title_format.clone();
+
+        // Reset all stepper values
+        self.state_cache_size_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.viewer_behavior.state_cache_size as f64, cx);
+        });
+        self.filter_processing_threads_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.performance.filter_processing_threads as f64, cx);
+        });
+        self.max_image_dimension_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.performance.max_image_dimension as f64, cx);
+        });
+        self.pan_speed_normal_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.keyboard_mouse.pan_speed_normal.into(), cx);
+        });
+        self.pan_speed_fast_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.keyboard_mouse.pan_speed_fast.into(), cx);
+        });
+        self.pan_speed_slow_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.keyboard_mouse.pan_speed_slow.into(), cx);
+        });
+        self.scroll_wheel_sensitivity_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.keyboard_mouse.scroll_wheel_sensitivity.into(), cx);
+        });
+        self.z_drag_sensitivity_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.keyboard_mouse.z_drag_sensitivity.into(), cx);
+        });
+        self.overlay_transparency_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.appearance.overlay_transparency as f64, cx);
+        });
+        self.font_size_scale_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.appearance.font_size_scale.into(), cx);
+        });
+        self.default_brightness_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.filters.default_brightness.into(), cx);
+        });
+        self.default_contrast_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.filters.default_contrast.into(), cx);
+        });
+        self.default_gamma_stepper.update(cx, |stepper, cx| {
+            stepper.set_value(defaults.filters.default_gamma.into(), cx);
+        });
+
+        // Reset segmented controls
+        let zoom_value = match defaults.viewer_behavior.default_zoom_mode {
+            ZoomMode::FitToWindow => "fit",
+            ZoomMode::OneHundredPercent => "100",
+        };
+        self.zoom_mode_control.update(cx, |control, cx| {
+            control.set_selected(zoom_value, cx);
+        });
     }
 
     /// Get the final settings (for apply)
@@ -310,19 +626,13 @@ impl SettingsWindow {
             )
     }
 
-    /// Render a numeric input with increment/decrement buttons
-    fn render_numeric_input(
-        &mut self,
+    /// Render a row with a label and NumberStepper
+    fn render_stepper_row(
+        &self,
         label: String,
-        value: String,
         description: Option<String>,
-        on_increment: impl Fn(&mut SettingsWindow, &mut Context<Self>) + 'static + Clone,
-        on_decrement: impl Fn(&mut SettingsWindow, &mut Context<Self>) + 'static + Clone,
-        cx: &mut Context<Self>,
+        stepper: &Entity<NumberStepper>,
     ) -> impl IntoElement {
-        let increment_handler = on_increment.clone();
-        let decrement_handler = on_decrement;
-
         div()
             .flex()
             .flex_col()
@@ -330,79 +640,18 @@ impl SettingsWindow {
             .child(self.render_label(label, description))
             .child(
                 div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(Spacing::xs())
-                    .child(
-                        // Decrement button
-                        div()
-                            .px(Spacing::sm())
-                            .py(Spacing::xs())
-                            .bg(rgb(0x444444))
-                            .border_1()
-                            .border_color(rgb(0x666666))
-                            .rounded(px(4.0))
-                            .text_size(TextSize::md())
-                            .text_color(Colors::text())
-                            .cursor_pointer()
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
-                                    decrement_handler(this, cx);
-                                    cx.notify();
-                                }),
-                            )
-                            .child("−"),
-                    )
-                    .child(
-                        // Value display
-                        div()
-                            .w(px(120.0))
-                            .px(Spacing::sm())
-                            .py(Spacing::xs())
-                            .bg(rgb(0x2a2a2a))
-                            .border_1()
-                            .border_color(rgb(0x444444))
-                            .rounded(px(4.0))
-                            .text_size(TextSize::md())
-                            .text_color(Colors::text())
-                            .text_align(gpui::TextAlign::Center)
-                            .child(value),
-                    )
-                    .child(
-                        // Increment button
-                        div()
-                            .px(Spacing::sm())
-                            .py(Spacing::xs())
-                            .bg(rgb(0x444444))
-                            .border_1()
-                            .border_color(rgb(0x666666))
-                            .rounded(px(4.0))
-                            .text_size(TextSize::md())
-                            .text_color(Colors::text())
-                            .cursor_pointer()
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
-                                    increment_handler(this, cx);
-                                    cx.notify();
-                                }),
-                            )
-                            .child("+"),
-                    ),
+                    .w(px(150.0))  // Constrain stepper width
+                    .child(stepper.clone())
             )
     }
 
     /// Render viewer behavior section
     fn render_viewer_behavior(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         // Copy values needed for rendering to avoid borrow checker issues
-        let default_zoom_mode = self.working_settings.viewer_behavior.default_zoom_mode;
         let remember_per_image_state = self
             .working_settings
             .viewer_behavior
             .remember_per_image_state;
-        let state_cache_size = self.working_settings.viewer_behavior.state_cache_size;
         let animation_auto_play = self.working_settings.viewer_behavior.animation_auto_play;
 
         div()
@@ -416,69 +665,7 @@ impl SettingsWindow {
                         "Default Zoom Mode".to_string(),
                         Some("How images are initially displayed".to_string()),
                     ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(Spacing::md())
-                            .child(
-                                div()
-                                    .px(Spacing::md())
-                                    .py(Spacing::sm())
-                                    .rounded(px(4.0))
-                                    .border_1()
-                                    .cursor_pointer()
-                                    .when(default_zoom_mode == ZoomMode::FitToWindow, |div| {
-                                        div.border_color(Colors::info()).bg(rgba(0x50fa7b22))
-                                    })
-                                    .when(default_zoom_mode != ZoomMode::FitToWindow, |div| {
-                                        div.border_color(rgb(0x444444))
-                                    })
-                                    .text_size(TextSize::sm())
-                                    .text_color(Colors::text())
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(
-                                            |this, _event: &MouseDownEvent, _window, cx| {
-                                                this.working_settings
-                                                    .viewer_behavior
-                                                    .default_zoom_mode = ZoomMode::FitToWindow;
-                                                cx.notify();
-                                            },
-                                        ),
-                                    )
-                                    .child("Fit to Window"),
-                            )
-                            .child(
-                                div()
-                                    .px(Spacing::md())
-                                    .py(Spacing::sm())
-                                    .rounded(px(4.0))
-                                    .border_1()
-                                    .cursor_pointer()
-                                    .when(default_zoom_mode == ZoomMode::OneHundredPercent, |div| {
-                                        div.border_color(Colors::info()).bg(rgba(0x50fa7b22))
-                                    })
-                                    .when(default_zoom_mode != ZoomMode::OneHundredPercent, |div| {
-                                        div.border_color(rgb(0x444444))
-                                    })
-                                    .text_size(TextSize::sm())
-                                    .text_color(Colors::text())
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(
-                                            |this, _event: &MouseDownEvent, _window, cx| {
-                                                this.working_settings
-                                                    .viewer_behavior
-                                                    .default_zoom_mode =
-                                                    ZoomMode::OneHundredPercent;
-                                                cx.notify();
-                                            },
-                                        ),
-                                    )
-                                    .child("100% (Actual Size)"),
-                            ),
-                    ),
+                    .child(self.zoom_mode_control.clone()),
             )
             .child(self.render_checkbox(
                 "Remember per-image state".to_string(),
@@ -494,23 +681,10 @@ impl SettingsWindow {
                 },
                 cx,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "State cache size".to_string(),
-                state_cache_size.to_string(),
                 Some("Maximum number of images to cache state for".to_string()),
-                |this, _cx| {
-                    this.working_settings.viewer_behavior.state_cache_size =
-                        (this.working_settings.viewer_behavior.state_cache_size + 100).min(10000);
-                },
-                |this, _cx| {
-                    this.working_settings.viewer_behavior.state_cache_size = this
-                        .working_settings
-                        .viewer_behavior
-                        .state_cache_size
-                        .saturating_sub(100)
-                        .max(10);
-                },
-                cx,
+                &self.state_cache_size_stepper,
             ))
             .child(self.render_checkbox(
                 "Auto-play animations".to_string(),
@@ -527,8 +701,6 @@ impl SettingsWindow {
     /// Render performance section
     fn render_performance(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let preload_adjacent_images = self.working_settings.performance.preload_adjacent_images;
-        let filter_processing_threads = self.working_settings.performance.filter_processing_threads;
-        let max_image_dimension = self.working_settings.performance.max_image_dimension;
 
         div()
             .flex()
@@ -544,54 +716,20 @@ impl SettingsWindow {
                 },
                 cx,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Filter processing threads".to_string(),
-                filter_processing_threads.to_string(),
                 Some("Number of CPU threads for filter processing".to_string()),
-                |this, _cx| {
-                    this.working_settings.performance.filter_processing_threads =
-                        (this.working_settings.performance.filter_processing_threads + 1).min(32);
-                },
-                |this, _cx| {
-                    this.working_settings.performance.filter_processing_threads = this
-                        .working_settings
-                        .performance
-                        .filter_processing_threads
-                        .saturating_sub(1)
-                        .max(1);
-                },
-                cx,
+                &self.filter_processing_threads_stepper,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Maximum image dimension".to_string(),
-                format!("{}px", max_image_dimension),
                 Some("Maximum allowed width or height for loading images".to_string()),
-                |this, _cx| {
-                    this.working_settings.performance.max_image_dimension =
-                        (this.working_settings.performance.max_image_dimension + 1000).min(100000);
-                },
-                |this, _cx| {
-                    this.working_settings.performance.max_image_dimension = this
-                        .working_settings
-                        .performance
-                        .max_image_dimension
-                        .saturating_sub(1000)
-                        .max(1000);
-                },
-                cx,
+                &self.max_image_dimension_stepper,
             ))
     }
 
     /// Render keyboard & mouse section
     fn render_keyboard_mouse(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let pan_speed_normal = self.working_settings.keyboard_mouse.pan_speed_normal;
-        let pan_speed_fast = self.working_settings.keyboard_mouse.pan_speed_fast;
-        let pan_speed_slow = self.working_settings.keyboard_mouse.pan_speed_slow;
-        let scroll_wheel_sensitivity = self
-            .working_settings
-            .keyboard_mouse
-            .scroll_wheel_sensitivity;
-        let z_drag_sensitivity = self.working_settings.keyboard_mouse.z_drag_sensitivity;
         let spacebar_pan_accelerated = self
             .working_settings
             .keyboard_mouse
@@ -601,88 +739,30 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .child(self.render_section_header("Keyboard & Mouse".to_string()))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Pan speed (normal)".to_string(),
-                format!("{:.1} px", pan_speed_normal),
                 Some("Base keyboard pan speed in pixels".to_string()),
-                |this, _cx| {
-                    this.working_settings.keyboard_mouse.pan_speed_normal =
-                        (this.working_settings.keyboard_mouse.pan_speed_normal + 1.0).min(100.0);
-                },
-                |this, _cx| {
-                    this.working_settings.keyboard_mouse.pan_speed_normal =
-                        (this.working_settings.keyboard_mouse.pan_speed_normal - 1.0).max(1.0);
-                },
-                cx,
+                &self.pan_speed_normal_stepper,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Pan speed (fast, with Shift)".to_string(),
-                format!("{:.1} px", pan_speed_fast),
                 Some("Pan speed with Shift modifier".to_string()),
-                |this, _cx| {
-                    this.working_settings.keyboard_mouse.pan_speed_fast =
-                        (this.working_settings.keyboard_mouse.pan_speed_fast + 5.0).min(200.0);
-                },
-                |this, _cx| {
-                    this.working_settings.keyboard_mouse.pan_speed_fast =
-                        (this.working_settings.keyboard_mouse.pan_speed_fast - 5.0).max(1.0);
-                },
-                cx,
+                &self.pan_speed_fast_stepper,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Pan speed (slow, with Alt)".to_string(),
-                format!("{:.1} px", pan_speed_slow),
                 Some("Pan speed with Alt modifier".to_string()),
-                |this, _cx| {
-                    this.working_settings.keyboard_mouse.pan_speed_slow =
-                        (this.working_settings.keyboard_mouse.pan_speed_slow + 0.5).min(50.0);
-                },
-                |this, _cx| {
-                    this.working_settings.keyboard_mouse.pan_speed_slow =
-                        (this.working_settings.keyboard_mouse.pan_speed_slow - 0.5).max(0.5);
-                },
-                cx,
+                &self.pan_speed_slow_stepper,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Scroll wheel sensitivity".to_string(),
-                format!("{:.2}x", scroll_wheel_sensitivity),
                 Some("Zoom factor per scroll wheel notch".to_string()),
-                |this, _cx| {
-                    this.working_settings
-                        .keyboard_mouse
-                        .scroll_wheel_sensitivity = (this
-                        .working_settings
-                        .keyboard_mouse
-                        .scroll_wheel_sensitivity
-                        + 0.05)
-                        .min(2.0);
-                },
-                |this, _cx| {
-                    this.working_settings
-                        .keyboard_mouse
-                        .scroll_wheel_sensitivity = (this
-                        .working_settings
-                        .keyboard_mouse
-                        .scroll_wheel_sensitivity
-                        - 0.05)
-                        .max(1.01);
-                },
-                cx,
+                &self.scroll_wheel_sensitivity_stepper,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Z-drag zoom sensitivity".to_string(),
-                format!("{:.3}", z_drag_sensitivity),
                 Some("Zoom percentage change per pixel when Z-dragging".to_string()),
-                |this, _cx| {
-                    this.working_settings.keyboard_mouse.z_drag_sensitivity =
-                        (this.working_settings.keyboard_mouse.z_drag_sensitivity + 0.001).min(0.1);
-                },
-                |this, _cx| {
-                    this.working_settings.keyboard_mouse.z_drag_sensitivity =
-                        (this.working_settings.keyboard_mouse.z_drag_sensitivity - 0.001)
-                            .max(0.001);
-                },
-                cx,
+                &self.z_drag_sensitivity_stepper,
             ))
             .child(self.render_checkbox(
                 "Spacebar pan acceleration".to_string(),
@@ -842,8 +922,6 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let background_color = self.working_settings.appearance.background_color;
-        let overlay_transparency = self.working_settings.appearance.overlay_transparency;
-        let font_size_scale = self.working_settings.appearance.font_size_scale;
 
         div()
             .flex()
@@ -1089,33 +1167,15 @@ impl SettingsWindow {
                             )
                     )
             )
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Overlay transparency".to_string(),
-                format!("{}", overlay_transparency),
                 Some("Transparency for overlay backgrounds (0-255)".to_string()),
-                |this, _cx| {
-                    this.working_settings.appearance.overlay_transparency =
-                        this.working_settings.appearance.overlay_transparency.saturating_add(10);
-                },
-                |this, _cx| {
-                    this.working_settings.appearance.overlay_transparency =
-                        this.working_settings.appearance.overlay_transparency.saturating_sub(10);
-                },
-                cx
+                &self.overlay_transparency_stepper,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Font size scale".to_string(),
-                format!("{:.1}x", font_size_scale),
                 Some("Scale factor for overlay text (0.5 - 8.0)".to_string()),
-                |this, _cx| {
-                    this.working_settings.appearance.font_size_scale =
-                        (this.working_settings.appearance.font_size_scale + 0.1).min(8.0);
-                },
-                |this, _cx| {
-                    this.working_settings.appearance.font_size_scale =
-                        (this.working_settings.appearance.font_size_scale - 0.1).max(0.5);
-                },
-                cx
+                &self.font_size_scale_stepper,
             ))
             .child(
                 div()
@@ -1178,9 +1238,6 @@ impl SettingsWindow {
     /// Render filters section
     #[allow(dead_code)]
     fn render_filters(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let default_brightness = self.working_settings.filters.default_brightness;
-        let default_contrast = self.working_settings.filters.default_contrast;
-        let default_gamma = self.working_settings.filters.default_gamma;
         let remember_filter_state = self.working_settings.filters.remember_filter_state;
         let filter_presets = self.working_settings.filters.filter_presets.clone();
 
@@ -1188,47 +1245,20 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .child(self.render_section_header("Filters".to_string()))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Default brightness".to_string(),
-                format!("{:.0}", default_brightness),
                 Some("Default brightness value when resetting (-100 to +100)".to_string()),
-                |this, _cx| {
-                    this.working_settings.filters.default_brightness =
-                        (this.working_settings.filters.default_brightness + 5.0).min(100.0);
-                },
-                |this, _cx| {
-                    this.working_settings.filters.default_brightness =
-                        (this.working_settings.filters.default_brightness - 5.0).max(-100.0);
-                },
-                cx,
+                &self.default_brightness_stepper,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Default contrast".to_string(),
-                format!("{:.0}", default_contrast),
                 Some("Default contrast value when resetting (-100 to +100)".to_string()),
-                |this, _cx| {
-                    this.working_settings.filters.default_contrast =
-                        (this.working_settings.filters.default_contrast + 5.0).min(100.0);
-                },
-                |this, _cx| {
-                    this.working_settings.filters.default_contrast =
-                        (this.working_settings.filters.default_contrast - 5.0).max(-100.0);
-                },
-                cx,
+                &self.default_contrast_stepper,
             ))
-            .child(self.render_numeric_input(
+            .child(self.render_stepper_row(
                 "Default gamma".to_string(),
-                format!("{:.2}", default_gamma),
                 Some("Default gamma value when resetting (0.1 to 10.0)".to_string()),
-                |this, _cx| {
-                    this.working_settings.filters.default_gamma =
-                        (this.working_settings.filters.default_gamma + 0.1).min(10.0);
-                },
-                |this, _cx| {
-                    this.working_settings.filters.default_gamma =
-                        (this.working_settings.filters.default_gamma - 0.1).max(0.1);
-                },
-                cx,
+                &self.default_gamma_stepper,
             ))
             .child(self.render_checkbox(
                 "Remember filter state per-image".to_string(),
@@ -1675,7 +1705,7 @@ impl SettingsWindow {
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                                    this.reset_to_defaults();
+                                    this.reset_to_defaults(cx);
                                     cx.notify();
                                     // Dispatch the action to parent using window context
                                     window
