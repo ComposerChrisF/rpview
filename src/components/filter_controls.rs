@@ -251,7 +251,7 @@ impl Render for FilterControls {
                                 div()
                                     .text_size(TextSize::sm())
                                     .text_color(rgb(0xAAAAAA))
-                                    .child(format!("{}/R: Reset all", platform_key)),
+                                    .child(format!("Shift+{}/R: Reset all", platform_key)),
                             ),
                     ),
             )
