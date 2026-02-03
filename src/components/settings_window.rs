@@ -43,7 +43,7 @@ use crate::state::settings::*;
 use crate::utils::settings_io;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::{CloseSettings, ResetSettingsToDefaults};
-use adabraka_ui::prelude::scrollable_vertical;
+use ccf_gpui_widgets::prelude::scrollable_vertical;
 use gpui::prelude::*;
 use gpui::*;
 

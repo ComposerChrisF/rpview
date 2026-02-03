@@ -1,5 +1,5 @@
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
-use adabraka_ui::prelude::scrollable_vertical;
+use ccf_gpui_widgets::prelude::scrollable_vertical;
 use gpui::prelude::*;
 use gpui::*;
 
