@@ -44,8 +44,8 @@ use crate::utils::settings_io;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::{CloseSettings, ResetSettingsToDefaults};
 use ccf_gpui_widgets::prelude::{
-    scrollable_vertical, NumberStepper, NumberStepperEvent, SegmentedControl,
-    SegmentedControlEvent, Theme,
+    scrollable_vertical, Checkbox, CheckboxEvent, NumberStepper, NumberStepperEvent,
+    SegmentedControl, SegmentedControlEvent, Theme,
 };
 use gpui::prelude::*;
 use gpui::*;
@@ -123,6 +123,18 @@ pub struct SettingsWindow {
 
     // Segmented controls
     zoom_mode_control: Entity<SegmentedControl>,
+
+    // Checkboxes for boolean settings
+    remember_per_image_state_checkbox: Entity<Checkbox>,
+    animation_auto_play_checkbox: Entity<Checkbox>,
+    preload_adjacent_images_checkbox: Entity<Checkbox>,
+    spacebar_pan_accelerated_checkbox: Entity<Checkbox>,
+    auto_save_filtered_cache_checkbox: Entity<Checkbox>,
+    remember_last_directory_checkbox: Entity<Checkbox>,
+    remember_filter_state_checkbox: Entity<Checkbox>,
+    wrap_navigation_checkbox: Entity<Checkbox>,
+    show_image_counter_checkbox: Entity<Checkbox>,
+    file_manager_integration_checkbox: Entity<Checkbox>,
 }
 
 impl SettingsWindow {
@@ -358,6 +370,157 @@ impl SettingsWindow {
             cx.notify();
         }).detach();
 
+        // Custom theme for checkboxes with green checked state and lime green focus
+        let checkbox_theme = Theme::dark()
+            .with_primary(0x50fa7b)
+            .with_border_focus(0x50fa7b);
+
+        // Helper to get checkbox label based on state
+        fn checkbox_label(checked: bool) -> &'static str {
+            if checked { "Enabled" } else { "Disabled" }
+        }
+
+        // Create checkbox entities for boolean settings
+        let checked = settings.viewer_behavior.remember_per_image_state;
+        let remember_per_image_state_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&remember_per_image_state_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.viewer_behavior.remember_per_image_state = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.viewer_behavior.animation_auto_play;
+        let animation_auto_play_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&animation_auto_play_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.viewer_behavior.animation_auto_play = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.performance.preload_adjacent_images;
+        let preload_adjacent_images_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&preload_adjacent_images_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.performance.preload_adjacent_images = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.keyboard_mouse.spacebar_pan_accelerated;
+        let spacebar_pan_accelerated_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&spacebar_pan_accelerated_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.keyboard_mouse.spacebar_pan_accelerated = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.file_operations.auto_save_filtered_cache;
+        let auto_save_filtered_cache_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&auto_save_filtered_cache_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.file_operations.auto_save_filtered_cache = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.file_operations.remember_last_directory;
+        let remember_last_directory_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&remember_last_directory_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.file_operations.remember_last_directory = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.filters.remember_filter_state;
+        let remember_filter_state_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&remember_filter_state_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.filters.remember_filter_state = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.sort_navigation.wrap_navigation;
+        let wrap_navigation_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&wrap_navigation_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.sort_navigation.wrap_navigation = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.sort_navigation.show_image_counter;
+        let show_image_counter_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&show_image_counter_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.sort_navigation.show_image_counter = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
+        let checked = settings.external_tools.enable_file_manager_integration;
+        let file_manager_integration_checkbox = cx.new(|cx| {
+            Checkbox::new(cx)
+                .with_checked(checked)
+                .label(checkbox_label(checked))
+                .theme(checkbox_theme)
+        });
+        cx.subscribe(&file_manager_integration_checkbox, |this, checkbox, event: &CheckboxEvent, cx| {
+            let CheckboxEvent::Change(checked) = event;
+            this.working_settings.external_tools.enable_file_manager_integration = *checked;
+            checkbox.update(cx, |cb, cx| cb.set_label(checkbox_label(*checked), cx));
+            cx.notify();
+        }).detach();
+
         Self {
             window_title_input: settings.appearance.window_title_format.clone(),
             working_settings: settings,
@@ -378,6 +541,16 @@ impl SettingsWindow {
             default_contrast_stepper,
             default_gamma_stepper,
             zoom_mode_control,
+            remember_per_image_state_checkbox,
+            animation_auto_play_checkbox,
+            preload_adjacent_images_checkbox,
+            spacebar_pan_accelerated_checkbox,
+            auto_save_filtered_cache_checkbox,
+            remember_last_directory_checkbox,
+            remember_filter_state_checkbox,
+            wrap_navigation_checkbox,
+            show_image_counter_checkbox,
+            file_manager_integration_checkbox,
         }
     }
 
@@ -441,6 +614,58 @@ impl SettingsWindow {
         };
         self.zoom_mode_control.update(cx, |control, cx| {
             control.set_selected(zoom_value, cx);
+        });
+
+        // Reset checkboxes (set both checked state and label)
+        let checked = defaults.viewer_behavior.remember_per_image_state;
+        self.remember_per_image_state_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.viewer_behavior.animation_auto_play;
+        self.animation_auto_play_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.performance.preload_adjacent_images;
+        self.preload_adjacent_images_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.keyboard_mouse.spacebar_pan_accelerated;
+        self.spacebar_pan_accelerated_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.file_operations.auto_save_filtered_cache;
+        self.auto_save_filtered_cache_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.file_operations.remember_last_directory;
+        self.remember_last_directory_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.filters.remember_filter_state;
+        self.remember_filter_state_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.sort_navigation.wrap_navigation;
+        self.wrap_navigation_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.sort_navigation.show_image_counter;
+        self.show_image_counter_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
+        });
+        let checked = defaults.external_tools.enable_file_manager_integration;
+        self.file_manager_integration_checkbox.update(cx, |checkbox, cx| {
+            checkbox.set_checked(checked, cx);
+            checkbox.set_label(if checked { "Enabled" } else { "Disabled" }, cx);
         });
     }
 
@@ -574,58 +799,6 @@ impl SettingsWindow {
             )
     }
 
-    /// Render a checkbox setting
-    fn render_checkbox<F>(
-        &mut self,
-        label: String,
-        value: bool,
-        description: Option<String>,
-        on_toggle: F,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement
-    where
-        F: Fn(&mut SettingsWindow, &mut Context<Self>) + 'static,
-    {
-        div()
-            .flex()
-            .flex_col()
-            .mb(Spacing::md())
-            .child(self.render_label(label, description))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(
-                        div()
-                            .w(px(20.0))
-                            .h(px(20.0))
-                            .border_1()
-                            .border_color(rgb(0x666666))
-                            .rounded(px(3.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .when(value, |div| div.bg(Colors::info()).child("✓"))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
-                                    on_toggle(this, cx);
-                                    cx.notify();
-                                }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .ml(Spacing::sm())
-                            .text_size(TextSize::sm())
-                            .text_color(rgb(0xaaaaaa))
-                            .child(if value { "Enabled" } else { "Disabled" }),
-                    ),
-            )
-    }
-
     /// Render a row with a label and NumberStepper
     fn render_stepper_row(
         &self,
@@ -645,15 +818,23 @@ impl SettingsWindow {
             )
     }
 
-    /// Render viewer behavior section
-    fn render_viewer_behavior(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        // Copy values needed for rendering to avoid borrow checker issues
-        let remember_per_image_state = self
-            .working_settings
-            .viewer_behavior
-            .remember_per_image_state;
-        let animation_auto_play = self.working_settings.viewer_behavior.animation_auto_play;
+    /// Render a row with a label and Checkbox widget
+    fn render_checkbox_row(
+        &self,
+        label: String,
+        description: Option<String>,
+        checkbox: &Entity<Checkbox>,
+    ) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_col()
+            .mb(Spacing::md())
+            .child(self.render_label(label, description))
+            .child(checkbox.clone())
+    }
 
+    /// Render viewer behavior section
+    fn render_viewer_behavior(&self) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
@@ -667,54 +848,33 @@ impl SettingsWindow {
                     ))
                     .child(self.zoom_mode_control.clone()),
             )
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Remember per-image state".to_string(),
-                remember_per_image_state,
                 Some("Remember zoom, pan, and filters for each image".to_string()),
-                |this, _cx| {
-                    this.working_settings
-                        .viewer_behavior
-                        .remember_per_image_state = !this
-                        .working_settings
-                        .viewer_behavior
-                        .remember_per_image_state;
-                },
-                cx,
+                &self.remember_per_image_state_checkbox,
             ))
             .child(self.render_stepper_row(
                 "State cache size".to_string(),
                 Some("Maximum number of images to cache state for".to_string()),
                 &self.state_cache_size_stepper,
             ))
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Auto-play animations".to_string(),
-                animation_auto_play,
                 Some("Start animated GIFs/WEBPs playing automatically".to_string()),
-                |this, _cx| {
-                    this.working_settings.viewer_behavior.animation_auto_play =
-                        !this.working_settings.viewer_behavior.animation_auto_play;
-                },
-                cx,
+                &self.animation_auto_play_checkbox,
             ))
     }
 
     /// Render performance section
-    fn render_performance(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let preload_adjacent_images = self.working_settings.performance.preload_adjacent_images;
-
+    fn render_performance(&self) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
             .child(self.render_section_header("Performance".to_string()))
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Preload adjacent images".to_string(),
-                preload_adjacent_images,
                 Some("Load next/previous images in background for faster navigation".to_string()),
-                |this, _cx| {
-                    this.working_settings.performance.preload_adjacent_images =
-                        !this.working_settings.performance.preload_adjacent_images;
-                },
-                cx,
+                &self.preload_adjacent_images_checkbox,
             ))
             .child(self.render_stepper_row(
                 "Filter processing threads".to_string(),
@@ -729,12 +889,7 @@ impl SettingsWindow {
     }
 
     /// Render keyboard & mouse section
-    fn render_keyboard_mouse(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let spacebar_pan_accelerated = self
-            .working_settings
-            .keyboard_mouse
-            .spacebar_pan_accelerated;
-
+    fn render_keyboard_mouse(&self) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
@@ -764,19 +919,10 @@ impl SettingsWindow {
                 Some("Zoom percentage change per pixel when Z-dragging".to_string()),
                 &self.z_drag_sensitivity_stepper,
             ))
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Spacebar pan acceleration".to_string(),
-                spacebar_pan_accelerated,
                 Some("Enable acceleration for spacebar+mouse panning".to_string()),
-                |this, _cx| {
-                    this.working_settings
-                        .keyboard_mouse
-                        .spacebar_pan_accelerated = !this
-                        .working_settings
-                        .keyboard_mouse
-                        .spacebar_pan_accelerated;
-                },
-                cx,
+                &self.spacebar_pan_accelerated_checkbox,
             ))
     }
 
@@ -788,14 +934,6 @@ impl SettingsWindow {
             .default_save_directory
             .clone();
         let default_save_format = self.working_settings.file_operations.default_save_format;
-        let auto_save_filtered_cache = self
-            .working_settings
-            .file_operations
-            .auto_save_filtered_cache;
-        let remember_last_directory = self
-            .working_settings
-            .file_operations
-            .remember_last_directory;
 
         div()
             .flex()
@@ -885,33 +1023,15 @@ impl SettingsWindow {
                         ),
                     )),
             )
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Auto-save filtered cache".to_string(),
-                auto_save_filtered_cache,
                 Some("Permanently save filtered image cache to disk".to_string()),
-                |this, _cx| {
-                    this.working_settings
-                        .file_operations
-                        .auto_save_filtered_cache = !this
-                        .working_settings
-                        .file_operations
-                        .auto_save_filtered_cache;
-                },
-                cx,
+                &self.auto_save_filtered_cache_checkbox,
             ))
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Remember last directory".to_string(),
-                remember_last_directory,
                 Some("Remember last used directory in file dialogs".to_string()),
-                |this, _cx| {
-                    this.working_settings
-                        .file_operations
-                        .remember_last_directory = !this
-                        .working_settings
-                        .file_operations
-                        .remember_last_directory;
-                },
-                cx,
+                &self.remember_last_directory_checkbox,
             ))
     }
 
@@ -1237,8 +1357,7 @@ impl SettingsWindow {
 
     /// Render filters section
     #[allow(dead_code)]
-    fn render_filters(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let remember_filter_state = self.working_settings.filters.remember_filter_state;
+    fn render_filters(&self) -> impl IntoElement {
         let filter_presets = self.working_settings.filters.filter_presets.clone();
 
         div()
@@ -1260,15 +1379,10 @@ impl SettingsWindow {
                 Some("Default gamma value when resetting (0.1 to 10.0)".to_string()),
                 &self.default_gamma_stepper,
             ))
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Remember filter state per-image".to_string(),
-                remember_filter_state,
                 Some("Remember filter settings for each image separately".to_string()),
-                |this, _cx| {
-                    this.working_settings.filters.remember_filter_state =
-                        !this.working_settings.filters.remember_filter_state;
-                },
-                cx,
+                &self.remember_filter_state_checkbox,
             ))
             .child(
                 div()
@@ -1302,8 +1416,6 @@ impl SettingsWindow {
     /// Render sort & navigation section
     fn render_sort_navigation(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let default_sort_mode = self.working_settings.sort_navigation.default_sort_mode;
-        let wrap_navigation = self.working_settings.sort_navigation.wrap_navigation;
-        let show_image_counter = self.working_settings.sort_navigation.show_image_counter;
 
         div()
             .flex()
@@ -1385,40 +1497,26 @@ impl SettingsWindow {
                             ),
                     ),
             )
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Wrap navigation".to_string(),
-                wrap_navigation,
                 Some("Navigate from last image to first (and vice versa)".to_string()),
-                |this, _cx| {
-                    this.working_settings.sort_navigation.wrap_navigation =
-                        !this.working_settings.sort_navigation.wrap_navigation;
-                },
-                cx,
+                &self.wrap_navigation_checkbox,
             ))
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "Show image counter".to_string(),
-                show_image_counter,
                 Some("Display image position in window title".to_string()),
-                |this, _cx| {
-                    this.working_settings.sort_navigation.show_image_counter =
-                        !this.working_settings.sort_navigation.show_image_counter;
-                },
-                cx,
+                &self.show_image_counter_checkbox,
             ))
     }
 
     /// Render external tools section
-    fn render_external_tools(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_external_tools(&self) -> impl IntoElement {
         let external_viewers = self
             .working_settings
             .external_tools
             .external_viewers
             .clone();
         let external_editor = self.working_settings.external_tools.external_editor.clone();
-        let enable_file_manager_integration = self
-            .working_settings
-            .external_tools
-            .enable_file_manager_integration;
 
         div()
             .flex()
@@ -1545,24 +1643,15 @@ impl SettingsWindow {
                             ),
                     ),
             )
-            .child(self.render_checkbox(
+            .child(self.render_checkbox_row(
                 "File manager integration".to_string(),
-                enable_file_manager_integration,
                 Some("Show 'Reveal in Finder/Explorer' menu option".to_string()),
-                |this, _cx| {
-                    this.working_settings
-                        .external_tools
-                        .enable_file_manager_integration = !this
-                        .working_settings
-                        .external_tools
-                        .enable_file_manager_integration;
-                },
-                cx,
+                &self.file_manager_integration_checkbox,
             ))
     }
 
     /// Render settings file section
-    fn render_settings_file(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_settings_file(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_path = settings_io::get_settings_path();
         let path_str = settings_path.display().to_string();
 
@@ -1745,10 +1834,10 @@ impl SettingsWindow {
         div().flex_1().child(
             scrollable_vertical(div().p(Spacing::xl()).child(match self.current_section {
                 SettingsSection::ViewerBehavior => {
-                    self.render_viewer_behavior(cx).into_any_element()
+                    self.render_viewer_behavior().into_any_element()
                 }
-                SettingsSection::Performance => self.render_performance(cx).into_any_element(),
-                SettingsSection::KeyboardMouse => self.render_keyboard_mouse(cx).into_any_element(),
+                SettingsSection::Performance => self.render_performance().into_any_element(),
+                SettingsSection::KeyboardMouse => self.render_keyboard_mouse().into_any_element(),
                 SettingsSection::FileOperations => {
                     self.render_file_operations(cx).into_any_element()
                 }
@@ -1758,7 +1847,7 @@ impl SettingsWindow {
                 SettingsSection::SortNavigation => {
                     self.render_sort_navigation(cx).into_any_element()
                 }
-                SettingsSection::ExternalTools => self.render_external_tools(cx).into_any_element(),
+                SettingsSection::ExternalTools => self.render_external_tools().into_any_element(),
                 SettingsSection::SettingsFile => self.render_settings_file(cx).into_any_element(),
             }))
             .id("settings-content-scroll"),
