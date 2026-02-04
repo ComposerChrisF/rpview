@@ -45,8 +45,8 @@ use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::{CloseSettings, NextImage, PreviousImage, ResetSettingsToDefaults};
 use ccf_gpui_widgets::prelude::{
     scrollable_vertical, ColorSwatch, ColorSwatchEvent, NumberStepper, NumberStepperEvent,
-    SegmentedControl, SegmentedControlEvent, TextInput, TextInputEvent, Theme, ToggleSwitch,
-    ToggleSwitchEvent,
+    SegmentedControl, SegmentedControlEvent, SidebarItem, SidebarNav, SidebarNavEvent,
+    TextInput, TextInputEvent, Theme, ToggleSwitch, ToggleSwitchEvent,
 };
 use gpui::prelude::*;
 use gpui::*;
@@ -94,6 +94,25 @@ impl SettingsSection {
     }
 }
 
+impl SidebarItem for SettingsSection {
+    fn label(&self) -> SharedString {
+        self.name().into()
+    }
+
+    fn id(&self) -> ElementId {
+        match self {
+            Self::ViewerBehavior => "sidebar_viewer_behavior".into(),
+            Self::Performance => "sidebar_performance".into(),
+            Self::KeyboardMouse => "sidebar_keyboard_mouse".into(),
+            Self::FileOperations => "sidebar_file_operations".into(),
+            Self::Appearance => "sidebar_appearance".into(),
+            Self::SortNavigation => "sidebar_sort_navigation".into(),
+            Self::ExternalTools => "sidebar_external_tools".into(),
+            Self::SettingsFile => "sidebar_settings_file".into(),
+        }
+    }
+}
+
 /// Settings window component
 pub struct SettingsWindow {
     /// Working copy of settings (being edited)
@@ -102,6 +121,8 @@ pub struct SettingsWindow {
     pub current_section: SettingsSection,
     /// Focus handle for the settings window
     focus_handle: FocusHandle,
+    /// Sidebar navigation widget
+    sidebar_nav: Entity<SidebarNav<SettingsSection>>,
     /// Text input for window title format
     window_title_input: Entity<TextInput>,
 
@@ -144,8 +165,14 @@ pub struct SettingsWindow {
 impl SettingsWindow {
     /// Create a new settings window with the given settings
     pub fn new(settings: AppSettings, cx: &mut Context<Self>) -> Self {
-        // Custom theme for steppers with lime green focus color
-        let stepper_theme = Theme::dark().with_border_focus(0x50fa7b);
+        // App-wide theme with lime green accent colors
+        let app_theme = Theme::dark()
+            .with_accent(0x50fa7b)       // lime green for selected text, accents
+            .with_primary(0x50fa7b)      // lime green for toggle "on" state
+            .with_border_focus(0x50fa7b); // lime green for focus rings
+
+        // Toggle switches need a dark green "off" state background
+        let toggle_theme = app_theme.with_bg_input(0x143d14);
 
         // Create number steppers for each numeric setting
         // step_small is set to give "lesser of 1 or normal step" behavior
@@ -157,7 +184,7 @@ impl SettingsWindow {
                 .step(100.0)
                 .step_small(0.01)  // Alt+click steps by 1
                 .display_precision(0)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&state_cache_size_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -172,7 +199,7 @@ impl SettingsWindow {
                 .max(32.0)
                 .step(1.0)
                 .display_precision(0)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&filter_processing_threads_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -188,7 +215,7 @@ impl SettingsWindow {
                 .step(1000.0)
                 .step_small(0.001)  // Alt+click steps by 1
                 .display_precision(0)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&max_image_dimension_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -203,7 +230,7 @@ impl SettingsWindow {
                 .max(100.0)
                 .step(1.0)
                 .display_precision(1)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&pan_speed_normal_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -219,7 +246,7 @@ impl SettingsWindow {
                 .step(5.0)
                 .step_small(0.2)  // Alt+click steps by 1
                 .display_precision(1)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&pan_speed_fast_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -234,7 +261,7 @@ impl SettingsWindow {
                 .max(50.0)
                 .step(0.5)
                 .display_precision(1)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&pan_speed_slow_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -249,7 +276,7 @@ impl SettingsWindow {
                 .max(2.0)
                 .step(0.05)
                 .display_precision(2)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&scroll_wheel_sensitivity_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -264,7 +291,7 @@ impl SettingsWindow {
                 .max(0.1)
                 .step(0.001)
                 .display_precision(3)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&z_drag_sensitivity_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -280,7 +307,7 @@ impl SettingsWindow {
                 .step(10.0)
                 .step_small(0.1)  // Alt+click steps by 1
                 .display_precision(0)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&overlay_transparency_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -295,7 +322,7 @@ impl SettingsWindow {
                 .max(8.0)
                 .step(0.1)
                 .display_precision(1)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&font_size_scale_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -311,7 +338,7 @@ impl SettingsWindow {
                 .step(5.0)
                 .step_small(0.2)  // Alt+click steps by 1
                 .display_precision(0)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&default_brightness_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -327,7 +354,7 @@ impl SettingsWindow {
                 .step(5.0)
                 .step_small(0.2)  // Alt+click steps by 1
                 .display_precision(0)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&default_contrast_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -342,7 +369,7 @@ impl SettingsWindow {
                 .max(10.0)
                 .step(0.1)
                 .display_precision(2)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&default_gamma_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
@@ -362,7 +389,7 @@ impl SettingsWindow {
                     ("100", "100% (Actual Size)"),
                 ])
                 .with_selected(initial_zoom)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&zoom_mode_control, |this, _control, event: &SegmentedControlEvent, cx| {
             let SegmentedControlEvent::Change(value) = event;
@@ -386,7 +413,7 @@ impl SettingsWindow {
                     ("date", "Modified Date"),
                 ])
                 .with_selected(initial_sort)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&sort_mode_control, |this, _control, event: &SegmentedControlEvent, cx| {
             let SegmentedControlEvent::Change(value) = event;
@@ -418,7 +445,7 @@ impl SettingsWindow {
                     ("webp", "WEBP"),
                 ])
                 .with_selected(initial_format)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&save_format_control, |this, _control, event: &SegmentedControlEvent, cx| {
             let SegmentedControlEvent::Change(value) = event;
@@ -433,13 +460,6 @@ impl SettingsWindow {
             };
             cx.notify();
         }).detach();
-
-        // Custom theme for toggle switches with lime green theme
-        // On state: saturated lime, Off state: very dark lime
-        let toggle_theme = Theme::dark()
-            .with_primary(0x2ecc71)
-            .with_border_focus(0x2ecc71)
-            .with_bg_input(0x143d14);
 
         // Create toggle switch entities for boolean settings
         let remember_per_image_state_toggle = cx.new(|cx| {
@@ -568,7 +588,7 @@ impl SettingsWindow {
         let background_color_swatch = cx.new(|cx| {
             ColorSwatch::new(cx)
                 .with_value(initial_hex)
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&background_color_swatch, |this, _swatch, event: &ColorSwatchEvent, cx| {
             let ColorSwatchEvent::Change(hex) = event;
@@ -590,7 +610,7 @@ impl SettingsWindow {
             TextInput::new(cx)
                 .with_value(&settings.appearance.window_title_format)
                 .placeholder("e.g., {filename} - rpview ({index}/{total})")
-                .theme(stepper_theme)
+                .theme(app_theme)
         });
         cx.subscribe(&window_title_input, |this, input, event: &TextInputEvent, cx| {
             if let TextInputEvent::Change = event {
@@ -600,11 +620,24 @@ impl SettingsWindow {
             }
         }).detach();
 
+        // Create sidebar navigation widget
+        let sidebar_nav = cx.new(|cx| {
+            SidebarNav::new(SettingsSection::all(), SettingsSection::ViewerBehavior, cx)
+                .with_width(px(200.0))
+                .theme(app_theme)
+        });
+        cx.subscribe(&sidebar_nav, |this, _, event: &SidebarNavEvent<SettingsSection>, cx| {
+            let SidebarNavEvent::Select(section) = event;
+            this.current_section = *section;
+            cx.notify();
+        }).detach();
+
         Self {
             window_title_input,
             working_settings: settings,
             current_section: SettingsSection::ViewerBehavior,
             focus_handle: cx.focus_handle(),
+            sidebar_nav,
             state_cache_size_stepper,
             filter_processing_threads_stepper,
             max_image_dimension_stepper,
@@ -633,12 +666,6 @@ impl SettingsWindow {
             show_image_counter_toggle,
             file_manager_integration_toggle,
         }
-    }
-
-    /// Change the current section
-    pub fn set_section(&mut self, section: SettingsSection, cx: &mut Context<Self>) {
-        self.current_section = section;
-        cx.notify();
     }
 
     /// Reset all settings to defaults
@@ -779,43 +806,6 @@ impl SettingsWindow {
             .text_color(Colors::text())
             .font_weight(FontWeight::BOLD)
             .child("Settings")
-    }
-
-    /// Render the sidebar navigation
-    fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let current = self.current_section;
-
-        div()
-            .flex()
-            .flex_col()
-            .w(px(200.0))
-            .bg(rgb(0x2a2a2a))
-            .border_r_1()
-            .border_color(rgb(0x444444))
-            .p(Spacing::md())
-            .children(SettingsSection::all().into_iter().map(move |section| {
-                let is_selected = section == current;
-                div()
-                    .px(Spacing::md())
-                    .py(Spacing::sm())
-                    .mb(Spacing::xs())
-                    .rounded(px(4.0))
-                    .when(is_selected, |div| {
-                        div.bg(rgb(0x444444)).text_color(Colors::info())
-                    })
-                    .when(!is_selected, |div| {
-                        div.bg(rgb(0x2a2a2a)).text_color(Colors::text())
-                    })
-                    .text_size(TextSize::md())
-                    .cursor_pointer()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
-                            this.set_section(section, cx);
-                        }),
-                    )
-                    .child(section.name())
-            }))
     }
 
     /// Render a section header within the content area
@@ -1647,7 +1637,7 @@ impl Render for SettingsWindow {
                             .flex()
                             .flex_row()
                             .overflow_hidden()
-                            .child(self.render_sidebar(cx))
+                            .child(self.sidebar_nav.clone())
                             .child(self.render_content(window, cx)),
                     )
                     .child(self.render_footer(cx)),
