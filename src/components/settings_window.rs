@@ -45,8 +45,8 @@ use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::{CloseSettings, NextImage, PreviousImage, ResetSettingsToDefaults};
 use ccf_gpui_widgets::prelude::{
     scrollable_vertical, ColorSwatch, ColorSwatchEvent, NumberStepper, NumberStepperEvent,
-    SegmentedControl, SegmentedControlEvent, SidebarItem, SidebarNav, SidebarNavEvent,
-    TextInput, TextInputEvent, Theme, ToggleSwitch, ToggleSwitchEvent,
+    SegmentOption, SegmentedControl, SegmentedControlEvent, SelectionItem, SidebarNav,
+    SidebarNavEvent, TextInput, TextInputEvent, Theme, ToggleSwitch, ToggleSwitchEvent,
 };
 use gpui::prelude::*;
 use gpui::*;
@@ -94,7 +94,7 @@ impl SettingsSection {
     }
 }
 
-impl SidebarItem for SettingsSection {
+impl SelectionItem for SettingsSection {
     fn label(&self) -> SharedString {
         self.name().into()
     }
@@ -388,12 +388,12 @@ impl SettingsWindow {
                     ("fit", "Fit to Window"),
                     ("100", "100% (Actual Size)"),
                 ])
-                .with_selected(initial_zoom)
+                .with_selected_value(initial_zoom)
                 .theme(app_theme)
         });
-        cx.subscribe(&zoom_mode_control, |this, _control, event: &SegmentedControlEvent, cx| {
-            let SegmentedControlEvent::Change(value) = event;
-            this.working_settings.viewer_behavior.default_zoom_mode = match value.as_str() {
+        cx.subscribe(&zoom_mode_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+            let SegmentedControlEvent::Change(option) = event;
+            this.working_settings.viewer_behavior.default_zoom_mode = match option.value.as_str() {
                 "fit" => ZoomMode::FitToWindow,
                 "100" => ZoomMode::OneHundredPercent,
                 _ => ZoomMode::FitToWindow,
@@ -412,12 +412,12 @@ impl SettingsWindow {
                     ("alpha", "Alphabetical"),
                     ("date", "Modified Date"),
                 ])
-                .with_selected(initial_sort)
+                .with_selected_value(initial_sort)
                 .theme(app_theme)
         });
-        cx.subscribe(&sort_mode_control, |this, _control, event: &SegmentedControlEvent, cx| {
-            let SegmentedControlEvent::Change(value) = event;
-            this.working_settings.sort_navigation.default_sort_mode = match value.as_str() {
+        cx.subscribe(&sort_mode_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+            let SegmentedControlEvent::Change(option) = event;
+            this.working_settings.sort_navigation.default_sort_mode = match option.value.as_str() {
                 "alpha" => SortModeWrapper::Alphabetical,
                 "date" => SortModeWrapper::ModifiedDate,
                 _ => SortModeWrapper::Alphabetical,
@@ -444,12 +444,12 @@ impl SettingsWindow {
                     ("tiff", "TIFF"),
                     ("webp", "WEBP"),
                 ])
-                .with_selected(initial_format)
+                .with_selected_value(initial_format)
                 .theme(app_theme)
         });
-        cx.subscribe(&save_format_control, |this, _control, event: &SegmentedControlEvent, cx| {
-            let SegmentedControlEvent::Change(value) = event;
-            this.working_settings.file_operations.default_save_format = match value.as_str() {
+        cx.subscribe(&save_format_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+            let SegmentedControlEvent::Change(option) = event;
+            this.working_settings.file_operations.default_save_format = match option.value.as_str() {
                 "same" => SaveFormat::SameAsLoaded,
                 "png" => SaveFormat::Png,
                 "jpeg" => SaveFormat::Jpeg,
@@ -627,7 +627,7 @@ impl SettingsWindow {
                 .theme(app_theme)
         });
         cx.subscribe(&sidebar_nav, |this, _, event: &SidebarNavEvent<SettingsSection>, cx| {
-            let SidebarNavEvent::Select(section) = event;
+            let SidebarNavEvent::Change(section) = event;
             this.current_section = *section;
             cx.notify();
         }).detach();
@@ -725,7 +725,7 @@ impl SettingsWindow {
             ZoomMode::OneHundredPercent => "100",
         };
         self.zoom_mode_control.update(cx, |control, cx| {
-            control.set_selected(zoom_value, cx);
+            control.set_selected_value(zoom_value, cx);
         });
 
         let sort_value = match defaults.sort_navigation.default_sort_mode {
@@ -733,7 +733,7 @@ impl SettingsWindow {
             SortModeWrapper::ModifiedDate => "date",
         };
         self.sort_mode_control.update(cx, |control, cx| {
-            control.set_selected(sort_value, cx);
+            control.set_selected_value(sort_value, cx);
         });
 
         let format_value = match defaults.file_operations.default_save_format {
@@ -745,7 +745,7 @@ impl SettingsWindow {
             SaveFormat::Webp => "webp",
         };
         self.save_format_control.update(cx, |control, cx| {
-            control.set_selected(format_value, cx);
+            control.set_selected_value(format_value, cx);
         });
 
         // Reset color swatch
