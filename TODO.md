@@ -669,7 +669,12 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 ✅ **Working Interactive Controls:**
 - Checkboxes for all boolean settings (10+ settings including animation auto-play, pan acceleration, etc.)
-- Radio buttons for enum selections (zoom mode, sort mode, save format)
+- **SegmentedControl for enum selections** ✅ UPGRADED
+  - Default zoom mode (Fit to Window / 100% Actual Size)
+  - Default sort mode (Alphabetical / Modified Date)
+  - Default save format (Same / PNG / JPEG / BMP / TIFF / WEBP)
+  - Full keyboard navigation (Tab to focus, Left/Right arrow keys to select)
+  - Context-aware key bindings prevent image navigation while settings is open
 - Numeric inputs with increment/decrement buttons (15+ settings)
   - Pan speeds (normal, fast, slow)
   - Zoom sensitivities (scroll wheel, Z-drag)
@@ -831,12 +836,13 @@ div()
   - [ ] Update working_settings on text change
   - [ ] Affected settings: window_title_format, external viewer command/args
 
-- [ ] **Step 5: Dropdowns/Select Components**
-  - [ ] Check if adabraka-ui provides Select/Dropdown
-  - [ ] If yes: use for save format selection
-  - [ ] If no: keep radio buttons or implement custom dropdown
-  - [ ] Populate with enum/option values
-  - [ ] Update working_settings on selection
+- [x] **Step 5: SegmentedControl for Enum Selections** ✅ COMPLETE
+  - [x] Use ccf-gpui-widgets SegmentedControl for all enum settings
+  - [x] Zoom mode: Fit to Window / 100% (Actual Size)
+  - [x] Sort mode: Alphabetical / Modified Date
+  - [x] Save format: Same / PNG / JPEG / BMP / TIFF / WEBP
+  - [x] Full keyboard navigation with Left/Right arrows
+  - [x] Context-aware bindings prevent image navigation in settings
 
 - [ ] **Step 6: Directory Picker**
   - [ ] Add "Browse..." button click handler

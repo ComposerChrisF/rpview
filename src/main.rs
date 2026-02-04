@@ -1500,10 +1500,14 @@ impl Render for App {
         );
 
         // Main content area (takes remaining space after menu bar)
+        // Only enable ImageViewer key context when no modal is open
         let content = div()
             .flex_1()
             .min_h_0() // Allow shrinking below content size
             .bg(bg_color)
+            .when(!self.show_settings && !self.show_filters, |div| {
+                div.key_context("ImageViewer")
+            })
             .when(self.drag_over, |div| {
                 // Show highlighted border when dragging files over the window
                 div.border_4().border_color(gpui::rgb(0x50fa7b)) // Green highlight
@@ -1964,8 +1968,8 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("cmd-w", CloseWindow, None),
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("escape", EscapePressed, None),
-        KeyBinding::new("right", NextImage, None),
-        KeyBinding::new("left", PreviousImage, None),
+        KeyBinding::new("right", NextImage, Some("ImageViewer")),
+        KeyBinding::new("left", PreviousImage, Some("ImageViewer")),
         // Animation controls
         KeyBinding::new("o", ToggleAnimationPlayPause, None),
         KeyBinding::new("]", NextFrame, None),
