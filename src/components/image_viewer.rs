@@ -1,5 +1,6 @@
 #![allow(clippy::collapsible_if)]
 
+use crate::OpenFile;
 use crate::components::animation_indicator::AnimationIndicator;
 use crate::components::error_display::ErrorDisplay;
 use crate::components::processing_indicator::ProcessingIndicator;
@@ -64,6 +65,8 @@ pub struct ImageViewer {
     pub error_message: Option<String>,
     /// Path of the image that failed to load (for full path display)
     pub error_path: Option<PathBuf>,
+    /// Path to directory with no images (for friendly notice, not an error)
+    pub no_images_path: Option<PathBuf>,
     /// Oversized image warning: (path, width, height, max_dimension)
     pub oversized_image: Option<(PathBuf, u32, u32, u32)>,
     /// Focus handle for keyboard events
@@ -448,6 +451,7 @@ impl ImageViewer {
                 });
                 self.error_message = None;
                 self.error_path = None;
+                self.no_images_path = None;
 
                 // Fit to window on load (if viewport size is known)
                 self.fit_to_window();
@@ -485,6 +489,7 @@ impl ImageViewer {
         self.current_image = None;
         self.error_message = None;
         self.error_path = None;
+        self.no_images_path = None;
 
         // Clear pending filtered image from previous image
         self.pending_filtered_path = None;
@@ -543,6 +548,7 @@ impl ImageViewer {
                         });
                         self.error_message = None;
                         self.error_path = None;
+                        self.no_images_path = None;
                         self.oversized_image = None;
 
                         // Fit to window on load
@@ -567,6 +573,7 @@ impl ImageViewer {
                         self.current_image = None;
                         self.error_message = None;
                         self.error_path = None;
+                        self.no_images_path = None;
                         self.oversized_image = Some((path, width, height, max_dim));
 
                         return true;
@@ -784,6 +791,7 @@ impl ImageViewer {
         self.current_image = None;
         self.error_message = None;
         self.error_path = None;
+        self.no_images_path = None;
     }
 
     /// Cache a specific animation frame to disk if not already cached
@@ -957,6 +965,48 @@ impl ImageViewer {
                                 .text_align(gpui::TextAlign::Center)
                                 .child(format!("and increase the limit above {} px", max_dim))
                         )
+                )
+                .into_any_element()
+        } else if let Some(ref path) = self.no_images_path {
+            // Show friendly notice when directory has no images (not an error)
+            let display_path = path.display().to_string();
+            div()
+                .size_full()
+                .flex()
+                .flex_col()
+                .justify_center()
+                .items_center()
+                .gap(Spacing::lg())
+                .child(
+                    div()
+                        .text_size(TextSize::xl())
+                        .text_color(Colors::text())
+                        .text_align(gpui::TextAlign::Center)
+                        .child("The current directory does not contain any images."),
+                )
+                .child(
+                    div()
+                        .text_size(TextSize::xl())
+                        .text_color(Colors::text())
+                        .text_align(gpui::TextAlign::Center)
+                        .child(display_path),
+                )
+                .child(
+                    div()
+                        .mt(Spacing::lg())
+                        .px(Spacing::lg())
+                        .py(Spacing::sm())
+                        .bg(Colors::info())
+                        .rounded(px(6.0))
+                        .text_size(TextSize::md())
+                        .text_color(rgb(0x1a1a1a))
+                        .font_weight(FontWeight::MEDIUM)
+                        .cursor_pointer()
+                        .hover(|style| style.bg(rgb(0x6272a4)))
+                        .on_mouse_down(MouseButton::Left, |_event, window, cx| {
+                            window.dispatch_action(OpenFile.boxed_clone(), cx);
+                        })
+                        .child("Open Image"),
                 )
                 .into_any_element()
         } else if let Some(ref error) = self.error_message {
@@ -1169,6 +1219,48 @@ impl Render for ImageViewer {
             div()
                 .size_full()
                 .child(cx.new(|_cx| LoadingIndicator::new("Loading image...")))
+                .into_any_element()
+        } else if let Some(ref path) = self.no_images_path {
+            // Show friendly notice when directory has no images (not an error)
+            let display_path = path.display().to_string();
+            div()
+                .size_full()
+                .flex()
+                .flex_col()
+                .justify_center()
+                .items_center()
+                .gap(Spacing::lg())
+                .child(
+                    div()
+                        .text_size(TextSize::xl())
+                        .text_color(Colors::text())
+                        .text_align(gpui::TextAlign::Center)
+                        .child("The current directory does not contain any images."),
+                )
+                .child(
+                    div()
+                        .text_size(TextSize::xl())
+                        .text_color(Colors::text())
+                        .text_align(gpui::TextAlign::Center)
+                        .child(display_path),
+                )
+                .child(
+                    div()
+                        .mt(Spacing::lg())
+                        .px(Spacing::lg())
+                        .py(Spacing::sm())
+                        .bg(Colors::info())
+                        .rounded(px(6.0))
+                        .text_size(TextSize::md())
+                        .text_color(rgb(0x1a1a1a))
+                        .font_weight(FontWeight::MEDIUM)
+                        .cursor_pointer()
+                        .hover(|style| style.bg(rgb(0x6272a4)))
+                        .on_mouse_down(MouseButton::Left, |_event, window, cx| {
+                            window.dispatch_action(OpenFile.boxed_clone(), cx);
+                        })
+                        .child("Open Image"),
+                )
                 .into_any_element()
         } else if let Some(ref error) = self.error_message {
             // Show error message with full canonical path if available
