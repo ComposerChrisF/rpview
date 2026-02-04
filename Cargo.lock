@@ -823,8 +823,10 @@ dependencies = [
 name = "ccf-gpui-widgets"
 version = "0.1.0"
 dependencies = [
+ "dirs 5.0.1",
  "gpui",
  "log",
+ "rfd",
  "smol",
 ]
 

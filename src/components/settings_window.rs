@@ -44,9 +44,10 @@ use crate::utils::settings_io;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::{CloseSettings, NextImage, PreviousImage, ResetSettingsToDefaults};
 use ccf_gpui_widgets::prelude::{
-    scrollable_vertical, ColorSwatch, ColorSwatchEvent, NumberStepper, NumberStepperEvent,
-    SegmentOption, SegmentedControl, SegmentedControlEvent, SelectionItem, SidebarNav,
-    SidebarNavEvent, TextInput, TextInputEvent, Theme, ToggleSwitch, ToggleSwitchEvent,
+    scrollable_vertical, ColorSwatch, ColorSwatchEvent, DirectoryPicker, DirectoryPickerEvent,
+    NumberStepper, NumberStepperEvent, SegmentOption, SegmentedControl, SegmentedControlEvent,
+    SelectionItem, SidebarNav, SidebarNavEvent, TextInput, TextInputEvent, Theme, ToggleSwitch,
+    ToggleSwitchEvent,
 };
 use gpui::prelude::*;
 use gpui::*;
@@ -145,9 +146,13 @@ pub struct SettingsWindow {
     zoom_mode_control: Entity<SegmentedControl>,
     sort_mode_control: Entity<SegmentedControl>,
     save_format_control: Entity<SegmentedControl>,
+    save_location_mode_control: Entity<SegmentedControl>,
 
     // Color picker for background color
     background_color_swatch: Entity<ColorSwatch>,
+
+    // Directory picker for default save directory
+    default_save_directory_picker: Entity<DirectoryPicker>,
 
     // Toggle switches for boolean settings
     remember_per_image_state_toggle: Entity<ToggleSwitch>,
@@ -461,6 +466,49 @@ impl SettingsWindow {
             cx.notify();
         }).detach();
 
+        // Segmented control for save location mode
+        let initial_save_location = if settings.file_operations.default_save_directory.is_some() {
+            "custom"
+        } else {
+            "same"
+        };
+        let save_location_mode_control = cx.new(|cx| {
+            SegmentedControl::new(cx)
+                .options(vec![
+                    ("same", "Same as current image"),
+                    ("custom", "Custom Location..."),
+                ])
+                .with_selected_value(initial_save_location)
+                .theme(app_theme)
+        });
+        cx.subscribe(&save_location_mode_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+            let SegmentedControlEvent::Change(option) = event;
+            match option.value.as_str() {
+                "same" => {
+                    // Disable picker and clear directory setting
+                    this.default_save_directory_picker.update(cx, |picker, cx| {
+                        picker.set_enabled(false, cx);
+                    });
+                    this.working_settings.file_operations.default_save_directory = None;
+                }
+                "custom" => {
+                    // Enable picker and set directory from picker value
+                    this.default_save_directory_picker.update(cx, |picker, cx| {
+                        picker.set_enabled(true, cx);
+                    });
+                    let path = this.default_save_directory_picker.read(cx).value().to_string();
+                    if path.is_empty() {
+                        this.working_settings.file_operations.default_save_directory = None;
+                    } else {
+                        this.working_settings.file_operations.default_save_directory =
+                            Some(std::path::PathBuf::from(path));
+                    }
+                }
+                _ => {}
+            }
+            cx.notify();
+        }).detach();
+
         // Create toggle switch entities for boolean settings
         let remember_per_image_state_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -620,6 +668,33 @@ impl SettingsWindow {
             }
         }).detach();
 
+        // Create directory picker for default save directory
+        let has_custom_dir = settings.file_operations.default_save_directory.is_some();
+        let initial_dir = settings
+            .file_operations
+            .default_save_directory
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        let default_save_directory_picker = cx.new(|cx| {
+            DirectoryPicker::new(cx)
+                .with_value(initial_dir)
+                .with_enabled(has_custom_dir) // Disabled when "Same as current image" is selected
+                .placeholder("Click to select, or drag & drop")
+                .browse_shortcut(false) // Disable Cmd+O to avoid conflicts
+                .theme(app_theme)
+        });
+        cx.subscribe(&default_save_directory_picker, |this, _picker, event: &DirectoryPickerEvent, cx| {
+            let DirectoryPickerEvent::Change(path) = event;
+            if path.is_empty() {
+                this.working_settings.file_operations.default_save_directory = None;
+            } else {
+                this.working_settings.file_operations.default_save_directory =
+                    Some(std::path::PathBuf::from(path));
+            }
+            cx.notify();
+        }).detach();
+
         // Create sidebar navigation widget
         let sidebar_nav = cx.new(|cx| {
             SidebarNav::new(SettingsSection::all(), SettingsSection::ViewerBehavior, cx)
@@ -654,7 +729,9 @@ impl SettingsWindow {
             zoom_mode_control,
             sort_mode_control,
             save_format_control,
+            save_location_mode_control,
             background_color_swatch,
+            default_save_directory_picker,
             remember_per_image_state_toggle,
             animation_auto_play_toggle,
             preload_adjacent_images_toggle,
@@ -748,11 +825,22 @@ impl SettingsWindow {
             control.set_selected_value(format_value, cx);
         });
 
+        // Reset save location mode (defaults to "same")
+        self.save_location_mode_control.update(cx, |control, cx| {
+            control.set_selected_value("same", cx);
+        });
+
         // Reset color swatch
         let bg = &defaults.appearance.background_color;
         let default_hex = format!("#{:02x}{:02x}{:02x}", bg[0], bg[1], bg[2]);
         self.background_color_swatch.update(cx, |swatch, cx| {
             swatch.set_value(&default_hex, cx);
+        });
+
+        // Reset directory picker (disabled since default is "same as current image")
+        self.default_save_directory_picker.update(cx, |picker, cx| {
+            picker.set_value("", cx);
+            picker.set_enabled(false, cx);
         });
 
         // Reset toggle switches
@@ -1010,12 +1098,24 @@ impl SettingsWindow {
     }
 
     /// Render file operations section
-    fn render_file_operations(&self) -> impl IntoElement {
-        let default_save_directory = self
-            .working_settings
-            .file_operations
-            .default_save_directory
-            .clone();
+    fn render_file_operations(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let is_custom_location = self
+            .save_location_mode_control
+            .read(cx)
+            .selected_value()
+            == "custom";
+        let directory_path = self
+            .default_save_directory_picker
+            .read(cx)
+            .value()
+            .to_string();
+
+        // Build the destination description
+        let destination_text = if is_custom_location && !directory_path.is_empty() {
+            format!("Destination save defaults to \"{}\"", directory_path)
+        } else {
+            "Destination save defaults to \"Same as current image\"".to_string()
+        };
 
         div()
             .flex()
@@ -1030,40 +1130,22 @@ impl SettingsWindow {
                         "Default save directory".to_string(),
                         Some("Where filtered images are saved by default".to_string()),
                     ))
+                    // Save location mode selector
                     .child(
                         div()
-                            .flex()
-                            .flex_row()
-                            .gap(Spacing::sm())
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .px(Spacing::sm())
-                                    .py(Spacing::xs())
-                                    .bg(rgb(0x2a2a2a))
-                                    .border_1()
-                                    .border_color(rgb(0x444444))
-                                    .rounded(px(4.0))
-                                    .text_size(TextSize::sm())
-                                    .text_color(rgb(0xaaaaaa))
-                                    .child(
-                                        default_save_directory
-                                            .as_ref()
-                                            .map(|p| p.display().to_string())
-                                            .unwrap_or_else(|| "Same as current image".to_string()),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .px(Spacing::md())
-                                    .py(Spacing::xs())
-                                    .bg(rgb(0x444444))
-                                    .rounded(px(4.0))
-                                    .text_size(TextSize::sm())
-                                    .text_color(Colors::text())
-                                    .cursor_pointer()
-                                    .child("Browse..."),
-                            ),
+                            .mb(Spacing::sm())
+                            .child(self.save_location_mode_control.clone()),
+                    )
+                    // Directory picker (enabled only when custom location is selected)
+                    .child(self.default_save_directory_picker.clone())
+                    // Always show destination info
+                    .child(
+                        div()
+                            .text_size(TextSize::sm())
+                            .text_color(rgb(0x888888))
+                            .italic()
+                            .mt(Spacing::sm())
+                            .child(destination_text),
                     ),
             )
             .child(
@@ -1530,7 +1612,7 @@ impl SettingsWindow {
                 SettingsSection::Performance => self.render_performance().into_any_element(),
                 SettingsSection::KeyboardMouse => self.render_keyboard_mouse().into_any_element(),
                 SettingsSection::FileOperations => {
-                    self.render_file_operations().into_any_element()
+                    self.render_file_operations(cx).into_any_element()
                 }
                 SettingsSection::Appearance => {
                     self.render_appearance().into_any_element()

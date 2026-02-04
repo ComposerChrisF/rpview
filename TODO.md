@@ -699,7 +699,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 ⏳ **Optional Enhancements (Low Priority - rarely changed settings):**
 - Text input fields (window title format, file paths)
-- File browser for default save directory
+- ✅ File browser for default save directory (DirectoryPicker with segmented control)
 - External viewer list editor (add/remove/reorder viewers)
 
 **Settings File Location** (for manual editing of text fields):
@@ -2512,7 +2512,7 @@ fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
 **What's Deferred (Low Priority):**
 - Text input fields (window_title_format, file paths) - use JSON editing
 - Color picker for background_color - use JSON editing
-- File browser for default_save_directory - use JSON editing
+- ✅ File browser for default_save_directory - DirectoryPicker with segmented control
 - External viewer list editor (add/remove/reorder) - use JSON editing
 - Executable validation for external viewers - logs error on launch failure
 
