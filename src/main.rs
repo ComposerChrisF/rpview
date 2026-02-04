@@ -385,11 +385,14 @@ impl App {
             )
             .set_title("Open Image");
 
-        // Set default directory to current image's parent directory if available
+        // Set default directory to current image's parent directory if available,
+        // or to the no_images_path directory if we're showing the empty directory notice
         if let Some(current_path) = self.app_state.current_image() {
             if let Some(parent) = current_path.parent() {
                 file_dialog = file_dialog.set_directory(parent);
             }
+        } else if let Some(ref no_images_dir) = self.viewer.no_images_path {
+            file_dialog = file_dialog.set_directory(no_images_dir);
         }
 
         // Get selected file (single selection)
@@ -2287,6 +2290,7 @@ fn main() {
                         current_image: None,
                         error_message: None,
                         error_path: None,
+                        no_images_path: None,
                         oversized_image: None,
                         focus_handle: inner_cx.focus_handle(),
                         image_state: state::ImageState::new(),
@@ -2306,15 +2310,11 @@ fn main() {
                         let max_dim = Some(settings.performance.max_image_dimension);
                         viewer.load_image_async(path.clone(), max_dim, false);
                     } else {
-                        // No images found - show error with canonical directory path
+                        // No images found - show friendly notice (not an error)
                         let canonical_dir = search_dir
                             .canonicalize()
                             .unwrap_or_else(|_| search_dir.clone());
-                        viewer.error_message = Some(format!(
-                            "No images found in directory:\n{}",
-                            canonical_dir.display()
-                        ));
-                        viewer.error_path = None;
+                        viewer.no_images_path = Some(canonical_dir);
                     }
 
                     // Set initial window title
