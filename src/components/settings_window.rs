@@ -42,10 +42,11 @@
 use crate::state::settings::*;
 use crate::utils::settings_io;
 use crate::utils::style::{Colors, Spacing, TextSize};
-use crate::{CloseSettings, ResetSettingsToDefaults};
+use crate::{CloseSettings, NextImage, PreviousImage, ResetSettingsToDefaults};
 use ccf_gpui_widgets::prelude::{
     scrollable_vertical, ColorSwatch, ColorSwatchEvent, NumberStepper, NumberStepperEvent,
-    SegmentedControl, SegmentedControlEvent, Theme, ToggleSwitch, ToggleSwitchEvent,
+    SegmentedControl, SegmentedControlEvent, TextInput, TextInputEvent, Theme, ToggleSwitch,
+    ToggleSwitchEvent,
 };
 use gpui::prelude::*;
 use gpui::*;
@@ -101,10 +102,8 @@ pub struct SettingsWindow {
     pub current_section: SettingsSection,
     /// Focus handle for the settings window
     focus_handle: FocusHandle,
-    /// Text input buffer for window title format
-    window_title_input: String,
-    /// Focus handle for the text input
-    text_input_focus: FocusHandle,
+    /// Text input for window title format
+    window_title_input: Entity<TextInput>,
 
     // Number steppers for numeric settings
     state_cache_size_stepper: Entity<NumberStepper>,
@@ -123,6 +122,8 @@ pub struct SettingsWindow {
 
     // Segmented controls
     zoom_mode_control: Entity<SegmentedControl>,
+    sort_mode_control: Entity<SegmentedControl>,
+    save_format_control: Entity<SegmentedControl>,
 
     // Color picker for background color
     background_color_swatch: Entity<ColorSwatch>,
@@ -373,6 +374,66 @@ impl SettingsWindow {
             cx.notify();
         }).detach();
 
+        // Segmented control for sort mode
+        let initial_sort = match settings.sort_navigation.default_sort_mode {
+            SortModeWrapper::Alphabetical => "alpha",
+            SortModeWrapper::ModifiedDate => "date",
+        };
+        let sort_mode_control = cx.new(|cx| {
+            SegmentedControl::new(cx)
+                .options(vec![
+                    ("alpha", "Alphabetical"),
+                    ("date", "Modified Date"),
+                ])
+                .with_selected(initial_sort)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&sort_mode_control, |this, _control, event: &SegmentedControlEvent, cx| {
+            let SegmentedControlEvent::Change(value) = event;
+            this.working_settings.sort_navigation.default_sort_mode = match value.as_str() {
+                "alpha" => SortModeWrapper::Alphabetical,
+                "date" => SortModeWrapper::ModifiedDate,
+                _ => SortModeWrapper::Alphabetical,
+            };
+            cx.notify();
+        }).detach();
+
+        // Segmented control for save format
+        let initial_format = match settings.file_operations.default_save_format {
+            SaveFormat::SameAsLoaded => "same",
+            SaveFormat::Png => "png",
+            SaveFormat::Jpeg => "jpeg",
+            SaveFormat::Bmp => "bmp",
+            SaveFormat::Tiff => "tiff",
+            SaveFormat::Webp => "webp",
+        };
+        let save_format_control = cx.new(|cx| {
+            SegmentedControl::new(cx)
+                .options(vec![
+                    ("same", "Same"),
+                    ("png", "PNG"),
+                    ("jpeg", "JPEG"),
+                    ("bmp", "BMP"),
+                    ("tiff", "TIFF"),
+                    ("webp", "WEBP"),
+                ])
+                .with_selected(initial_format)
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&save_format_control, |this, _control, event: &SegmentedControlEvent, cx| {
+            let SegmentedControlEvent::Change(value) = event;
+            this.working_settings.file_operations.default_save_format = match value.as_str() {
+                "same" => SaveFormat::SameAsLoaded,
+                "png" => SaveFormat::Png,
+                "jpeg" => SaveFormat::Jpeg,
+                "bmp" => SaveFormat::Bmp,
+                "tiff" => SaveFormat::Tiff,
+                "webp" => SaveFormat::Webp,
+                _ => SaveFormat::SameAsLoaded,
+            };
+            cx.notify();
+        }).detach();
+
         // Custom theme for toggle switches with lime green theme
         // On state: saturated lime, Off state: very dark lime
         let toggle_theme = Theme::dark()
@@ -524,12 +585,26 @@ impl SettingsWindow {
             }
         }).detach();
 
+        // Create text input for window title format
+        let window_title_input = cx.new(|cx| {
+            TextInput::new(cx)
+                .with_value(&settings.appearance.window_title_format)
+                .placeholder("e.g., {filename} - rpview ({index}/{total})")
+                .theme(stepper_theme)
+        });
+        cx.subscribe(&window_title_input, |this, input, event: &TextInputEvent, cx| {
+            if let TextInputEvent::Change = event {
+                let value = input.read(cx).content().to_string();
+                this.working_settings.appearance.window_title_format = value;
+                cx.notify();
+            }
+        }).detach();
+
         Self {
-            window_title_input: settings.appearance.window_title_format.clone(),
+            window_title_input,
             working_settings: settings,
             current_section: SettingsSection::ViewerBehavior,
             focus_handle: cx.focus_handle(),
-            text_input_focus: cx.focus_handle(),
             state_cache_size_stepper,
             filter_processing_threads_stepper,
             max_image_dimension_stepper,
@@ -544,6 +619,8 @@ impl SettingsWindow {
             default_contrast_stepper,
             default_gamma_stepper,
             zoom_mode_control,
+            sort_mode_control,
+            save_format_control,
             background_color_swatch,
             remember_per_image_state_toggle,
             animation_auto_play_toggle,
@@ -568,7 +645,11 @@ impl SettingsWindow {
     pub fn reset_to_defaults(&mut self, cx: &mut Context<Self>) {
         let defaults = AppSettings::default();
         self.working_settings = defaults.clone();
-        self.window_title_input = defaults.appearance.window_title_format.clone();
+
+        // Reset window title input
+        self.window_title_input.update(cx, |input, cx| {
+            input.set_value(&defaults.appearance.window_title_format, cx);
+        });
 
         // Reset all stepper values
         self.state_cache_size_stepper.update(cx, |stepper, cx| {
@@ -620,6 +701,26 @@ impl SettingsWindow {
             control.set_selected(zoom_value, cx);
         });
 
+        let sort_value = match defaults.sort_navigation.default_sort_mode {
+            SortModeWrapper::Alphabetical => "alpha",
+            SortModeWrapper::ModifiedDate => "date",
+        };
+        self.sort_mode_control.update(cx, |control, cx| {
+            control.set_selected(sort_value, cx);
+        });
+
+        let format_value = match defaults.file_operations.default_save_format {
+            SaveFormat::SameAsLoaded => "same",
+            SaveFormat::Png => "png",
+            SaveFormat::Jpeg => "jpeg",
+            SaveFormat::Bmp => "bmp",
+            SaveFormat::Tiff => "tiff",
+            SaveFormat::Webp => "webp",
+        };
+        self.save_format_control.update(cx, |control, cx| {
+            control.set_selected(format_value, cx);
+        });
+
         // Reset color swatch
         let bg = &defaults.appearance.background_color;
         let default_hex = format!("#{:02x}{:02x}{:02x}", bg[0], bg[1], bg[2]);
@@ -662,10 +763,8 @@ impl SettingsWindow {
 
     /// Get the final settings (for apply)
     pub fn get_settings(&self) -> AppSettings {
-        let mut settings = self.working_settings.clone();
-        // Apply text input buffer to settings
-        settings.appearance.window_title_format = self.window_title_input.clone();
-        settings
+        // working_settings is kept in sync via event subscriptions
+        self.working_settings.clone()
     }
 
     /// Render the header
@@ -921,13 +1020,12 @@ impl SettingsWindow {
     }
 
     /// Render file operations section
-    fn render_file_operations(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_file_operations(&self) -> impl IntoElement {
         let default_save_directory = self
             .working_settings
             .file_operations
             .default_save_directory
             .clone();
-        let default_save_format = self.working_settings.file_operations.default_save_format;
 
         div()
             .flex()
@@ -985,37 +1083,7 @@ impl SettingsWindow {
                         "Default save format".to_string(),
                         Some("Format for saving filtered images".to_string()),
                     ))
-                    .child(div().w(px(200.0)).child(
-                        div().flex().flex_row().gap(Spacing::xs()).children(
-                            SaveFormat::all().into_iter().map(|format| {
-                                let is_selected = format == default_save_format;
-                                div()
-                                    .px(Spacing::md())
-                                    .py(Spacing::sm())
-                                    .rounded(px(4.0))
-                                    .border_1()
-                                    .cursor_pointer()
-                                    .when(is_selected, |div| {
-                                        div.border_color(Colors::info()).bg(rgba(0x50fa7b22))
-                                    })
-                                    .when(!is_selected, |div| div.border_color(rgb(0x444444)))
-                                    .text_size(TextSize::sm())
-                                    .text_color(Colors::text())
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(
-                                            move |this, _event: &MouseDownEvent, _window, cx| {
-                                                this.working_settings
-                                                    .file_operations
-                                                    .default_save_format = format;
-                                                cx.notify();
-                                            },
-                                        ),
-                                    )
-                                    .child(format.display_name())
-                            }),
-                        ),
-                    )),
+                    .child(self.save_format_control.clone()),
             )
             .child(self.render_toggle_row(
                 Some("Permanently save filtered image cache to disk".to_string()),
@@ -1028,11 +1096,7 @@ impl SettingsWindow {
     }
 
     /// Render appearance section
-    fn render_appearance(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_appearance(&self) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
@@ -1061,55 +1125,7 @@ impl SettingsWindow {
                     .flex_col()
                     .mb(Spacing::md())
                     .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
-                    .child({
-                        let text_input_focus = self.text_input_focus.clone();
-                        let is_focused = text_input_focus.contains_focused(window, cx);
-                        let text_with_cursor = if is_focused {
-                            format!("{}|", self.window_title_input)
-                        } else {
-                            self.window_title_input.clone()
-                        };
-
-                        div()
-                            .w_full()
-                            .px(Spacing::sm())
-                            .py(Spacing::xs())
-                            .bg(rgb(0x2a2a2a))
-                            .border_1()
-                            .border_color(if is_focused { rgb(0x50fa7b) } else { rgb(0x444444) })
-                            .rounded(px(4.0))
-                            .text_size(TextSize::md())
-                            .text_color(Colors::text())
-                            .cursor(gpui::CursorStyle::IBeam)
-                            .track_focus(&text_input_focus)
-                            .on_mouse_down(MouseButton::Left, cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                                this.text_input_focus.focus(window);
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                                // Handle text input
-                                let key = &event.keystroke.key;
-                                match key.as_str() {
-                                    "backspace" => {
-                                        this.window_title_input.pop();
-                                        cx.notify();
-                                    }
-                                    "escape" => {
-                                        // Unfocus the text input and focus the main settings window
-                                        this.focus_handle.focus(window);
-                                        cx.notify();
-                                    }
-                                    _ => {
-                                        // Add printable characters (single character keys)
-                                        if key.len() == 1 && !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform {
-                                            this.window_title_input.push_str(key);
-                                            cx.notify();
-                                        }
-                                    }
-                                }
-                            }))
-                            .child(text_with_cursor)
-                    })
+                    .child(self.window_title_input.clone())
             )
     }
 
@@ -1171,9 +1187,7 @@ impl SettingsWindow {
     }
 
     /// Render sort & navigation section
-    fn render_sort_navigation(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let default_sort_mode = self.working_settings.sort_navigation.default_sort_mode;
-
+    fn render_sort_navigation(&self) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
@@ -1185,74 +1199,7 @@ impl SettingsWindow {
                         "Default sort mode".to_string(),
                         Some("How images are sorted on startup".to_string()),
                     ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(Spacing::md())
-                            .child(
-                                div()
-                                    .px(Spacing::md())
-                                    .py(Spacing::sm())
-                                    .rounded(px(4.0))
-                                    .border_1()
-                                    .cursor_pointer()
-                                    .when(
-                                        default_sort_mode == SortModeWrapper::Alphabetical,
-                                        |div| div.border_color(Colors::info()).bg(rgba(0x50fa7b22)),
-                                    )
-                                    .when(
-                                        default_sort_mode != SortModeWrapper::Alphabetical,
-                                        |div| div.border_color(rgb(0x444444)),
-                                    )
-                                    .text_size(TextSize::sm())
-                                    .text_color(Colors::text())
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(
-                                            |this, _event: &MouseDownEvent, _window, cx| {
-                                                this.working_settings
-                                                    .sort_navigation
-                                                    .default_sort_mode =
-                                                    SortModeWrapper::Alphabetical;
-                                                cx.notify();
-                                            },
-                                        ),
-                                    )
-                                    .child("Alphabetical"),
-                            )
-                            .child(
-                                div()
-                                    .px(Spacing::md())
-                                    .py(Spacing::sm())
-                                    .rounded(px(4.0))
-                                    .border_1()
-                                    .cursor_pointer()
-                                    .when(
-                                        default_sort_mode == SortModeWrapper::ModifiedDate,
-                                        |div| div.border_color(Colors::info()).bg(rgba(0x50fa7b22)),
-                                    )
-                                    .when(
-                                        default_sort_mode != SortModeWrapper::ModifiedDate,
-                                        |div| div.border_color(rgb(0x444444)),
-                                    )
-                                    .text_size(TextSize::sm())
-                                    .text_color(Colors::text())
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(
-                                            |this, _event: &MouseDownEvent, _window, cx| {
-                                                this.working_settings
-                                                    .sort_navigation
-                                                    .default_sort_mode =
-                                                    SortModeWrapper::ModifiedDate;
-                                                cx.notify();
-                                            },
-                                        ),
-                                    )
-                                    .child("Modified Date"),
-                            ),
-                    ),
+                    .child(self.sort_mode_control.clone()),
             )
             .child(self.render_toggle_row(
                 Some("Navigate from last image to first (and vice versa)".to_string()),
@@ -1422,7 +1369,7 @@ impl SettingsWindow {
                     .max_w_full()
                     .child(self.render_label(
                         "Settings file location".to_string(),
-                        Some("Path to the JSON settings file".to_string()),
+                        Some("Path to the JSON settings file:".to_string()),
                     ))
                     .child(
                         div()
@@ -1578,13 +1525,13 @@ impl SettingsWindow {
                                     .mb(Spacing::xs())
                                     .child("Note:"),
                             )
-                            .child("Edit settings.json to configure advanced options."),
+                            .child("Edit the “settings.json” file to configure advanced options."),
                     ),
             )
     }
 
     /// Render the content area based on selected section
-    fn render_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_content(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div().flex_1().child(
             scrollable_vertical(div().p(Spacing::xl()).child(match self.current_section {
                 SettingsSection::ViewerBehavior => {
@@ -1593,13 +1540,13 @@ impl SettingsWindow {
                 SettingsSection::Performance => self.render_performance().into_any_element(),
                 SettingsSection::KeyboardMouse => self.render_keyboard_mouse().into_any_element(),
                 SettingsSection::FileOperations => {
-                    self.render_file_operations(cx).into_any_element()
+                    self.render_file_operations().into_any_element()
                 }
                 SettingsSection::Appearance => {
-                    self.render_appearance(window, cx).into_any_element()
+                    self.render_appearance().into_any_element()
                 }
                 SettingsSection::SortNavigation => {
-                    self.render_sort_navigation(cx).into_any_element()
+                    self.render_sort_navigation().into_any_element()
                 }
                 SettingsSection::ExternalTools => self.render_external_tools().into_any_element(),
                 SettingsSection::SettingsFile => self.render_settings_file(cx).into_any_element(),
@@ -1673,6 +1620,13 @@ impl Render for SettingsWindow {
             .items_center()
             .justify_center()
             .track_focus(&self.focus_handle)
+            // Consume navigation actions so arrow keys work in widgets
+            .on_action(|_: &NextImage, _window, _cx| {
+                // Consume action - don't navigate images while settings is open
+            })
+            .on_action(|_: &PreviousImage, _window, _cx| {
+                // Consume action - don't navigate images while settings is open
+            })
             .child(
                 // Settings window box
                 div()
