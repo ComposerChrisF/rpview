@@ -1675,55 +1675,6 @@ impl Render for App {
                     cx.notify();
                 }
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
-                // Don't process keyboard events if modal overlays are open
-                if this.is_modal_open() {
-                    return;
-                }
-
-                // Check for spacebar press (without modifiers)
-                if event.keystroke.key.as_str() == "space"
-                    && !event.keystroke.modifiers.shift
-                    && !event.keystroke.modifiers.control
-                    && !event.keystroke.modifiers.platform
-                    && !event.keystroke.modifiers.alt
-                {
-                    // Enable spacebar-drag pan mode
-                    this.spacebar_held = true;
-                    cx.notify();
-                }
-                // Check for Z key press (without modifiers)
-                else if event.keystroke.key.as_str() == "z"
-                    && !event.keystroke.modifiers.shift
-                    && !event.keystroke.modifiers.control
-                    && !event.keystroke.modifiers.platform
-                    && !event.keystroke.modifiers.alt
-                {
-                    // Enable Z-drag zoom mode
-                    this.z_key_held = true;
-                    cx.notify();
-                }
-            }))
-            .on_key_up(cx.listener(|this, event: &KeyUpEvent, _window, cx| {
-                // Check for spacebar release
-                if event.keystroke.key.as_str() == "space" {
-                    // Disable spacebar-drag pan mode and save state
-                    if this.spacebar_held {
-                        this.spacebar_held = false;
-                        this.save_current_image_state();
-                        cx.notify();
-                    }
-                }
-                // Check for Z key release
-                else if event.keystroke.key.as_str() == "z" {
-                    // Disable Z-drag zoom mode and save state
-                    if this.z_key_held {
-                        this.z_key_held = false;
-                        this.save_current_image_state();
-                        cx.notify();
-                    }
-                }
-            }))
             .on_drag_move(cx.listener(
                 |this, _event: &DragMoveEvent<ExternalPaths>, _window, cx| {
                     // Set drag-over state to show visual feedback
@@ -1792,6 +1743,56 @@ impl Render for App {
                 }
             })
             .child(content)
+            // Key handlers for Space/Z drag modes - must be on focused element
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
+                // Don't process keyboard events if modal overlays are open
+                if this.is_modal_open() {
+                    return;
+                }
+
+                // Check for spacebar press (without modifiers)
+                if event.keystroke.key.as_str() == "space"
+                    && !event.keystroke.modifiers.shift
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.alt
+                {
+                    // Enable spacebar-drag pan mode
+                    this.spacebar_held = true;
+                    cx.notify();
+                }
+                // Check for Z key press (without modifiers)
+                else if event.keystroke.key.as_str() == "z"
+                    && !event.keystroke.modifiers.shift
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.alt
+                {
+                    // Enable Z-drag zoom mode
+                    this.z_key_held = true;
+                    cx.notify();
+                }
+            }))
+            .on_key_up(cx.listener(|this, event: &KeyUpEvent, _window, cx| {
+                // Check for spacebar release
+                if event.keystroke.key.as_str() == "space" {
+                    // Disable spacebar-drag pan mode and save state
+                    if this.spacebar_held {
+                        this.spacebar_held = false;
+                        this.save_current_image_state();
+                        cx.notify();
+                    }
+                }
+                // Check for Z key release
+                else if event.keystroke.key.as_str() == "z" {
+                    // Disable Z-drag zoom mode and save state
+                    if this.z_key_held {
+                        this.z_key_held = false;
+                        this.save_current_image_state();
+                        cx.notify();
+                    }
+                }
+            }))
             // Action handlers - registered on focused element so menu items work
             .on_action(|_: &CloseWindow, window, _| {
                 window.remove_window();
