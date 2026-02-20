@@ -1235,6 +1235,9 @@ impl App {
     }
 
     fn save_current_image_state(&mut self) {
+        // Notify SVG re-raster system of zoom/pan change
+        self.viewer.notify_svg_zoom_pan_changed();
+
         // Only save state if enabled in settings
         if self.settings.viewer_behavior.remember_per_image_state {
             let state = self.viewer.get_image_state();
@@ -1405,6 +1408,39 @@ impl Render for App {
                 // Still preloading, request another frame
                 window.request_animation_frame();
             }
+        }
+
+        // --- SVG dynamic re-rasterization ---
+        let svg_just_finished = self.viewer.check_svg_reraster_processing();
+        if svg_just_finished {
+            self.viewer.pending_svg_reraster_preload_frames = 0;
+            window.request_animation_frame();
+            cx.notify();
+        }
+
+        if self.viewer.pending_svg_reraster_path.is_some() {
+            if !svg_just_finished {
+                self.viewer.pending_svg_reraster_preload_frames += 1;
+            }
+            if self.viewer.pending_svg_reraster_preload_frames >= 3 {
+                self.viewer.apply_pending_svg_reraster();
+                cx.notify();
+            } else {
+                window.request_animation_frame();
+            }
+        }
+
+        if self.viewer.last_zoom_pan_change.is_some() {
+            if self.viewer.check_svg_reraster_needed() {
+                window.request_animation_frame();
+            } else {
+                // Debounce timer hasn't elapsed yet, keep polling
+                window.request_animation_frame();
+            }
+        }
+
+        if self.viewer.is_svg_rerastering {
+            window.request_animation_frame();
         }
 
         // If still loading or processing filters, request another render to check again
@@ -1598,6 +1634,7 @@ impl Render for App {
                             // Update last position for next delta calculation
                             this.viewer.spacebar_drag_state = Some((current_x, current_y));
 
+                            this.viewer.notify_svg_zoom_pan_changed();
                             cx.notify();
                             return; // Don't process Z-drag if we're spacebar-dragging
                         }
@@ -1646,6 +1683,7 @@ impl Render for App {
                             this.viewer.z_drag_state =
                                 Some((current_x, current_y, center_x, center_y));
 
+                            this.viewer.notify_svg_zoom_pan_changed();
                             cx.notify();
                         }
                     }
@@ -2305,6 +2343,16 @@ fn main() {
                         filter_processing_handle: None,
                         pending_filtered_path: None,
                         pending_filter_preload_frames: 0,
+                        svg_reraster_path: None,
+                        svg_reraster_region: None,
+                        svg_reraster_scale: None,
+                        pending_svg_reraster_path: None,
+                        pending_svg_reraster_region: None,
+                        pending_svg_reraster_preload_frames: 0,
+                        svg_reraster_handle: None,
+                        is_svg_rerastering: false,
+                        svg_reraster_cancel: None,
+                        last_zoom_pan_change: None,
                     };
 
                     if let Some(ref path) = first_image_path {

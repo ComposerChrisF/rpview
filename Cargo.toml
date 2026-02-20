@@ -1,6 +1,6 @@
 [package]
 name = "rpview-gpui"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 authors = ["rpview contributors"]
 description = "A fast, cross-platform image viewer built with GPUI"
