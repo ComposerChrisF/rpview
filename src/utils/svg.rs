@@ -1,5 +1,28 @@
 use crate::error::{AppError, AppResult};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
+
+/// Cached font database loaded once and reused for all SVG operations.
+/// System font discovery is slow (~50-100ms), so we only do it once.
+static FONTDB: OnceLock<Arc<resvg::usvg::fontdb::Database>> = OnceLock::new();
+
+fn fontdb() -> Arc<resvg::usvg::fontdb::Database> {
+    FONTDB
+        .get_or_init(|| {
+            let mut db = resvg::usvg::fontdb::Database::new();
+            db.load_system_fonts();
+            eprintln!("[SVG] Loaded {} font faces from system", db.len());
+            Arc::new(db)
+        })
+        .clone()
+}
+
+fn svg_options() -> resvg::usvg::Options<'static> {
+    resvg::usvg::Options {
+        fontdb: fontdb(),
+        ..Default::default()
+    }
+}
 
 /// Get the intrinsic dimensions of an SVG file
 pub fn get_svg_dimensions(path: &Path) -> AppResult<(u32, u32)> {
@@ -7,10 +30,9 @@ pub fn get_svg_dimensions(path: &Path) -> AppResult<(u32, u32)> {
         AppError::ImageLoadError(path.to_path_buf(), format!("Failed to read SVG file: {}", e))
     })?;
 
-    let tree = resvg::usvg::Tree::from_data(&svg_data, &resvg::usvg::Options::default())
-        .map_err(|e| {
-            AppError::ImageLoadError(path.to_path_buf(), format!("Failed to parse SVG: {}", e))
-        })?;
+    let tree = resvg::usvg::Tree::from_data(&svg_data, &svg_options()).map_err(|e| {
+        AppError::ImageLoadError(path.to_path_buf(), format!("Failed to parse SVG: {}", e))
+    })?;
 
     let size = tree.size();
     let width = size.width().ceil() as u32;
@@ -35,10 +57,9 @@ pub fn rasterize_svg(path: &Path, scale_factor: f32) -> AppResult<(PathBuf, u32,
         AppError::ImageLoadError(path.to_path_buf(), format!("Failed to read SVG file: {}", e))
     })?;
 
-    let tree = resvg::usvg::Tree::from_data(&svg_data, &resvg::usvg::Options::default())
-        .map_err(|e| {
-            AppError::ImageLoadError(path.to_path_buf(), format!("Failed to parse SVG: {}", e))
-        })?;
+    let tree = resvg::usvg::Tree::from_data(&svg_data, &svg_options()).map_err(|e| {
+        AppError::ImageLoadError(path.to_path_buf(), format!("Failed to parse SVG: {}", e))
+    })?;
 
     let size = tree.size();
     let intrinsic_w = size.width().ceil() as u32;
@@ -64,8 +85,7 @@ pub fn rasterize_svg(path: &Path, scale_factor: f32) -> AppResult<(PathBuf, u32,
         )
     })?;
 
-    let transform =
-        resvg::tiny_skia::Transform::from_scale(scale_factor as f32, scale_factor as f32);
+    let transform = resvg::tiny_skia::Transform::from_scale(scale_factor, scale_factor);
     resvg::render(&tree, transform, &mut pixmap.as_mut());
 
     // Build temp file path

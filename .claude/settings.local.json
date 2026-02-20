@@ -62,7 +62,12 @@
       "Bash(ln:*)",
       "Bash(cargo audit:*)",
       "WebFetch(domain:linebender.org)",
-      "Bash(version-manager:*)"
+      "Bash(version-manager:*)",
+      "Bash(publish-bin:*)",
+      "Bash(/Users/chris/Chris/Tools/FM-Mac/release/rpview:*)",
+      "Bash(plutil:*)",
+      "Bash(/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister:*)",
+      "Bash(bash packaging/macos/bundle.sh:*)"
     ]
   }
 }

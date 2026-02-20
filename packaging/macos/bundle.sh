@@ -125,10 +125,20 @@ info "Copying binary..."
 cp "$BINARY_PATH" "$MACOS_DIR/$BINARY_NAME"
 chmod +x "$MACOS_DIR/$BINARY_NAME"
 
-# Copy Info.plist
+# Copy Info.plist and update version from Cargo.toml
 info "Copying Info.plist..."
 if [ -f "$SCRIPT_DIR/Info.plist" ]; then
     cp "$SCRIPT_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
+
+    # Extract version from Cargo.toml and update Info.plist
+    CARGO_VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+    if [ -n "$CARGO_VERSION" ]; then
+        info "Setting bundle version to $CARGO_VERSION (from Cargo.toml)"
+        plutil -replace CFBundleShortVersionString -string "$CARGO_VERSION" "$CONTENTS_DIR/Info.plist"
+        plutil -replace CFBundleVersion -string "$CARGO_VERSION" "$CONTENTS_DIR/Info.plist"
+    else
+        warn "Could not extract version from Cargo.toml"
+    fi
 else
     error "Info.plist not found at $SCRIPT_DIR/Info.plist"
 fi
