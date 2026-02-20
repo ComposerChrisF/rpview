@@ -73,6 +73,14 @@ impl Render for ZoomIndicator {
             );
         }
 
+        // Version
+        container = container.child(
+            div()
+                .text_size(scaled_text_size(9.0, self.font_size_scale))
+                .text_color(rgba(0x666666FF))
+                .child(format!("v{}", env!("CARGO_PKG_VERSION"))),
+        );
+
         container
     }
 }
