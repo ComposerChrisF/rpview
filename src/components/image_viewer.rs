@@ -55,6 +55,8 @@ pub struct LoadedImage {
     /// Cached paths for each animation frame (disk cache)
     /// Empty PathBuf means frame not yet cached (will be cached on-demand)
     pub frame_cache_paths: Vec<PathBuf>,
+    /// Rasterized temp PNG path (for SVG files)
+    pub rasterized_path: Option<PathBuf>,
 }
 
 /// Component for viewing images
@@ -448,6 +450,7 @@ impl ImageViewer {
                     cached_filter_settings: None,
                     animation_data,
                     frame_cache_paths,
+                    rasterized_path: None,
                 });
                 self.error_message = None;
                 self.error_path = None;
@@ -545,6 +548,7 @@ impl ImageViewer {
                             cached_filter_settings: None,
                             animation_data: data.animation_data,
                             frame_cache_paths,
+                            rasterized_path: data.rasterized_path,
                         });
                         self.error_message = None;
                         self.error_path = None;
@@ -588,6 +592,13 @@ impl ImageViewer {
     /// Update filtered image cache if needed (async)
     pub fn update_filtered_cache(&mut self) {
         eprintln!("[ImageViewer::update_filtered_cache] Called");
+
+        // Filters not supported for SVG files (image::open can't read SVGs)
+        if let Some(ref loaded) = self.current_image {
+            if crate::utils::file_scanner::is_svg(&loaded.path) {
+                return;
+            }
+        }
 
         // Cancel any previous filter processing when starting new one
         // This allows rapid slider changes to cancel old processing
@@ -1076,10 +1087,11 @@ impl ImageViewer {
                         .into_any_element();
                 }
             } else {
-                // Static image - use filtered path if available, otherwise original
+                // Static image - use filtered path, then rasterized path, then original
                 loaded
                     .filtered_path
                     .as_ref()
+                    .or(loaded.rasterized_path.as_ref())
                     .unwrap_or(&loaded.path)
                     .clone()
             };
@@ -1309,10 +1321,11 @@ impl Render for ImageViewer {
                         .into_any_element();
                 }
             } else {
-                // Static image - use filtered path if available, otherwise original
+                // Static image - use filtered path, then rasterized path, then original
                 loaded
                     .filtered_path
                     .as_ref()
+                    .or(loaded.rasterized_path.as_ref())
                     .unwrap_or(&loaded.path)
                     .clone()
             };

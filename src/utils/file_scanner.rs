@@ -4,8 +4,17 @@ use std::path::{Path, PathBuf};
 
 /// Supported image extensions
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp",
+    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp", "svg",
 ];
+
+/// Check if a file is an SVG
+pub fn is_svg(path: &Path) -> bool {
+    if let Some(extension) = path.extension() {
+        extension.to_string_lossy().to_lowercase() == "svg"
+    } else {
+        false
+    }
+}
 
 /// Check if a file has a supported image extension
 pub fn is_supported_image(path: &Path) -> bool {

@@ -21,7 +21,7 @@ pub struct Cli {
 
 /// Supported image extensions
 const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp",
+    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp", "svg",
 ];
 
 impl Cli {

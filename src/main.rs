@@ -380,7 +380,7 @@ impl App {
             .add_filter(
                 "Images",
                 &[
-                    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp",
+                    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp", "svg",
                 ],
             )
             .set_title("Open Image");

@@ -17,6 +17,8 @@ pub struct LoadedImageData {
     pub animation_data: Option<AnimationData>,
     /// First 3 animation frames (if animated), cached for immediate display
     pub initial_frame_paths: Vec<PathBuf>,
+    /// Rasterized temp PNG path (for SVG files)
+    pub rasterized_path: Option<PathBuf>,
 }
 
 /// Message sent from the background loader thread
@@ -93,6 +95,24 @@ pub fn load_image_async(
             }
         }
 
+        // Rasterize SVGs to temp PNGs (2x for Retina)
+        let rasterized_path = if crate::utils::file_scanner::is_svg(&path) {
+            match crate::utils::svg::rasterize_svg(&path, 2.0) {
+                Ok((temp_path, _, _)) => Some(temp_path),
+                Err(e) => {
+                    let _ = tx.send(LoaderMessage::Error(path, e.to_string()));
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+
+        // Check cancellation after SVG rasterization
+        if is_cancelled(&cancel_flag_clone) {
+            return;
+        }
+
         // Try to load animation data if it's an animated image
         let animation_data = crate::utils::animation::load_animation(&path)
             .ok()
@@ -152,6 +172,7 @@ pub fn load_image_async(
             height,
             animation_data,
             initial_frame_paths,
+            rasterized_path,
         }));
     });
 
@@ -180,6 +201,11 @@ pub fn load_image(path: &Path) -> AppResult<DynamicImage> {
 
 /// Get image dimensions without fully loading the image
 pub fn get_image_dimensions(path: &Path) -> AppResult<(u32, u32)> {
+    // SVG files need special handling — image::ImageReader can't read them
+    if crate::utils::file_scanner::is_svg(path) {
+        return crate::utils::svg::get_svg_dimensions(path);
+    }
+
     let reader = image::ImageReader::open(path).map_err(|e| {
         AppError::ImageLoadError(path.to_path_buf(), format!("Failed to open image: {}", e))
     })?;

@@ -911,7 +911,7 @@ div()
 - [ ] Custom filter plugins
 - [ ] Batch processing
 - [ ] RAW image format support
-- [ ] SVG support
+- [x] SVG support (v0.2.0 — rasterize via resvg at 2x for Retina, filters excluded)
 - [ ] Video thumbnail support
 - [ ] GPU-accelerated filter pipeline (wgpu)
 
