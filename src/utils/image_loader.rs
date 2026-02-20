@@ -8,6 +8,8 @@ use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use resvg::usvg;
+
 /// Result of an async image load operation
 #[derive(Clone)]
 pub struct LoadedImageData {
@@ -19,6 +21,8 @@ pub struct LoadedImageData {
     pub initial_frame_paths: Vec<PathBuf>,
     /// Rasterized temp PNG path (for SVG files)
     pub rasterized_path: Option<PathBuf>,
+    /// Parsed SVG tree for dynamic re-rendering at different zoom levels
+    pub svg_tree: Option<Arc<usvg::Tree>>,
 }
 
 /// Message sent from the background loader thread
@@ -95,17 +99,25 @@ pub fn load_image_async(
             }
         }
 
-        // Rasterize SVGs to temp PNGs (2x for Retina)
-        let rasterized_path = if crate::utils::file_scanner::is_svg(&path) {
-            match crate::utils::svg::rasterize_svg(&path, 2.0) {
-                Ok((temp_path, _, _)) => Some(temp_path),
+        // Rasterize SVGs to temp PNGs (2x for Retina) and keep parsed tree for re-rendering
+        let (rasterized_path, svg_tree) = if crate::utils::file_scanner::is_svg(&path) {
+            match crate::utils::svg::parse_svg(&path) {
+                Ok(tree) => {
+                    match crate::utils::svg::rerasterize_svg_full(&tree, 2.0) {
+                        Ok(temp_path) => (Some(temp_path), Some(Arc::new(tree))),
+                        Err(e) => {
+                            let _ = tx.send(LoaderMessage::Error(path, e));
+                            return;
+                        }
+                    }
+                }
                 Err(e) => {
                     let _ = tx.send(LoaderMessage::Error(path, e.to_string()));
                     return;
                 }
             }
         } else {
-            None
+            (None, None)
         };
 
         // Check cancellation after SVG rasterization
@@ -173,6 +185,7 @@ pub fn load_image_async(
             animation_data,
             initial_frame_paths,
             rasterized_path,
+            svg_tree,
         }));
     });
 

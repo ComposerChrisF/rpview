@@ -912,6 +912,7 @@ div()
 - [ ] Batch processing
 - [ ] RAW image format support
 - [x] SVG support (v0.2.0 — rasterize via resvg at 2x for Retina, filters excluded)
+- [x] SVG dynamic re-rendering at zoom (v0.3.0 — re-rasterizes at current zoom level for crisp rendering; full or viewport-only strategy based on pixel budget; debounced with GPU preload)
 - [ ] Video thumbnail support
 - [ ] GPU-accelerated filter pipeline (wgpu)
 

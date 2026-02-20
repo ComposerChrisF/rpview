@@ -11,9 +11,12 @@ use crate::utils::animation::AnimationData;
 use crate::utils::filters;
 use crate::utils::image_loader;
 use crate::utils::style::{Colors, Spacing, TextSize};
+use crate::utils::svg::SvgRerasterRegion;
 use crate::utils::zoom;
 use gpui::*;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex, mpsc};
+use std::time::Instant;
 
 /// Loaded image data
 ///
@@ -57,6 +60,10 @@ pub struct LoadedImage {
     pub frame_cache_paths: Vec<PathBuf>,
     /// Rasterized temp PNG path (for SVG files)
     pub rasterized_path: Option<PathBuf>,
+    /// Parsed SVG tree for dynamic re-rendering at different zoom levels
+    pub svg_tree: Option<Arc<resvg::usvg::Tree>>,
+    /// Scale factor used for the initial SVG rasterization (typically 2.0)
+    pub svg_base_scale: f32,
 }
 
 /// Component for viewing images
@@ -101,6 +108,32 @@ pub struct ImageViewer {
     pub pending_filtered_path: Option<PathBuf>,
     /// Number of frames the pending filtered path has been preloaded (for GPU cache)
     pub pending_filter_preload_frames: u32,
+
+    // --- SVG dynamic re-rasterization state ---
+
+    /// Active sharp re-raster path (replaces blurry base raster when zoomed in)
+    pub svg_reraster_path: Option<PathBuf>,
+    /// Region info if this is a viewport-only re-raster (None = full render)
+    pub svg_reraster_region: Option<SvgRerasterRegion>,
+    /// Zoom level the active re-raster was rendered at
+    pub svg_reraster_scale: Option<f32>,
+
+    /// Pending re-raster path (GPU preloading before swap)
+    pub pending_svg_reraster_path: Option<PathBuf>,
+    /// Pending region info
+    pub pending_svg_reraster_region: Option<SvgRerasterRegion>,
+    /// GPU preload frame counter for pending re-raster
+    pub pending_svg_reraster_preload_frames: u32,
+
+    /// Channel receiving completed re-raster results from background thread
+    pub svg_reraster_handle: Option<mpsc::Receiver<Result<(PathBuf, Option<SvgRerasterRegion>), String>>>,
+    /// Whether a re-raster is currently in progress on a background thread
+    pub is_svg_rerastering: bool,
+    /// Cancel flag for in-flight re-raster
+    pub svg_reraster_cancel: Option<Arc<Mutex<bool>>>,
+
+    /// Timestamp of last zoom/pan change (for debouncing re-raster triggers)
+    pub last_zoom_pan_change: Option<Instant>,
 }
 
 impl ImageViewer {
@@ -451,6 +484,8 @@ impl ImageViewer {
                     animation_data,
                     frame_cache_paths,
                     rasterized_path: None,
+                    svg_tree: None,
+                    svg_base_scale: 2.0,
                 });
                 self.error_message = None;
                 self.error_path = None;
@@ -497,6 +532,9 @@ impl ImageViewer {
         // Clear pending filtered image from previous image
         self.pending_filtered_path = None;
         self.pending_filter_preload_frames = 0;
+
+        // Clear SVG re-raster state from previous image
+        self.clear_svg_reraster_state();
     }
 
     /// Check if async loading has completed and process the result
@@ -549,6 +587,8 @@ impl ImageViewer {
                             animation_data: data.animation_data,
                             frame_cache_paths,
                             rasterized_path: data.rasterized_path,
+                            svg_tree: data.svg_tree,
+                            svg_base_scale: 2.0,
                         });
                         self.error_message = None;
                         self.error_path = None;
@@ -795,6 +835,245 @@ impl ImageViewer {
                 }
             }
         }
+    }
+
+    // --- SVG dynamic re-rasterization methods ---
+
+    /// Notify that zoom or pan changed, starting the debounce timer for SVG re-rasters.
+    pub fn notify_svg_zoom_pan_changed(&mut self) {
+        if let Some(ref loaded) = self.current_image {
+            if loaded.svg_tree.is_some() {
+                self.last_zoom_pan_change = Some(Instant::now());
+            }
+        }
+    }
+
+    /// Check whether a new SVG re-raster should be triggered.
+    /// Call from the render loop; returns true if a background render was spawned.
+    pub fn check_svg_reraster_needed(&mut self) -> bool {
+        use crate::utils::svg;
+
+        // Must have a pending debounce timestamp
+        let changed_at = match self.last_zoom_pan_change {
+            Some(t) => t,
+            None => return false,
+        };
+
+        // Debounce: wait at least 150ms since the last zoom/pan change
+        if changed_at.elapsed().as_millis() < 150 {
+            return false;
+        }
+
+        // Don't start a new render if one is already in flight
+        if self.is_svg_rerastering {
+            return false;
+        }
+
+        let loaded = match &self.current_image {
+            Some(l) => l,
+            None => return false,
+        };
+
+        let tree = match &loaded.svg_tree {
+            Some(t) => t,
+            None => return false,
+        };
+
+        let current_zoom = self.image_state.zoom;
+        let base_scale = loaded.svg_base_scale;
+
+        // If current zoom is at or below the base scale (with 10% tolerance), the
+        // initial rasterization is sharp enough — no need to re-render.
+        if current_zoom <= base_scale * 1.1 {
+            // Clear any existing re-raster since we're zoomed out enough
+            if self.svg_reraster_path.is_some() {
+                if let Some(ref path) = self.svg_reraster_path {
+                    let _ = std::fs::remove_file(path);
+                }
+                self.svg_reraster_path = None;
+                self.svg_reraster_region = None;
+                self.svg_reraster_scale = None;
+            }
+            self.last_zoom_pan_change = None;
+            return false;
+        }
+
+        // If we already have a re-raster at this scale, check if viewport is still covered
+        if let Some(existing_scale) = self.svg_reraster_scale {
+            let scale_ratio = current_zoom / existing_scale;
+            if (scale_ratio - 1.0).abs() < 0.05 {
+                // Same scale — check if viewport is within the padded region (viewport-only case)
+                if let Some(ref region) = self.svg_reraster_region {
+                    if let Some(viewport) = self.viewport_size {
+                        let vp_w: f32 = viewport.width.into();
+                        let vp_h: f32 = viewport.height.into();
+                        let (pan_x, pan_y) = self.image_state.pan;
+
+                        // Visible SVG-space rect
+                        let vis_x = -pan_x / current_zoom;
+                        let vis_y = -pan_y / current_zoom;
+                        let vis_w = vp_w / current_zoom;
+                        let vis_h = vp_h / current_zoom;
+
+                        // Check if fully contained in rendered region
+                        if vis_x >= region.svg_x
+                            && vis_y >= region.svg_y
+                            && vis_x + vis_w <= region.svg_x + region.svg_w
+                            && vis_y + vis_h <= region.svg_y + region.svg_h
+                        {
+                            self.last_zoom_pan_change = None;
+                            return false;
+                        }
+                    }
+                } else {
+                    // Full render at same scale — no need to re-render
+                    self.last_zoom_pan_change = None;
+                    return false;
+                }
+            }
+        }
+
+        // Cancel any in-flight re-raster
+        if let Some(ref cancel) = self.svg_reraster_cancel {
+            if let Ok(mut flag) = cancel.lock() {
+                *flag = true;
+            }
+        }
+        self.svg_reraster_handle = None;
+        self.svg_reraster_cancel = None;
+
+        // Determine full vs viewport-only strategy
+        let svg_size = tree.size();
+        let full_w = (svg_size.width() * current_zoom).ceil() as u64;
+        let full_h = (svg_size.height() * current_zoom).ceil() as u64;
+        let total_pixels = full_w * full_h;
+
+        let tree_clone = Arc::clone(tree);
+        let (tx, rx) = mpsc::channel();
+        let cancel_flag = Arc::new(Mutex::new(false));
+        let cancel_clone = cancel_flag.clone();
+
+        if total_pixels <= svg::MAX_FULL_RERASTER_PIXELS {
+            // Full re-raster
+            let zoom = current_zoom;
+            std::thread::spawn(move || {
+                if cancel_clone.lock().map(|f| *f).unwrap_or(false) {
+                    return;
+                }
+                let result = svg::rerasterize_svg_full(&tree_clone, zoom)
+                    .map(|path| (path, None));
+                let _ = tx.send(result);
+            });
+        } else {
+            // Viewport-only re-raster
+            let viewport = self.viewport_size;
+            let (pan_x, pan_y) = self.image_state.pan;
+            let zoom = current_zoom;
+
+            std::thread::spawn(move || {
+                if cancel_clone.lock().map(|f| *f).unwrap_or(false) {
+                    return;
+                }
+                let vp = match viewport {
+                    Some(v) => v,
+                    None => return,
+                };
+                let vp_w: f32 = vp.width.into();
+                let vp_h: f32 = vp.height.into();
+
+                // Convert viewport to SVG-space coordinates
+                let vis_x = -pan_x / zoom;
+                let vis_y = -pan_y / zoom;
+                let vis_w = vp_w / zoom;
+                let vis_h = vp_h / zoom;
+
+                let result = svg::rerasterize_svg_viewport(
+                    &tree_clone,
+                    (vis_x, vis_y, vis_w, vis_h),
+                    svg::VIEWPORT_PADDING_FACTOR,
+                    zoom,
+                )
+                .map(|(path, region)| (path, Some(region)));
+
+                let _ = tx.send(result);
+            });
+        }
+
+        self.svg_reraster_handle = Some(rx);
+        self.is_svg_rerastering = true;
+        self.svg_reraster_cancel = Some(cancel_flag);
+        self.last_zoom_pan_change = None;
+
+        true
+    }
+
+    /// Poll the background re-raster thread. Returns true if a result was received.
+    pub fn check_svg_reraster_processing(&mut self) -> bool {
+        if let Some(ref receiver) = self.svg_reraster_handle {
+            if let Ok(result) = receiver.try_recv() {
+                match result {
+                    Ok((path, region)) => {
+                        self.pending_svg_reraster_path = Some(path);
+                        self.pending_svg_reraster_region = region;
+                        eprintln!("[SVG] Re-raster complete, pending GPU preload");
+                    }
+                    Err(e) => {
+                        eprintln!("[SVG] Re-raster failed: {}", e);
+                    }
+                }
+                self.is_svg_rerastering = false;
+                self.svg_reraster_handle = None;
+                self.svg_reraster_cancel = None;
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Swap the pending re-raster into the active slot after GPU preloading.
+    pub fn apply_pending_svg_reraster(&mut self) {
+        if let Some(pending_path) = self.pending_svg_reraster_path.take() {
+            // Delete old re-raster temp file
+            if let Some(ref old_path) = self.svg_reraster_path {
+                let _ = std::fs::remove_file(old_path);
+            }
+
+            self.svg_reraster_path = Some(pending_path);
+            self.svg_reraster_region = self.pending_svg_reraster_region.take();
+            self.svg_reraster_scale = Some(self.image_state.zoom);
+            self.pending_svg_reraster_preload_frames = 0;
+
+            eprintln!("[SVG] Applied re-raster at zoom {:.2}", self.image_state.zoom);
+        }
+    }
+
+    /// Clean up all SVG re-raster state (call on image change).
+    pub fn clear_svg_reraster_state(&mut self) {
+        // Cancel in-flight render
+        if let Some(ref cancel) = self.svg_reraster_cancel {
+            if let Ok(mut flag) = cancel.lock() {
+                *flag = true;
+            }
+        }
+
+        // Delete temp files
+        if let Some(ref path) = self.svg_reraster_path {
+            let _ = std::fs::remove_file(path);
+        }
+        if let Some(ref path) = self.pending_svg_reraster_path {
+            let _ = std::fs::remove_file(path);
+        }
+
+        self.svg_reraster_path = None;
+        self.svg_reraster_region = None;
+        self.svg_reraster_scale = None;
+        self.pending_svg_reraster_path = None;
+        self.pending_svg_reraster_region = None;
+        self.pending_svg_reraster_preload_frames = 0;
+        self.svg_reraster_handle = None;
+        self.is_svg_rerastering = false;
+        self.svg_reraster_cancel = None;
+        self.last_zoom_pan_change = None;
     }
 
     /// Clear the current image
@@ -1087,10 +1366,13 @@ impl ImageViewer {
                         .into_any_element();
                 }
             } else {
-                // Static image - use filtered path, then rasterized path, then original
+                // Static image priority: filtered → full SVG re-raster (no region) → rasterized → original
+                let full_reraster = self.svg_reraster_path.as_ref()
+                    .filter(|_| self.svg_reraster_region.is_none());
                 loaded
                     .filtered_path
                     .as_ref()
+                    .or(full_reraster)
                     .or(loaded.rasterized_path.as_ref())
                     .unwrap_or(&loaded.path)
                     .clone()
@@ -1127,6 +1409,25 @@ impl ImageViewer {
                     .top(px(pan_y)),
             );
 
+        // Overlay sharp viewport-only SVG re-raster on top of the base image
+        if let (Some(rr_path), Some(region)) = (&self.svg_reraster_path, &self.svg_reraster_region) {
+            if rr_path.exists() {
+                let screen_x = region.svg_x * zoom_level + pan_x;
+                let screen_y = region.svg_y * zoom_level + pan_y;
+                let screen_w = region.svg_w * zoom_level;
+                let screen_h = region.svg_h * zoom_level;
+                container = container.child(
+                    img(rr_path.clone())
+                        .id(ElementId::Name(format!("svg-reraster-{}", rr_path.display()).into()))
+                        .w(px(screen_w))
+                        .h(px(screen_h))
+                        .absolute()
+                        .left(px(screen_x))
+                        .top(px(screen_y)),
+                );
+            }
+        }
+
         // Preload next frame for animations
         if let Some(ref anim_state) = self.image_state.animation {
             let next_frame_index = (anim_state.current_frame + 1) % anim_state.frame_count;
@@ -1152,6 +1453,24 @@ impl ImageViewer {
             if pending_path.exists() {
                 let preload_id =
                     ElementId::Name(format!("pending-filter-{}", pending_path.display()).into());
+                container = container.child(
+                    img(pending_path.clone())
+                        .id(preload_id)
+                        .w(px(zoomed_width as f32))
+                        .h(px(zoomed_height as f32))
+                        .absolute()
+                        .left(px(-10000.0))
+                        .top(px(0.0))
+                        .opacity(0.0),
+                );
+            }
+        }
+
+        // Preload pending SVG re-raster (GPU cache priming before swap)
+        if let Some(ref pending_path) = self.pending_svg_reraster_path {
+            if pending_path.exists() {
+                let preload_id =
+                    ElementId::Name(format!("pending-svg-reraster-{}", pending_path.display()).into());
                 container = container.child(
                     img(pending_path.clone())
                         .id(preload_id)
@@ -1321,10 +1640,13 @@ impl Render for ImageViewer {
                         .into_any_element();
                 }
             } else {
-                // Static image - use filtered path, then rasterized path, then original
+                // Static image priority: filtered → full SVG re-raster (no region) → rasterized → original
+                let full_reraster = self.svg_reraster_path.as_ref()
+                    .filter(|_| self.svg_reraster_region.is_none());
                 loaded
                     .filtered_path
                     .as_ref()
+                    .or(full_reraster)
                     .or(loaded.rasterized_path.as_ref())
                     .unwrap_or(&loaded.path)
                     .clone()
@@ -1359,6 +1681,25 @@ impl Render for ImageViewer {
                         .top(px(pan_y)),
                 );
 
+            // Overlay sharp viewport-only SVG re-raster on top of the base image
+            if let (Some(rr_path), Some(region)) = (&self.svg_reraster_path, &self.svg_reraster_region) {
+                if rr_path.exists() {
+                    let screen_x = region.svg_x * zoom_level + pan_x;
+                    let screen_y = region.svg_y * zoom_level + pan_y;
+                    let screen_w = region.svg_w * zoom_level;
+                    let screen_h = region.svg_h * zoom_level;
+                    container = container.child(
+                        img(rr_path.clone())
+                            .id(ElementId::Name(format!("svg-reraster-{}", rr_path.display()).into()))
+                            .w(px(screen_w))
+                            .h(px(screen_h))
+                            .absolute()
+                            .left(px(screen_x))
+                            .top(px(screen_y)),
+                    );
+                }
+            }
+
             // Preload next frame for animations to avoid GPU texture loading flash
             // This is critical: even though frames are cached to disk, GPUI needs time
             // to load them into GPU memory. By rendering the next frame invisibly,
@@ -1380,6 +1721,24 @@ impl Render for ImageViewer {
                                 .opacity(0.0), // Make invisible
                         );
                     }
+                }
+            }
+
+            // Preload pending SVG re-raster (GPU cache priming before swap)
+            if let Some(ref pending_path) = self.pending_svg_reraster_path {
+                if pending_path.exists() {
+                    let preload_id =
+                        ElementId::Name(format!("pending-svg-reraster-{}", pending_path.display()).into());
+                    container = container.child(
+                        img(pending_path.clone())
+                            .id(preload_id)
+                            .w(px(zoomed_width as f32))
+                            .h(px(zoomed_height as f32))
+                            .absolute()
+                            .left(px(-10000.0))
+                            .top(px(0.0))
+                            .opacity(0.0),
+                    );
                 }
             }
 
