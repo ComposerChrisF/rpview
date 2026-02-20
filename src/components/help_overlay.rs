@@ -280,6 +280,13 @@ impl HelpOverlay {
             .text_color(rgb(0xaaaaaa))
             .text_align(TextAlign::Center)
             .child("Press H, ?, F1, or Esc to close this help")
+            .child(
+                div()
+                    .mt(Spacing::xs())
+                    .text_size(scaled_text_size(10.0, self.font_size_scale))
+                    .text_color(rgb(0x666666))
+                    .child(format!("rpview v{}", env!("CARGO_PKG_VERSION"))),
+            )
     }
 }
 
