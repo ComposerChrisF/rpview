@@ -47,7 +47,22 @@
       "Bash(gh api:*)",
       "Bash(cargo fmt:*)",
       "Bash(git -C \"/Users/chris/Chris/App/Rust/rpviews/rpview-gpui\" add -A)",
-      "Bash(git -C \"/Users/chris/Chris/App/Rust/rpviews/rpview-gpui\" commit -m \"$\\(cat <<''EOF''\nFix formatting and clippy warnings\n\n- Remove trailing whitespace in settings_window.rs\n- Fix clippy warnings: unnecessary clone on Copy type\n- Fix clippy warnings: unnecessary cast to same type\n- Format all code with cargo fmt\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git -C \"/Users/chris/Chris/App/Rust/rpviews/rpview-gpui\" commit -m \"$\\(cat <<''EOF''\nFix formatting and clippy warnings\n\n- Remove trailing whitespace in settings_window.rs\n- Fix clippy warnings: unnecessary clone on Copy type\n- Fix clippy warnings: unnecessary cast to same type\n- Format all code with cargo fmt\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"/Users/chris/Chris/App/Rust/rpviews/rpview-gpui\" commit -m \"$\\(cat <<''EOF''\nFix CI: install Linux dependencies for GPUI\n\nGPUI requires X11 and XKB libraries on Linux. Add apt-get install\nsteps for libxcb, libxkbcommon, and libxkbcommon-x11 to all Linux\njobs \\(check, test, coverage, docs, release\\).\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"/Users/chris/Chris/App/Rust/rpviews/rpview-gpui\" tag v0.1.0)",
+      "Bash(git -C \"/Users/chris/Chris/App/Rust/rpviews/rpview-gpui\" push origin v0.1.0)",
+      "Bash(cargo check:*)",
+      "Bash(git tag:*)",
+      "Bash(cargo run:*)",
+      "Bash(./packaging/macos/bundle.sh:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:rustsec.org)",
+      "WebFetch(domain:crates.io)",
+      "Bash(cargo add:*)",
+      "Bash(ln:*)",
+      "Bash(cargo audit:*)",
+      "WebFetch(domain:linebender.org)",
+      "Bash(version-manager:*)"
     ]
   }
 }

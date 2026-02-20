@@ -46,7 +46,8 @@ fn test_is_supported_image_unsupported_formats() {
     assert!(!is_supported_image(Path::new("test.pdf")));
     assert!(!is_supported_image(Path::new("test.doc")));
     assert!(!is_supported_image(Path::new("test.mp4")));
-    assert!(!is_supported_image(Path::new("test.svg"))); // SVG not currently supported
+    assert!(is_supported_image(Path::new("test.svg")));
+    assert!(is_supported_image(Path::new("test.SVG")));
     assert!(!is_supported_image(Path::new("test")));
     assert!(!is_supported_image(Path::new("test.")));
 }

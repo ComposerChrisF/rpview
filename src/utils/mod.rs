@@ -4,4 +4,5 @@ pub mod filters;
 pub mod image_loader;
 pub mod settings_io;
 pub mod style;
+pub mod svg;
 pub mod zoom;
