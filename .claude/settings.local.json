@@ -68,7 +68,8 @@
       "Bash(plutil:*)",
       "Bash(/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister:*)",
       "Bash(bash packaging/macos/bundle.sh:*)",
-      "Bash(cargo doc:*)"
+      "Bash(cargo doc:*)",
+      "Bash(cargo clean:*)"
     ]
   }
 }
