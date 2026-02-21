@@ -233,6 +233,10 @@ impl HelpOverlay {
             .into_any_element(),
             self.render_shortcut("F12".to_string(), "Toggle debug overlay".to_string())
                 .into_any_element(),
+            self.render_shortcut("T".to_string(), "Toggle zoom/size indicator".to_string())
+                .into_any_element(),
+            self.render_shortcut("B".to_string(), "Toggle light/dark background".to_string())
+                .into_any_element(),
             self.render_shortcut(
                 format!("{}-,", platform_key),
                 "Open settings window".to_string(),

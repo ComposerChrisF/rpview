@@ -67,5 +67,7 @@ actions!(
         CloseSettings,
         ResetSettingsToDefaults,
         LoadOversizedImageAnyway,
+        ToggleZoomIndicator,
+        ToggleBackground,
     ]
 );

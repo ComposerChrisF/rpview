@@ -925,6 +925,8 @@ div()
 - [ ] Thumbnail grid view
 
 ### Quality of Life
+- [x] Toggle zoom/size indicator visibility (T key) (v0.4.0)
+- [x] Toggle light/dark background for transparent images (B key) (v0.4.0)
 - [ ] Undo/redo for filter changes
 - [ ] Presets for common filter combinations
 - [ ] Recent files list

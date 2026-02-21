@@ -69,7 +69,8 @@
       "Bash(/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister:*)",
       "Bash(bash packaging/macos/bundle.sh:*)",
       "Bash(cargo doc:*)",
-      "Bash(cargo clean:*)"
+      "Bash(cargo clean:*)",
+      "Bash(bash /Users/chris/Chris/App/Rust/rpview-gpui/packaging/macos/bundle.sh --no-build)"
     ]
   }
 }
