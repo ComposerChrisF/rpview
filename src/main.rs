@@ -79,9 +79,10 @@ use rpview_gpui::{
     PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
     PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, ResetFilters,
     ResetSettingsToDefaults, RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical,
-    SortByModified, ToggleAnimationPlayPause, ToggleDebug, ToggleFilters, ToggleHelp,
-    ToggleSettings, ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast,
-    ZoomOutIncremental, ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
+    SortByModified, ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters,
+    ToggleHelp, ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast, ZoomInIncremental,
+    ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow, ZoomReset,
+    ZoomResetAndCenter,
 };
 
 struct App {
@@ -96,6 +97,8 @@ struct App {
     /// Tracks if left mouse button is currently pressed
     /// Used with MouseMoveEvent.pressed_button for robust button state tracking
     mouse_button_down: bool,
+    /// Whether zoom indicator is visible
+    show_zoom_indicator: bool,
     /// Whether help overlay is visible
     show_help: bool,
     /// Whether debug overlay is visible
@@ -187,6 +190,20 @@ impl App {
 
     fn handle_toggle_debug(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.show_debug = !self.show_debug;
+        cx.notify();
+    }
+
+    fn handle_toggle_zoom_indicator(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.show_zoom_indicator = !self.show_zoom_indicator;
+        cx.notify();
+    }
+
+    fn handle_toggle_background(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.settings.appearance.use_light_background =
+            !self.settings.appearance.use_light_background;
+        if let Err(e) = settings_io::save_settings(&self.settings) {
+            eprintln!("Error saving settings: {}", e);
+        }
         cx.notify();
     }
 
@@ -1532,10 +1549,11 @@ impl Render for App {
         }
 
         // Calculate background color once
+        let active_bg = self.settings.appearance.active_background_color();
         let bg_color = rgb(
-            ((self.settings.appearance.background_color[0] as u32) << 16)
-                | ((self.settings.appearance.background_color[1] as u32) << 8)
-                | (self.settings.appearance.background_color[2] as u32),
+            ((active_bg[0] as u32) << 16)
+                | ((active_bg[1] as u32) << 8)
+                | (active_bg[2] as u32),
         );
 
         // Main content area (takes remaining space after menu bar)
@@ -1728,9 +1746,10 @@ impl Render for App {
                 this.handle_dropped_files(paths, window, cx);
             }))
             .child(self.viewer.render_view(
-                self.settings.appearance.background_color,
+                active_bg,
                 self.settings.appearance.overlay_transparency,
                 self.settings.appearance.font_size_scale,
+                self.show_zoom_indicator,
                 cx,
             ))
             // Render overlays on top with proper z-order
@@ -1933,6 +1952,12 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &ToggleDebug, window, cx| {
                 this.handle_toggle_debug(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ToggleZoomIndicator, window, cx| {
+                this.handle_toggle_zoom_indicator(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleBackground, window, cx| {
+                this.handle_toggle_background(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| {
                 this.handle_toggle_settings(window, cx);
             }))
@@ -2069,6 +2094,8 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("?", ToggleHelp, None),
         KeyBinding::new("f1", ToggleHelp, None),
         KeyBinding::new("f12", ToggleDebug, None),
+        KeyBinding::new("t", ToggleZoomIndicator, None),
+        KeyBinding::new("b", ToggleBackground, None),
         // Settings window
         KeyBinding::new("cmd-,", ToggleSettings, None),
         KeyBinding::new("escape", CloseSettings, Some("SettingsWindow")),
@@ -2189,6 +2216,8 @@ fn setup_menus(cx: &mut gpui::App) {
                 MenuItem::separator(),
                 MenuItem::action("Toggle Help", ToggleHelp),
                 MenuItem::action("Toggle Debug", ToggleDebug),
+                MenuItem::action("Toggle Zoom Indicator", ToggleZoomIndicator),
+                MenuItem::action("Toggle Background", ToggleBackground),
             ],
         },
         Menu {
@@ -2430,6 +2459,7 @@ fn main() {
                         z_key_held: false,
                         spacebar_held: false,
                         mouse_button_down: false,
+                        show_zoom_indicator: true,
                         show_help: false,
                         show_debug: false,
                         show_settings: false,

@@ -1157,6 +1157,7 @@ impl ImageViewer {
         background_color: [u8; 3],
         overlay_transparency: u8,
         font_size_scale: f32,
+        show_zoom_indicator: bool,
         cx: &mut Context<V>,
     ) -> impl IntoElement {
         if self.is_loading {
@@ -1321,6 +1322,7 @@ impl ImageViewer {
                 background_color,
                 overlay_transparency,
                 font_size_scale,
+                show_zoom_indicator,
                 cx,
             )
         } else {
@@ -1334,6 +1336,7 @@ impl ImageViewer {
         background_color: [u8; 3],
         overlay_transparency: u8,
         font_size_scale: f32,
+        show_zoom_indicator: bool,
         cx: &mut Context<V>,
     ) -> AnyElement {
         let width = loaded.width;
@@ -1502,15 +1505,17 @@ impl ImageViewer {
             }
         }
 
-        container = container.child(cx.new(|_cx| {
-            ZoomIndicator::new(
-                zoom_level,
-                is_fit,
-                Some((width, height)),
-                overlay_transparency,
-                font_size_scale,
-            )
-        }));
+        if show_zoom_indicator {
+            container = container.child(cx.new(|_cx| {
+                ZoomIndicator::new(
+                    zoom_level,
+                    is_fit,
+                    Some((width, height)),
+                    overlay_transparency,
+                    font_size_scale,
+                )
+            }));
+        }
 
         // Add processing indicator if filters are being processed
         if self.is_processing_filters {

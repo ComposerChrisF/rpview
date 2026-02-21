@@ -169,8 +169,15 @@ impl SaveFormat {
 /// Appearance settings
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Appearance {
-    /// Background color for image viewer (RGB)
-    pub background_color: [u8; 3],
+    /// Dark background color for image viewer (RGB)
+    #[serde(default = "Appearance::default_background_color_dark")]
+    pub background_color_dark: [u8; 3],
+    /// Light background color for image viewer (RGB)
+    #[serde(default = "Appearance::default_background_color_light")]
+    pub background_color_light: [u8; 3],
+    /// Whether to use light background (toggled with B key)
+    #[serde(default)]
+    pub use_light_background: bool,
     /// Alpha value for overlay backgrounds (0-255)
     pub overlay_transparency: u8,
     /// Font size multiplier for overlays (0.5 - 8.0)
@@ -179,10 +186,31 @@ pub struct Appearance {
     pub window_title_format: String,
 }
 
+impl Appearance {
+    fn default_background_color_dark() -> [u8; 3] {
+        [0x1e, 0x1e, 0x1e]
+    }
+
+    fn default_background_color_light() -> [u8; 3] {
+        [0xe0, 0xe0, 0xe0]
+    }
+
+    /// Get the currently active background color based on the light/dark toggle
+    pub fn active_background_color(&self) -> [u8; 3] {
+        if self.use_light_background {
+            self.background_color_light
+        } else {
+            self.background_color_dark
+        }
+    }
+}
+
 impl Default for Appearance {
     fn default() -> Self {
         Self {
-            background_color: [0x1e, 0x1e, 0x1e], // #1e1e1e
+            background_color_dark: Self::default_background_color_dark(),
+            background_color_light: Self::default_background_color_light(),
+            use_light_background: false,
             overlay_transparency: 204,            // ~80% opacity
             font_size_scale: 1.0,
             window_title_format: "{filename} ({index}/{total})".to_string(),
@@ -474,7 +502,13 @@ mod tests {
         let appearance = Appearance::default();
 
         // Assert
-        assert_eq!(appearance.background_color, [0x1e, 0x1e, 0x1e]);
+        assert_eq!(appearance.background_color_dark, [0x1e, 0x1e, 0x1e]);
+        assert_eq!(appearance.background_color_light, [0xe0, 0xe0, 0xe0]);
+        assert!(!appearance.use_light_background);
+        assert_eq!(
+            appearance.active_background_color(),
+            [0x1e, 0x1e, 0x1e]
+        );
         assert_eq!(
             appearance.overlay_transparency,
             DEFAULT_OVERLAY_TRANSPARENCY

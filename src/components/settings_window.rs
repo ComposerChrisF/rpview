@@ -148,8 +148,9 @@ pub struct SettingsWindow {
     save_format_control: Entity<SegmentedControl>,
     save_location_mode_control: Entity<SegmentedControl>,
 
-    // Color picker for background color
-    background_color_swatch: Entity<ColorSwatch>,
+    // Color pickers for background colors
+    bg_color_dark_swatch: Entity<ColorSwatch>,
+    bg_color_light_swatch: Entity<ColorSwatch>,
 
     // Directory picker for default save directory
     default_save_directory_picker: Entity<DirectoryPicker>,
@@ -630,24 +631,44 @@ impl SettingsWindow {
             cx.notify();
         }).detach();
 
-        // Create color swatch for background color
-        let bg = &settings.appearance.background_color;
-        let initial_hex = format!("#{:02x}{:02x}{:02x}", bg[0], bg[1], bg[2]);
-        let background_color_swatch = cx.new(|cx| {
+        // Create color swatches for dark and light background colors
+        let bg_dark = &settings.appearance.background_color_dark;
+        let initial_dark_hex = format!("#{:02x}{:02x}{:02x}", bg_dark[0], bg_dark[1], bg_dark[2]);
+        let bg_color_dark_swatch = cx.new(|cx| {
             ColorSwatch::new(cx)
-                .with_value(initial_hex)
+                .with_value(initial_dark_hex)
                 .theme(app_theme)
         });
-        cx.subscribe(&background_color_swatch, |this, _swatch, event: &ColorSwatchEvent, cx| {
+        cx.subscribe(&bg_color_dark_swatch, |this, _swatch, event: &ColorSwatchEvent, cx| {
             let ColorSwatchEvent::Change(hex) = event;
-            // Parse hex color (#RRGGBB) and update settings
             if hex.len() >= 7 && hex.starts_with('#') {
                 if let (Ok(r), Ok(g), Ok(b)) = (
                     u8::from_str_radix(&hex[1..3], 16),
                     u8::from_str_radix(&hex[3..5], 16),
                     u8::from_str_radix(&hex[5..7], 16),
                 ) {
-                    this.working_settings.appearance.background_color = [r, g, b];
+                    this.working_settings.appearance.background_color_dark = [r, g, b];
+                    cx.notify();
+                }
+            }
+        }).detach();
+
+        let bg_light = &settings.appearance.background_color_light;
+        let initial_light_hex = format!("#{:02x}{:02x}{:02x}", bg_light[0], bg_light[1], bg_light[2]);
+        let bg_color_light_swatch = cx.new(|cx| {
+            ColorSwatch::new(cx)
+                .with_value(initial_light_hex)
+                .theme(app_theme)
+        });
+        cx.subscribe(&bg_color_light_swatch, |this, _swatch, event: &ColorSwatchEvent, cx| {
+            let ColorSwatchEvent::Change(hex) = event;
+            if hex.len() >= 7 && hex.starts_with('#') {
+                if let (Ok(r), Ok(g), Ok(b)) = (
+                    u8::from_str_radix(&hex[1..3], 16),
+                    u8::from_str_radix(&hex[3..5], 16),
+                    u8::from_str_radix(&hex[5..7], 16),
+                ) {
+                    this.working_settings.appearance.background_color_light = [r, g, b];
                     cx.notify();
                 }
             }
@@ -730,7 +751,8 @@ impl SettingsWindow {
             sort_mode_control,
             save_format_control,
             save_location_mode_control,
-            background_color_swatch,
+            bg_color_dark_swatch,
+            bg_color_light_swatch,
             default_save_directory_picker,
             remember_per_image_state_toggle,
             animation_auto_play_toggle,
@@ -830,11 +852,16 @@ impl SettingsWindow {
             control.set_selected_value("same", cx);
         });
 
-        // Reset color swatch
-        let bg = &defaults.appearance.background_color;
-        let default_hex = format!("#{:02x}{:02x}{:02x}", bg[0], bg[1], bg[2]);
-        self.background_color_swatch.update(cx, |swatch, cx| {
-            swatch.set_value(&default_hex, cx);
+        // Reset color swatches
+        let bg_dark = &defaults.appearance.background_color_dark;
+        let dark_hex = format!("#{:02x}{:02x}{:02x}", bg_dark[0], bg_dark[1], bg_dark[2]);
+        self.bg_color_dark_swatch.update(cx, |swatch, cx| {
+            swatch.set_value(&dark_hex, cx);
+        });
+        let bg_light = &defaults.appearance.background_color_light;
+        let light_hex = format!("#{:02x}{:02x}{:02x}", bg_light[0], bg_light[1], bg_light[2]);
+        self.bg_color_light_swatch.update(cx, |swatch, cx| {
+            swatch.set_value(&light_hex, cx);
         });
 
         // Reset directory picker (disabled since default is "same as current image")
@@ -1178,8 +1205,16 @@ impl SettingsWindow {
                     .flex()
                     .flex_col()
                     .mb(Spacing::md())
-                    .child(self.render_label("Background color".to_string(), Some("Image viewer background color".to_string())))
-                    .child(self.background_color_swatch.clone())
+                    .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string())))
+                    .child(self.bg_color_dark_swatch.clone())
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .mb(Spacing::md())
+                    .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string())))
+                    .child(self.bg_color_light_swatch.clone())
             )
             .child(self.render_stepper_row(
                 "Overlay transparency".to_string(),
