@@ -1,314 +1,291 @@
-# rpview-gpui
+# RPView
 
-A fast, keyboard-driven image viewer built with GPUI.
+A fast, keyboard-driven image viewer for macOS, Windows, and Linux. Built for
+people who browse lots of images and want something snappier and more capable
+than the OS default — while keeping the default viewer one keypress away.
 
-**Status**: 🚀 Phase 14 Complete - Production-ready with comprehensive testing
+## Why RPView?
 
-## Features
+Your OS ships with an image viewer. It works fine for opening a single photo.
+But if you regularly flip through directories of images, compare details at
+different zoom levels, or adjust brightness on the fly, you'll hit its limits
+fast. RPView fills the gap:
 
-- ✅ ⌨️ Keyboard-first navigation
-- ✅ 🖼️ Support for multiple image formats (PNG, JPEG, BMP, GIF, TIFF, ICO, WEBP)
-- ✅ 🔍 Advanced zoom and pan controls
-- ✅ 🎨 Real-time image filters (brightness, contrast, gamma)
-- ✅ 📁 Directory browsing with multiple sort modes
-- ✅ 💾 Per-image in-memory state persistence (zoom, pan, filters)
-- ✅ 🎬 Animated image support (GIF, WEBP)
-- ✅ 🖱️ Drag-and-drop file/folder support
-- ✅ 🌐 Cross-platform (macOS, Windows, Linux)
-- ✅ ⚡ GPU-accelerated rendering with texture preloading
-- ✅ 🧪 Comprehensive test coverage (129 tests)
+| | Preview.app / Photos / Eye of GNOME | RPView |
+|---|---|---|
+| **Navigation speed** | Loads each image on demand | Preloads adjacent images into GPU memory — navigation is instant |
+| **Zoom precision** | Pinch or menu only | Five zoom speeds (keyboard), scroll-wheel zoom at cursor, Z+drag dynamic zoom |
+| **Pan** | Scroll or trackpad | WASD/IJKL keys, Space+drag, three speed tiers |
+| **Image filters** | None (need a separate editor) | Brightness, contrast, and gamma — live, per-image, remembered |
+| **State memory** | Forgets zoom/pan when you move on | Remembers zoom, pan, and filter settings for up to 1,000 images |
+| **Animated GIF/WebP** | Basic playback | Frame-by-frame stepping, play/pause, GPU-preloaded frames |
+| **SVG rendering** | Static raster | Dynamic re-rendering at zoom level for always-crisp vectors |
+| **Background toggle** | Fixed background | Dark/light background toggle for transparent images |
+| **Keyboard-driven** | Mouse-oriented | Nearly everything has a shortcut |
+| **Hand off to default viewer** | N/A | One keypress opens the image in Preview/Photos/etc., optionally quitting RPView |
 
-## Current Status (Phase 14 ✅)
+## Supported Formats
 
-rpview-gpui is feature-complete and production-ready with comprehensive test coverage!
-
-**Completed Phases:**
-- ✅ Phase 1-14: All core features implemented
-- ✅ 129 tests (100% passing)
-- ✅ Cross-platform support
-- ✅ GPU texture preloading for instant navigation
-- ✅ Comprehensive documentation
-
-See [TODO.md](TODO.md) for detailed phase summaries.
+PNG, JPEG, BMP, GIF (animated), TIFF, ICO, WebP (animated), SVG
 
 ## Installation
 
-### Prerequisites
+### From source
 
-- Rust (latest stable) - [Install Rustup](https://rustup.rs/)
-- Platform-specific dependencies:
-  - **macOS**: Xcode Command Line Tools
-  - **Linux**: Development packages for X11
-  - **Windows**: Visual Studio Build Tools
-
-### Build
-
-```bash
+```
+git clone https://github.com/ComposerChrisF/rpview.git
+cd rpview
 cargo build --release
 ```
 
-## Usage
+The binary is at `target/release/rpview`. Copy it to a directory on your PATH,
+or on macOS run the bundler:
 
-### Basic Usage
+```
+bash packaging/macos/bundle.sh
+```
+
+This creates `target/release/RPView.app` which you can drag to /Applications.
+
+### Prerequisites
+
+- Rust (latest stable) — [rustup.rs](https://rustup.rs/)
+- **macOS**: Xcode Command Line Tools
+- **Linux**: X11 development packages
+- **Windows**: Visual Studio Build Tools
+
+## Quick Start
 
 ```bash
-# View images in current directory
-cargo run
+# View images in the current directory
+rpview
 
-# View all images in a directory, starting with a specific image
-cargo run -- image.png
+# Start at a specific image (loads its entire directory)
+rpview photo.png
 
-# View multiple images
-cargo run -- img1.png img2.jpg img3.bmp
+# View only specific files
+rpview a.png b.jpg c.webp
 
 # View all images in a directory
-cargo run -- /path/to/images
-
-# Mixed files and directories
-cargo run -- img1.png /path/to/images img2.jpg
+rpview ~/Pictures/screenshots
 ```
 
-### Help
-
-```bash
-cargo run -- --help
-```
+Or drag and drop files and folders onto the RPView window.
 
 ## Keyboard Shortcuts
 
-### Currently Implemented
-- `Cmd/Ctrl+W` - Close window
-- `Cmd/Ctrl+Q` - Quit application
-- `ESC` x3 (within 2 seconds) - Quick quit
+RPView is built around the keyboard. On macOS the modifier is Cmd; on
+Windows/Linux it's Ctrl. The table below writes "Cmd" — substitute as needed.
 
 ### Navigation
-- `←` / `→` - Navigate between images
-- Drag & drop files/folders to open
+
+| Key | Action |
+|-----|--------|
+| `Left` / `Right` | Previous / next image |
+| `Shift+Cmd+A` | Sort alphabetically |
+| `Shift+Cmd+M` | Sort by modified date |
+| Drag & Drop | Open dropped files or folders |
 
 ### Zoom
-- `=` / `-` - Zoom in/out
-- `0` - Toggle fit-to-window / 100%
-- `Ctrl/Cmd` + Mouse Wheel - Zoom at cursor
-- `Z` + Mouse Drag - Dynamic zoom
-- Shift/Ctrl modifiers for fine control
+
+| Key | Action |
+|-----|--------|
+| `+` / `-` | Zoom in / out (1.25x steps) |
+| `Shift` + `+` / `-` | Fast zoom (1.5x steps) |
+| `Cmd` + `+` / `-` | Slow zoom (1.05x steps) |
+| `Shift+Cmd` + `+` / `-` | Incremental zoom (1% steps) |
+| `0` | Toggle fit-to-window / 100% |
+| `Cmd+0` | Reset zoom and re-center |
+| `Cmd` + scroll wheel | Zoom at cursor position |
+| `Z` + drag | Dynamic drag-to-zoom |
 
 ### Pan
-- `W/A/S/D` or `I/J/K/L` - Pan image
-- Space + Mouse Drag - Pan image
-- Shift for fast pan, Alt for slow pan
 
-### Filters
-- `Ctrl/Cmd+F` - Toggle filter controls
-- `Ctrl/Cmd+1` - Disable filters
-- `Ctrl/Cmd+2` - Enable filters
-- `Shift+Ctrl/Cmd+R` - Reset filters
+| Key | Action |
+|-----|--------|
+| `W` `A` `S` `D` or `I` `J` `K` `L` | Pan (10 px) |
+| `Shift` + above | Fast pan (30 px) |
+| `Alt` + above | Slow pan (3 px) |
+| `Space` + drag | Pan with mouse (1:1 movement) |
 
-### Animation
-- `O` - Play/pause animation
-- `[` / `]` - Previous/next frame
+### Image Filters
 
-### Sorting (affects navigation to next image)
-- `Shift+Cmd/Ctrl+A` - Alphabetical sort
-- `Shift+Cmd/Ctrl+M` - Modified date sort
+| Key | Action |
+|-----|--------|
+| `Cmd+F` | Toggle filter controls panel |
+| `Cmd+1` | Disable all filters |
+| `Cmd+2` | Enable filters |
+| `Shift+Cmd+R` | Reset filters to defaults |
+
+Brightness, contrast, and gamma are adjusted interactively from the filter
+panel. Filter state is remembered per-image.
+
+### Animation (GIF / WebP)
+
+| Key | Action |
+|-----|--------|
+| `O` | Play / pause |
+| `[` / `]` | Previous / next frame |
+
+Animated images auto-play by default (configurable).
 
 ### File Operations
-- `Ctrl/Cmd+O` - Open file(s)
-- `Ctrl/Cmd+S` - Save file (current folder)
-- `Ctrl/Cmd+Option+S` - Save to Downloads folder
-- `Ctrl/Cmd+R` - Reveal in Finder/Explorer
-- `Ctrl/Cmd+Option+V` - Open in external viewer
-- `Shift+Ctrl/Cmd+Option+V` - Open in viewer and quit
-- `Ctrl/Cmd+E` - Open in external editor
 
-### Help & Info
-- `H`, `?`, `F1` - Toggle help overlay
-- `F12` - Toggle debug overlay
-- `Cmd/Ctrl+,` - Open settings window
+| Key | Action |
+|-----|--------|
+| `Cmd+O` | Open file(s) via dialog |
+| `Cmd+S` | Save image (to current folder) |
+| `Cmd+Alt+S` | Save image to Downloads |
+| `Cmd+R` | Reveal in Finder / Explorer |
+| `Cmd+Alt+V` | **Open in external viewer** (e.g. Preview.app) |
+| `Shift+Cmd+Alt+V` | Open in external viewer **and quit RPView** |
+| `Cmd+E` | Open in external editor |
 
-See [DESIGN.md](DESIGN.md) for complete keyboard shortcuts.
+The "open externally" shortcuts are the fast hand-off: if you need the OS
+default viewer for something RPView doesn't do (like markup or printing), one
+chord sends the current image there. Add `Shift` to quit RPView at the same
+time — useful if you're done browsing and just want to work with one file.
+
+### Display
+
+| Key | Action |
+|-----|--------|
+| `T` | Toggle zoom/size indicator |
+| `B` | Toggle dark / light background |
+
+The background toggle is especially useful for transparent PNGs and SVGs — flip
+between dark and light to check edges and transparency.
+
+### Window
+
+| Key | Action |
+|-----|--------|
+| `H` / `?` / `F1` | Help overlay (all shortcuts) |
+| `F12` | Debug overlay |
+| `Cmd+,` | Settings |
+| `Cmd+W` | Close window |
+| `Cmd+Q` | Quit |
+| `Esc` x3 (within 2 sec) | Quick quit |
+
+## Features in Detail
+
+### Instant Navigation with GPU Preloading
+
+RPView loads the next and previous images into GPU texture memory before you
+navigate to them. When you press the arrow key, the image appears immediately
+— no loading spinner, no flash of black.
+
+### Per-Image State Memory
+
+Zoom level, pan position, and filter adjustments are cached for each image you
+visit (up to 1,000 by default). Flip forward through a batch of photos, zoom
+and adjust one, then flip back — it's still right where you left it.
+
+### Five-Speed Zoom
+
+Normal, fast (Shift), slow (Cmd), incremental (Shift+Cmd), and mouse-wheel
+zoom at cursor. Plus Z+drag for Photoshop-style dynamic zoom. Each serves a
+different task: quick overview, precise pixel inspection, or smooth animated
+zoom.
+
+### SVG Re-Rendering
+
+SVGs are rasterized for display but **re-rendered at the current zoom level**
+when you zoom in. The result is always crisp, no matter how far you zoom. Large
+SVGs use viewport-only rendering to stay fast.
+
+### Real-Time Filters
+
+Brightness, contrast, and gamma — applied live, cached per-image, processed on
+background threads. Useful for inspecting dark photos, checking print contrast,
+or quickly comparing exposures.
+
+### Animation Controls
+
+GIF and animated WebP files play automatically. Press `O` to pause, then
+`[` and `]` to step frame by frame. Frames are cached to disk and preloaded
+into GPU memory for smooth playback without flicker.
+
+### Configurable External Viewer Hand-Off
+
+`Cmd+Alt+V` opens the current image in your OS default viewer (Preview on
+macOS, Photos on Windows, Eye of GNOME on Linux). `Shift+Cmd+Alt+V` does the
+same and quits RPView. The external viewers are fully configurable in settings
+— you can add editors, other viewers, or custom commands.
+
+### Dark / Light Background Toggle
+
+Press `B` to switch between dark and light backgrounds. Both colors are
+configurable in Settings > Appearance. This makes it easy to inspect
+transparent PNGs and SVGs against different backgrounds without leaving the
+viewer.
+
+### Drag and Drop
+
+Drop a file to open its parent directory. Drop multiple files to view just
+those files. Drop a folder to browse all images in it. Visual feedback shows a
+green border while dragging.
 
 ## Settings
 
-RPView is highly customizable through its settings system. Press `Cmd+,` (macOS) or `Ctrl+,` (Windows/Linux) to open the interactive settings window.
+Press `Cmd+,` to open the interactive settings window, or edit the JSON file
+directly.
 
-### Settings Location
+### Settings File Location
 
-Settings are stored in a JSON file at:
 - **macOS**: `~/Library/Application Support/rpview/settings.json`
 - **Linux**: `~/.config/rpview/settings.json`
 - **Windows**: `C:\Users\<User>\AppData\Roaming\rpview\settings.json`
 
-### Configurable Settings
+### What You Can Configure
 
-**Viewer Behavior**
-- Default zoom mode (fit-to-window or 100%)
-- Per-image state persistence
-- Animation auto-play
-- State cache size
+**Viewer Behavior** — Default zoom mode (fit-to-window or 100%), per-image
+state memory, animation auto-play, state cache size.
 
-**Performance**
-- Adjacent image preloading
-- Filter processing threads
-- Maximum image dimensions
+**Performance** — Adjacent image preloading, filter processing threads,
+maximum image dimension limit.
 
-**Keyboard & Mouse**
-- Pan speeds (normal, fast, slow)
-- Zoom sensitivity (scroll wheel, Z-drag)
-- Pan acceleration
+**Keyboard & Mouse** — Pan speeds (normal, fast, slow), scroll wheel zoom
+sensitivity, Z-drag sensitivity, spacebar pan acceleration.
 
-**File Operations**
-- Default save directory
-- Default save format
-- External viewer/editor integration
+**File Operations** — Default save directory, default save format (PNG, JPEG,
+BMP, TIFF, WebP, or same-as-original), external viewer and editor commands.
 
-**Appearance**
-- Background color
-- Overlay transparency
-- Font size scaling
-- Window title format
+**Appearance** — Dark and light background colors, overlay transparency, font
+size scale, window title format (with `{filename}`, `{index}`, `{total}`
+placeholders).
 
-**Filters**
-- Default brightness/contrast/gamma values
-- Filter presets (planned)
+**Filters** — Default brightness, contrast, and gamma values.
 
-**Navigation**
-- Default sort mode
-- Wrap-around navigation
-- Image counter display
+**Navigation** — Default sort mode, wrap-around navigation, image counter in
+title bar.
 
-### Settings Window Features
+**External Tools** — List of external viewers (tried in order), external
+editor, Finder/Explorer integration toggle.
 
-- ✅ **Interactive controls**: Checkboxes, radio buttons, numeric inputs
-- ✅ **Live preview**: See changes before applying
-- ✅ **Apply/Cancel/Reset**: Full control over changes
-- ✅ **Keyboard shortcuts**: `Cmd+Enter` to apply, `Esc` to cancel
-- ✅ **Auto-save**: Settings persist across restarts
-
-### Manual Editing
-
-You can also edit `settings.json` directly with any text editor. The file uses standard JSON format with pretty-printing for readability. Changes take effect on next launch.
-
-**Example**: Change default zoom mode to 100%
-```json
-{
-  "viewer_behavior": {
-    "default_zoom_mode": "OneHundredPercent",
-    ...
-  }
-}
-```
-
-### Documentation
-
-See [docs/SETTINGS.md](docs/SETTINGS.md) for:
-- Complete settings reference
-- All available options and ranges
-- Example configurations
-- Troubleshooting guide
-- Manual editing tips
-
-## Documentation
-
-### User Documentation
-- [DESIGN.md](DESIGN.md) - Application design and architecture
-- [CLI.md](CLI.md) - Command-line interface specification
-- [docs/SETTINGS.md](docs/SETTINGS.md) - Settings documentation and configuration guide
-- [docs/TESTING.md](docs/TESTING.md) - Testing infrastructure and guidelines
-
-### Developer Documentation
-- [TODO.md](TODO.md) - Development roadmap with phase summaries
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
-- [CHANGELOG.md](CHANGELOG.md) - Version history
-- [docs/CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md) - Cross-platform support details
-- [docs/GPU_TEXTURE_PRELOADING.md](docs/GPU_TEXTURE_PRELOADING.md) - GPU preloading implementation
-- [docs/ANIMATION_IMPLEMENTATION.md](docs/ANIMATION_IMPLEMENTATION.md) - Animation frame caching
-
-## Project Structure
-
-```
-rpview-gpui/
-├── src/
-│   ├── main.rs           # Application entry point
-│   ├── error.rs          # Error handling
-│   ├── cli.rs            # CLI argument parsing
-│   ├── state/            # State management
-│   ├── components/       # UI components (planned)
-│   └── utils/            # Utilities (styling, etc.)
-├── DESIGN.md             # Design documentation
-├── TODO.md               # Development roadmap
-└── Cargo.toml            # Dependencies
-```
-
-## Development Roadmap
-
-The project was developed in 15 phases:
-
-1. ✅ **Phase 1**: Project Foundation & Basic Structure
-2. ✅ **Phase 2**: Basic Image Display
-3. ✅ **Phase 3**: Navigation & Sorting
-4. ✅ **Phase 4**: Zoom & Pan Fundamentals
-5. ✅ **Phase 5**: Per-Image State Management
-6. ✅ **Phase 6**: Advanced Zoom Features
-7. ✅ **Phase 7**: Advanced Pan Features
-8. ✅ **Phase 8**: User Interface Overlays
-9. ✅ **Phase 9**: Filter System
-10. ✅ **Phase 10**: File Operations
-11. ✅ **Phase 11**: Animation Support
-12. ✅ **Phase 11.5**: Drag & Drop Support
-13. ✅ **Phase 12**: Cross-Platform Polish
-14. ✅ **Phase 13**: Performance Optimization
-15. ✅ **Phase 14**: Testing & Quality (129 tests)
-16. 🎯 **Phase 15**: Documentation & Release (Next)
-
-See [TODO.md](TODO.md) for detailed phase summaries.
-
-## Technologies
-
-- This app largely written via Claude Code 2, Sonnet 4.5
-- [GPUI](https://www.gpui.rs/) - High-performance GPU-accelerated UI framework
-- [image](https://docs.rs/image/) - Image decoding/encoding
-- [clap](https://docs.rs/clap/) - Command-line argument parsing
-- [rfd](https://docs.rs/rfd/) - Native file dialogs
-- [adabraka-ui](https://docs.rs/adabraka-ui/) - UI components
-- Rust 2024 Edition
-
-## Testing
-
-rpview-gpui has comprehensive test coverage with **129 tests**:
-- 93 unit tests (file ops, state, zoom/pan, filters)
-- 36 integration tests (CLI, workflows, navigation)
+## Building
 
 ```bash
-# Run all tests
+# Debug build
+cargo build
+
+# Release build (optimized, stripped)
+cargo build --release
+
+# Run tests (206 tests)
 cargo test
 
-# Run tests with coverage summary
-cargo test --quiet
+# macOS .app bundle (after release build)
+bash packaging/macos/bundle.sh --no-build
 ```
-
-See [docs/TESTING.md](docs/TESTING.md) for detailed testing documentation.
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
 Licensed under either of
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or
+  <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or
+  <http://opensource.org/licenses/MIT>)
 
 at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
-dual licensed as above, without any additional terms or conditions.
-
-## Links
-
-- [GPUI Documentation](https://github.com/zed-industries/zed/tree/main/crates/gpui/docs)
-- [GPUI Examples](https://github.com/zed-industries/zed/tree/main/crates/gpui/examples)
-- [Rust Documentation](https://doc.rust-lang.org/)
