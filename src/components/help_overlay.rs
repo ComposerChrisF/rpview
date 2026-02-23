@@ -219,6 +219,16 @@ impl HelpOverlay {
             )
             .into_any_element(),
             self.render_shortcut(
+                format!("{}-Delete", platform_key),
+                "Delete file (to Trash)".to_string(),
+            )
+            .into_any_element(),
+            self.render_shortcut(
+                format!("Shift+{}-Delete", platform_key),
+                "Permanently delete file".to_string(),
+            )
+            .into_any_element(),
+            self.render_shortcut(
                 "Drag & Drop".to_string(),
                 "Drop files/folders to open".to_string(),
             )

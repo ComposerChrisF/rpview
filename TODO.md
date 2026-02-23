@@ -326,6 +326,19 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] TIFF output
 - [x] WEBP output
 
+### File Delete
+- [x] Cmd+Backspace shows delete confirmation bar (move to Trash)
+- [x] Shift+Cmd+Backspace shows permanent delete confirmation bar
+- [x] Clickable red confirmation button at bottom-center
+- [x] Esc dismisses confirmation without deleting
+- [x] Toast notifications for success, error, and cancellation
+- [x] Auto-dismiss toast after 2.5 seconds
+- [x] File removed from navigation list after deletion
+- [x] Menu items in File menu
+- [x] Help overlay entries for delete shortcuts
+- [x] Cross-platform key bindings (Ctrl variants for Windows/Linux)
+- [x] Tests for `remove_current_image()` (6 tests)
+
 ## Phase 11: Animation Support ✅
 
 ### GIF Animation

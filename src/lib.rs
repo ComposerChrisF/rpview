@@ -69,5 +69,8 @@ actions!(
         LoadOversizedImageAnyway,
         ToggleZoomIndicator,
         ToggleBackground,
+        RequestDelete,
+        RequestPermanentDelete,
+        ConfirmDelete,
     ]
 );

@@ -73,17 +73,32 @@ use utils::settings_io;
 
 // Import all actions from lib.rs (they're defined there to avoid duplication)
 use rpview_gpui::{
-    BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ContrastDown, ContrastUp,
-    DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp, NextFrame, NextImage,
-    OpenFile, OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit, PanDown,
-    PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
+    BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ConfirmDelete, ContrastDown,
+    ContrastUp, DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp, NextFrame,
+    NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit,
+    PanDown, PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
     PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, ResetFilters,
-    ResetSettingsToDefaults, RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical,
-    SortByModified, ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters,
-    ToggleHelp, ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast, ZoomInIncremental,
-    ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow, ZoomReset,
-    ZoomResetAndCenter,
+    RequestDelete, RequestPermanentDelete, ResetSettingsToDefaults, RevealInFinder, SaveFile,
+    SaveFileToDownloads, SortAlphabetical, SortByModified, ToggleAnimationPlayPause,
+    ToggleBackground, ToggleDebug, ToggleFilters, ToggleHelp, ToggleSettings,
+    ToggleZoomIndicator, ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast,
+    ZoomOutIncremental, ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
 };
+
+/// What kind of delete is pending
+#[derive(Clone, Copy, PartialEq)]
+enum DeleteMode {
+    Trash,
+    Permanent,
+}
+
+/// State for a toast notification
+struct ToastState {
+    message: String,
+    detail: Option<String>,
+    is_error: bool,
+    created_at: Instant,
+}
 
 struct App {
     app_state: AppState,
@@ -120,15 +135,19 @@ struct App {
     last_frame_update: Instant,
     /// Whether files are being dragged over the window
     drag_over: bool,
+    /// Pending delete mode (Some = confirmation bar is visible)
+    pending_delete: Option<DeleteMode>,
+    /// Toast notification (auto-dismisses after ~2.5 seconds)
+    toast: Option<ToastState>,
     /// Application settings (loaded on startup)
     settings: AppSettings,
 }
 
 impl App {
-    /// Check if modal overlays (settings) are blocking main window interactions
+    /// Check if modal overlays (settings, delete confirmation) are blocking main window interactions
     /// Note: Menu bar state is handled separately via escape key
     fn is_modal_open(&self) -> bool {
-        self.show_settings
+        self.show_settings || self.pending_delete.is_some()
     }
 
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -140,6 +159,19 @@ impl App {
                 self.menu_bar.update(cx, |mb, cx| mb.close_menu(cx));
                 return;
             }
+        }
+
+        // Dismiss delete confirmation first (highest priority)
+        if self.pending_delete.is_some() {
+            self.pending_delete = None;
+            self.toast = Some(ToastState {
+                message: "Delete cancelled".into(),
+                detail: None,
+                is_error: false,
+                created_at: Instant::now(),
+            });
+            cx.notify();
+            return;
         }
 
         // If help, debug, settings, or filter overlay is open, close it instead of counting toward quit
@@ -658,6 +690,85 @@ impl App {
                 eprintln!("Failed to reveal in file manager: {}", e);
             }
         }
+        cx.notify();
+    }
+
+    fn handle_request_delete(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_modal_open() {
+            return;
+        }
+        if self.app_state.current_image().is_none() {
+            return;
+        }
+        self.pending_delete = Some(DeleteMode::Trash);
+        cx.notify();
+    }
+
+    fn handle_request_permanent_delete(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_modal_open() {
+            return;
+        }
+        if self.app_state.current_image().is_none() {
+            return;
+        }
+        self.pending_delete = Some(DeleteMode::Permanent);
+        cx.notify();
+    }
+
+    fn handle_confirm_delete(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let mode = match self.pending_delete {
+            Some(m) => m,
+            None => return,
+        };
+
+        let path = match self.app_state.current_image().cloned() {
+            Some(p) => p,
+            None => {
+                self.pending_delete = None;
+                cx.notify();
+                return;
+            }
+        };
+
+        let filename = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+        let full_path = path.display().to_string();
+
+        let result = match mode {
+            DeleteMode::Trash => trash::delete(&path).map_err(|e| e.to_string()),
+            DeleteMode::Permanent => std::fs::remove_file(&path).map_err(|e| e.to_string()),
+        };
+
+        match result {
+            Ok(()) => {
+                let action_word = match mode {
+                    DeleteMode::Trash => "Moved to Trash",
+                    DeleteMode::Permanent => "Permanently deleted",
+                };
+                self.toast = Some(ToastState {
+                    message: format!("{}: {}", action_word, filename),
+                    detail: Some(full_path),
+                    is_error: false,
+                    created_at: Instant::now(),
+                });
+                self.app_state.remove_current_image();
+                self.update_viewer(window, cx);
+                self.update_window_title(window);
+            }
+            Err(e) => {
+                self.toast = Some(ToastState {
+                    message: format!("Delete failed: {}", e),
+                    detail: Some(full_path),
+                    is_error: true,
+                    created_at: Instant::now(),
+                });
+            }
+        }
+
+        self.pending_delete = None;
         cx.notify();
     }
 
@@ -1346,6 +1457,15 @@ impl App {
 
 impl Render for App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Auto-dismiss toast after 2.5 seconds
+        if let Some(ref toast) = self.toast {
+            if toast.created_at.elapsed() >= Duration::from_millis(2500) {
+                self.toast = None;
+            } else {
+                window.request_animation_frame();
+            }
+        }
+
         // Check if async image loading has completed
         if self.viewer.check_async_load() {
             // Image loaded successfully or failed - load state and setup animation
@@ -1778,6 +1898,95 @@ impl Render for App {
             })
             .when(self.show_filters, |el| {
                 el.child(self.filter_controls.clone())
+            })
+            // Delete confirmation bar at bottom-center
+            .when(self.pending_delete.is_some(), |el| {
+                let mode = self.pending_delete.unwrap();
+                let filename = self
+                    .app_state
+                    .current_image()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("file")
+                    .to_string();
+                let label = match mode {
+                    DeleteMode::Trash => format!("Delete {}", filename),
+                    DeleteMode::Permanent => format!("Permanently Delete {}", filename),
+                };
+                el.child(
+                    div()
+                        .absolute()
+                        .bottom(px(48.0))
+                        .w_full()
+                        .flex()
+                        .justify_center()
+                        .child(
+                            div()
+                                .id("delete-confirm-bar")
+                                .cursor_pointer()
+                                .bg(rgba(0xff5555ff))
+                                .hover(|s| s.bg(rgba(0xff3333ff)))
+                                .rounded(px(8.0))
+                                .px(px(24.0))
+                                .py(px(12.0))
+                                .shadow_lg()
+                                .text_color(rgb(0xffffff))
+                                .font_weight(FontWeight::BOLD)
+                                .text_size(px(14.0))
+                                .child(label)
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                                        this.handle_confirm_delete(window, cx);
+                                    }),
+                                ),
+                        ),
+                )
+            })
+            // Toast notification at top-center
+            .when(self.toast.is_some(), |el| {
+                let toast = self.toast.as_ref().unwrap();
+                let border_color = if toast.is_error {
+                    rgba(0xff5555ff) // red
+                } else {
+                    rgba(0x50fa7bff) // green
+                };
+                let mut toast_el = div()
+                    .bg(rgba(0x1e1e1eee))
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded(px(8.0))
+                    .px(px(16.0))
+                    .py(px(10.0))
+                    .shadow_lg()
+                    .max_w(px(500.0))
+                    .child(
+                        div()
+                            .text_color(rgb(0xffffff))
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(toast.message.clone()),
+                    );
+                if let Some(ref detail) = toast.detail {
+                    toast_el = toast_el.child(
+                        div()
+                            .text_color(rgb(0xaaaaaa))
+                            .text_size(px(11.0))
+                            .mt(px(2.0))
+                            .overflow_x_hidden()
+                            .text_ellipsis()
+                            .child(detail.clone()),
+                    );
+                }
+                el.child(
+                    div()
+                        .absolute()
+                        .top(px(12.0))
+                        .w_full()
+                        .flex()
+                        .justify_center()
+                        .child(toast_el),
+                )
             });
 
         // Outer container with menu bar (Windows/Linux) and content
@@ -2027,6 +2236,17 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &RevealInFinder, window, cx| {
                 this.handle_reveal_in_finder(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &RequestDelete, window, cx| {
+                this.handle_request_delete(window, cx);
+            }))
+            .on_action(
+                cx.listener(|this, _: &RequestPermanentDelete, window, cx| {
+                    this.handle_request_permanent_delete(window, cx);
+                }),
+            )
+            .on_action(cx.listener(|this, _: &ConfirmDelete, window, cx| {
+                this.handle_confirm_delete(window, cx);
+            }))
     }
 }
 
@@ -2115,6 +2335,9 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-cmd-alt-v", OpenInExternalViewerAndQuit, None),
         // External editor
         KeyBinding::new("cmd-e", OpenInExternalEditor, None),
+        // Delete operations
+        KeyBinding::new("cmd-backspace", RequestDelete, None),
+        KeyBinding::new("shift-cmd-backspace", RequestPermanentDelete, None),
         // Windows/Linux explicit Ctrl bindings (GPUI 0.2.2 doesn't translate cmd to ctrl)
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-w", CloseWindow, None),
@@ -2164,6 +2387,10 @@ fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-ctrl-alt-v", OpenInExternalViewerAndQuit, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-e", OpenInExternalEditor, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-backspace", RequestDelete, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-backspace", RequestPermanentDelete, None),
     ]);
 }
 
@@ -2198,6 +2425,9 @@ fn setup_menus(cx: &mut gpui::App) {
                 MenuItem::action("Open in External Viewer", OpenInExternalViewer),
                 MenuItem::action("Open in Viewer and Quit", OpenInExternalViewerAndQuit),
                 MenuItem::action("Open in External Editor", OpenInExternalEditor),
+                MenuItem::separator(),
+                MenuItem::action("Delete File...", RequestDelete),
+                MenuItem::action("Permanently Delete File...", RequestPermanentDelete),
                 MenuItem::separator(),
                 MenuItem::action("Close Window", CloseWindow),
             ],
@@ -2471,6 +2701,8 @@ fn main() {
                         menu_bar,
                         last_frame_update: Instant::now(),
                         drag_over: false,
+                        pending_delete: None,
+                        toast: None,
                         settings: settings.clone(),
                     }
                 })
