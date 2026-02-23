@@ -140,6 +140,8 @@ Animated images auto-play by default (configurable).
 | `Cmd+Alt+V` | **Open in external viewer** (e.g. Preview.app) |
 | `Shift+Cmd+Alt+V` | Open in external viewer **and quit RPView** |
 | `Cmd+E` | Open in external editor |
+| `Cmd+Delete` | **Delete file** (move to Trash) |
+| `Shift+Cmd+Delete` | **Permanently delete file** |
 
 The "open externally" shortcuts are the fast hand-off: if you need the OS
 default viewer for something RPView doesn't do (like markup or printing), one
@@ -220,6 +222,14 @@ configurable in Settings > Appearance. This makes it easy to inspect
 transparent PNGs and SVGs against different backgrounds without leaving the
 viewer.
 
+### File Delete with Confirmation
+
+`Cmd+Delete` brings up a confirmation card showing the filename, full path, and
+a red "Delete" button — the file moves to Trash. `Shift+Cmd+Delete` shows
+"Permanently Delete" for irrecoverable removal. Press `Esc` to cancel. A brief
+toast notification confirms the outcome. The next image loads automatically
+after deletion.
+
 ### Drag and Drop
 
 Drop a file to open its parent directory. Drop multiple files to view just
@@ -272,7 +282,7 @@ cargo build
 # Release build (optimized, stripped)
 cargo build --release
 
-# Run tests (206 tests)
+# Run tests (213 tests)
 cargo test
 
 # macOS .app bundle (after release build)
