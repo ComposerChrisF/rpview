@@ -70,7 +70,10 @@
       "Bash(bash packaging/macos/bundle.sh:*)",
       "Bash(cargo doc:*)",
       "Bash(cargo clean:*)",
-      "Bash(bash /Users/chris/Chris/App/Rust/rpview-gpui/packaging/macos/bundle.sh --no-build)"
+      "Bash(bash /Users/chris/Chris/App/Rust/rpview-gpui/packaging/macos/bundle.sh --no-build)",
+      "Bash(git -C /Users/chris/Chris/App/Rust/ccf-gpui-widgets log --oneline -3)",
+      "Bash(git -C /Users/chris/Chris/App/Rust/ccf-gpui-widgets log --oneline --reverse)",
+      "Bash(git -C /Users/chris/Chris/App/Rust/ccf-gpui-widgets log --oneline --format=\"%h %ai %s\" --reverse)"
     ]
   }
 }
