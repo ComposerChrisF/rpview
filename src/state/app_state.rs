@@ -181,6 +181,20 @@ impl AppState {
         }
     }
 
+    /// Remove the current image from the list and adjust index.
+    /// Returns the removed path, or None if the list is empty.
+    pub fn remove_current_image(&mut self) -> Option<PathBuf> {
+        if self.image_paths.is_empty() {
+            return None;
+        }
+        let removed = self.image_paths.remove(self.current_index);
+        self.image_states.remove(&removed);
+        if !self.image_paths.is_empty() && self.current_index >= self.image_paths.len() {
+            self.current_index = self.image_paths.len() - 1;
+        }
+        Some(removed)
+    }
+
     /// Set the sort mode and re-sort the image list
     pub fn set_sort_mode(&mut self, mode: SortMode) {
         if self.sort_mode != mode {
@@ -492,5 +506,104 @@ mod tests {
 
         // Assert
         assert_eq!(state.max_cache_size, DEFAULT_CACHE_SIZE);
+    }
+
+    #[test]
+    fn test_remove_current_image_middle() {
+        // Arrange
+        let paths = vec![
+            PathBuf::from("a.png"),
+            PathBuf::from("b.png"),
+            PathBuf::from("c.png"),
+        ];
+        let mut state = AppState::new(paths);
+        state.current_index = 1; // "b.png"
+
+        // Act
+        let removed = state.remove_current_image();
+
+        // Assert
+        assert_eq!(removed, Some(PathBuf::from("b.png")));
+        assert_eq!(state.image_paths.len(), 2);
+        assert_eq!(state.current_index, 1); // now points to "c.png"
+        assert_eq!(state.image_paths[1], PathBuf::from("c.png"));
+    }
+
+    #[test]
+    fn test_remove_current_image_last() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut state = AppState::new(paths);
+        state.current_index = 1; // last item
+
+        // Act
+        let removed = state.remove_current_image();
+
+        // Assert
+        assert_eq!(removed, Some(PathBuf::from("b.png")));
+        assert_eq!(state.image_paths.len(), 1);
+        assert_eq!(state.current_index, 0); // adjusted back
+    }
+
+    #[test]
+    fn test_remove_current_image_first() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut state = AppState::new(paths);
+        state.current_index = 0;
+
+        // Act
+        let removed = state.remove_current_image();
+
+        // Assert
+        assert_eq!(removed, Some(PathBuf::from("a.png")));
+        assert_eq!(state.image_paths.len(), 1);
+        assert_eq!(state.current_index, 0); // stays at 0
+        assert_eq!(state.image_paths[0], PathBuf::from("b.png"));
+    }
+
+    #[test]
+    fn test_remove_current_image_only_item() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png")];
+        let mut state = AppState::new(paths);
+
+        // Act
+        let removed = state.remove_current_image();
+
+        // Assert
+        assert_eq!(removed, Some(PathBuf::from("a.png")));
+        assert!(state.image_paths.is_empty());
+        assert_eq!(state.current_index, 0);
+    }
+
+    #[test]
+    fn test_remove_current_image_empty_list() {
+        // Arrange
+        let mut state = AppState::new(Vec::new());
+
+        // Act
+        let removed = state.remove_current_image();
+
+        // Assert
+        assert_eq!(removed, None);
+    }
+
+    #[test]
+    fn test_remove_current_image_clears_cached_state() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut state = AppState::new(paths);
+        state.current_index = 0;
+        // Cache a state for a.png
+        state
+            .image_states
+            .insert(PathBuf::from("a.png"), ImageState::new());
+
+        // Act
+        state.remove_current_image();
+
+        // Assert - cached state for removed image should be gone
+        assert!(!state.image_states.contains_key(&PathBuf::from("a.png")));
     }
 }
