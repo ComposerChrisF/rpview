@@ -1899,19 +1899,23 @@ impl Render for App {
             .when(self.show_filters, |el| {
                 el.child(self.filter_controls.clone())
             })
-            // Delete confirmation bar at bottom-center
+            // Delete confirmation card at bottom-center
             .when(self.pending_delete.is_some(), |el| {
                 let mode = self.pending_delete.unwrap();
-                let filename = self
-                    .app_state
-                    .current_image()
+                let current_path = self.app_state.current_image().cloned();
+                let filename = current_path
+                    .as_ref()
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                     .unwrap_or("file")
                     .to_string();
-                let label = match mode {
-                    DeleteMode::Trash => format!("Delete {}", filename),
-                    DeleteMode::Permanent => format!("Permanently Delete {}", filename),
+                let full_path = current_path
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default();
+                let button_label = match mode {
+                    DeleteMode::Trash => "Delete",
+                    DeleteMode::Permanent => "Permanently Delete",
                 };
                 el.child(
                     div()
@@ -1921,35 +1925,83 @@ impl Render for App {
                         .flex()
                         .justify_center()
                         .child(
+                            // Card background
                             div()
-                                .id("delete-confirm-bar")
-                                .cursor_pointer()
-                                .bg(rgba(0xff5555ff))
-                                .hover(|s| s.bg(rgba(0xff3333ff)))
-                                .rounded(px(8.0))
-                                .px(px(24.0))
-                                .py(px(12.0))
+                                .bg(rgba(0x1e1e1eee))
+                                .border_1()
+                                .border_color(rgba(0xff555599))
+                                .rounded(px(10.0))
+                                .px(px(20.0))
+                                .py(px(16.0))
                                 .shadow_lg()
-                                .text_color(rgb(0xffffff))
-                                .font_weight(FontWeight::BOLD)
-                                .text_size(px(14.0))
-                                .child(label)
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                                        this.handle_confirm_delete(window, cx);
-                                    }),
+                                .max_w(px(500.0))
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap(px(10.0))
+                                // Filename
+                                .child(
+                                    div()
+                                        .text_color(rgb(0xffffff))
+                                        .text_size(px(14.0))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_align(TextAlign::Center)
+                                        .child(filename),
+                                )
+                                // Full path
+                                .child(
+                                    div()
+                                        .text_color(rgb(0x888888))
+                                        .text_size(px(11.0))
+                                        .text_align(TextAlign::Center)
+                                        .max_w(px(460.0))
+                                        .overflow_x_hidden()
+                                        .text_ellipsis()
+                                        .child(full_path),
+                                )
+                                // Delete button
+                                .child(
+                                    div()
+                                        .id("delete-confirm-btn")
+                                        .cursor_pointer()
+                                        .bg(rgba(0xff5555ff))
+                                        .hover(|s| s.bg(rgba(0xff3333ff)))
+                                        .rounded(px(6.0))
+                                        .px(px(24.0))
+                                        .py(px(8.0))
+                                        .text_color(rgb(0xffffff))
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_size(px(13.0))
+                                        .child(button_label)
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(
+                                                |this,
+                                                 _event: &MouseDownEvent,
+                                                 window,
+                                                 cx| {
+                                                    this.handle_confirm_delete(window, cx);
+                                                },
+                                            ),
+                                        ),
+                                )
+                                // Esc hint
+                                .child(
+                                    div()
+                                        .text_color(rgb(0x666666))
+                                        .text_size(px(11.0))
+                                        .child("Press Esc to cancel"),
                                 ),
                         ),
                 )
             })
-            // Toast notification at top-center
+            // Toast notification at bottom-center (near delete card position)
             .when(self.toast.is_some(), |el| {
                 let toast = self.toast.as_ref().unwrap();
                 let border_color = if toast.is_error {
-                    rgba(0xff5555ff) // red
+                    rgba(0xff5555ff)
                 } else {
-                    rgba(0x50fa7bff) // green
+                    rgba(0x50fa7bff)
                 };
                 let mut toast_el = div()
                     .bg(rgba(0x1e1e1eee))
@@ -1981,7 +2033,7 @@ impl Render for App {
                 el.child(
                     div()
                         .absolute()
-                        .top(px(12.0))
+                        .bottom(px(48.0))
                         .w_full()
                         .flex()
                         .justify_center()
