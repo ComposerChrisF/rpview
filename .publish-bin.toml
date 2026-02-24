@@ -1,1 +1,4 @@
 auto_publish = true
+release_only = true
+destination = []
+debug_destination = []
