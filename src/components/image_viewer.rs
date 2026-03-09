@@ -252,37 +252,20 @@ impl ImageViewer {
         self.image_state.pan = self.constrain_pan(new_pan_x, new_pan_y);
     }
 
-    /// Toggle between fit-to-window and 100% zoom, preserving image center position
+    /// Toggle between fit-to-window (centered) and 100% zoom.
+    /// When going to fit-to-window, the image is fully centered.
+    /// When going to 100%, the viewport-center anchor point is preserved.
     pub fn reset_zoom(&mut self) {
         if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
-            let old_zoom = self.image_state.zoom;
-
             if self.image_state.is_fit_to_window {
-                // Currently at fit-to-window, switch to 100%
-                let new_zoom = 1.0;
-
-                // Use the same pan adjustment logic as zoom_in/zoom_out
-                self.adjust_pan_for_zoom(img.width, img.height, viewport, old_zoom, new_zoom);
-
-                self.image_state.zoom = new_zoom;
+                // Currently at fit-to-window → switch to 100% keeping viewport center stable
+                let old_zoom = self.image_state.zoom;
+                self.adjust_pan_for_zoom(img.width, img.height, viewport, old_zoom, 1.0);
+                self.image_state.zoom = 1.0;
                 self.image_state.is_fit_to_window = false;
             } else {
-                // Currently at custom zoom (e.g., 100%), switch to fit-to-window
-                let viewport_width: f32 = viewport.width.into();
-                let viewport_height: f32 = viewport.height.into();
-
-                let new_zoom = zoom::calculate_fit_to_window(
-                    img.width,
-                    img.height,
-                    viewport_width,
-                    viewport_height,
-                );
-
-                // Use the same pan adjustment logic as zoom_in/zoom_out
-                self.adjust_pan_for_zoom(img.width, img.height, viewport, old_zoom, new_zoom);
-
-                self.image_state.zoom = new_zoom;
-                self.image_state.is_fit_to_window = true;
+                // Any other zoom → switch to fit-to-window, fully centered
+                self.fit_to_window();
             }
         }
     }
@@ -293,7 +276,6 @@ impl ImageViewer {
             let viewport_width: f32 = viewport.width.into();
             let viewport_height: f32 = viewport.height.into();
 
-            // Calculate pan to center the image at 100% zoom
             let zoomed_width = img.width as f32;
             let zoomed_height = img.height as f32;
             let pan_x = (viewport_width - zoomed_width) / 2.0;
@@ -305,14 +287,13 @@ impl ImageViewer {
         }
     }
 
-    /// Reset both zoom and pan - set to 100% centered or fit-to-window
+    /// Toggle between fit-to-window (centered) and 100% (centered).
+    /// Both states are fully centered — this is Cmd+0 / Ctrl+0.
     pub fn reset_zoom_and_pan(&mut self) {
         if self.image_state.is_fit_to_window {
-            // Already at fit-to-window (which is centered), do nothing or toggle to 100% centered
             self.set_one_hundred_percent();
         } else {
-            // Set to 100% and center
-            self.set_one_hundred_percent();
+            self.fit_to_window();
         }
     }
 
