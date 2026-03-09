@@ -1240,12 +1240,24 @@ impl App {
         cx.notify();
     }
 
+    /// Returns the sign multiplier for pan direction based on the user's preference.
+    /// In MoveImage mode, direction keys move the image on screen (W moves image up = positive pan Y).
+    /// In MoveViewport mode, direction keys move the viewport (W moves viewport up = negative pan Y).
+    fn pan_sign(&self) -> f32 {
+        use crate::state::settings::PanDirectionMode;
+        match self.settings.keyboard_mouse.pan_direction_mode {
+            PanDirectionMode::MoveImage => 1.0,
+            PanDirectionMode::MoveViewport => -1.0,
+        }
+    }
+
     fn handle_pan_up(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if self.is_modal_open() {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_normal;
-        self.viewer.pan(0.0, -speed); // Pan up = move viewport up = image moves down (positive Y)
+        let sign = self.pan_sign();
+        self.viewer.pan(0.0, sign * speed);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1255,7 +1267,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_normal;
-        self.viewer.pan(0.0, speed); // Pan down = move viewport down = image moves up (negative Y)
+        let sign = self.pan_sign();
+        self.viewer.pan(0.0, -sign * speed);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1265,7 +1278,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_normal;
-        self.viewer.pan(-speed, 0.0); // Pan left = move image right (negative X)
+        let sign = self.pan_sign();
+        self.viewer.pan(sign * speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1275,7 +1289,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_normal;
-        self.viewer.pan(speed, 0.0); // Pan right = move image left (positive X)
+        let sign = self.pan_sign();
+        self.viewer.pan(-sign * speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1286,7 +1301,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_fast;
-        self.viewer.pan(0.0, -speed);
+        let sign = self.pan_sign();
+        self.viewer.pan(0.0, sign * speed);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1296,7 +1312,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_fast;
-        self.viewer.pan(0.0, speed);
+        let sign = self.pan_sign();
+        self.viewer.pan(0.0, -sign * speed);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1306,7 +1323,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_fast;
-        self.viewer.pan(-speed, 0.0);
+        let sign = self.pan_sign();
+        self.viewer.pan(sign * speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1316,7 +1334,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_fast;
-        self.viewer.pan(speed, 0.0);
+        let sign = self.pan_sign();
+        self.viewer.pan(-sign * speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1327,7 +1346,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_slow;
-        self.viewer.pan(0.0, -speed);
+        let sign = self.pan_sign();
+        self.viewer.pan(0.0, sign * speed);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1337,7 +1357,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_slow;
-        self.viewer.pan(0.0, speed);
+        let sign = self.pan_sign();
+        self.viewer.pan(0.0, -sign * speed);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1347,7 +1368,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_slow;
-        self.viewer.pan(-speed, 0.0);
+        let sign = self.pan_sign();
+        self.viewer.pan(sign * speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
@@ -1357,7 +1379,8 @@ impl App {
             return;
         }
         let speed = self.settings.keyboard_mouse.pan_speed_slow;
-        self.viewer.pan(speed, 0.0);
+        let sign = self.pan_sign();
+        self.viewer.pan(-sign * speed, 0.0);
         self.save_current_image_state();
         cx.notify();
     }
