@@ -1241,13 +1241,14 @@ impl App {
     }
 
     /// Returns the sign multiplier for pan direction based on the user's preference.
-    /// In MoveImage mode, direction keys move the image on screen (W moves image up = positive pan Y).
-    /// In MoveViewport mode, direction keys move the viewport (W moves viewport up = negative pan Y).
+    /// Pan is applied as CSS left/top, so positive pan_y = image moves down on screen.
+    /// MoveImage: W should move image up (negative pan_y) → sign = -1.0
+    /// MoveViewport: W should scroll viewport up, image moves down (positive pan_y) → sign = 1.0
     fn pan_sign(&self) -> f32 {
         use crate::state::settings::PanDirectionMode;
         match self.settings.keyboard_mouse.pan_direction_mode {
-            PanDirectionMode::MoveImage => 1.0,
-            PanDirectionMode::MoveViewport => -1.0,
+            PanDirectionMode::MoveImage => -1.0,
+            PanDirectionMode::MoveViewport => 1.0,
         }
     }
 
