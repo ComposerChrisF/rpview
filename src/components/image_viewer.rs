@@ -226,30 +226,27 @@ impl ImageViewer {
         self.image_state.is_fit_to_window = false;
     }
 
-    /// Adjust pan offset to keep the center of the image at the same screen location when zooming
+    /// Adjust pan so the image pixel at the viewport center stays at the viewport center after zoom.
+    /// Same math as zoom_toward_point but anchored on the viewport center instead of cursor.
     fn adjust_pan_for_zoom(
         &mut self,
-        img_width: u32,
-        img_height: u32,
-        _viewport: Size<Pixels>,
+        _img_width: u32,
+        _img_height: u32,
+        viewport: Size<Pixels>,
         old_zoom: f32,
         new_zoom: f32,
     ) {
         let (pan_x, pan_y) = self.image_state.pan;
+        let vp_center_x: f32 = f32::from(viewport.width) / 2.0;
+        let vp_center_y: f32 = f32::from(viewport.height) / 2.0;
 
-        // Calculate the center of the image in screen coordinates (before zoom)
-        let old_img_width = img_width as f32 * old_zoom;
-        let old_img_height = img_height as f32 * old_zoom;
-        let old_img_center_x = pan_x + old_img_width / 2.0;
-        let old_img_center_y = pan_y + old_img_height / 2.0;
+        // Find which image pixel is currently at the viewport center
+        let pixel_x = (vp_center_x - pan_x) / old_zoom;
+        let pixel_y = (vp_center_y - pan_y) / old_zoom;
 
-        // Calculate the new image dimensions
-        let new_img_width = img_width as f32 * new_zoom;
-        let new_img_height = img_height as f32 * new_zoom;
-
-        // Calculate the offset needed to keep the image center at the same position
-        let new_pan_x = old_img_center_x - new_img_width / 2.0;
-        let new_pan_y = old_img_center_y - new_img_height / 2.0;
+        // Compute new pan so that same pixel remains at the viewport center
+        let new_pan_x = vp_center_x - pixel_x * new_zoom;
+        let new_pan_y = vp_center_y - pixel_y * new_zoom;
 
         // Apply pan constraints
         self.image_state.pan = self.constrain_pan(new_pan_x, new_pan_y);
