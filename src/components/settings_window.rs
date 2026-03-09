@@ -144,6 +144,7 @@ pub struct SettingsWindow {
 
     // Segmented controls
     zoom_mode_control: Entity<SegmentedControl>,
+    pan_direction_mode_control: Entity<SegmentedControl>,
     sort_mode_control: Entity<SegmentedControl>,
     save_format_control: Entity<SegmentedControl>,
     save_location_mode_control: Entity<SegmentedControl>,
@@ -272,6 +273,30 @@ impl SettingsWindow {
         cx.subscribe(&pan_speed_slow_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
             let NumberStepperEvent::Change(value) = event;
             this.working_settings.keyboard_mouse.pan_speed_slow = *value as f32;
+            cx.notify();
+        }).detach();
+
+        // Segmented control for pan direction mode
+        let initial_pan_direction = match settings.keyboard_mouse.pan_direction_mode {
+            PanDirectionMode::MoveImage => "image",
+            PanDirectionMode::MoveViewport => "viewport",
+        };
+        let pan_direction_mode_control = cx.new(|cx| {
+            SegmentedControl::new(cx)
+                .options(vec![
+                    ("image", "Move Image"),
+                    ("viewport", "Move Viewport"),
+                ])
+                .with_selected_value(initial_pan_direction)
+                .theme(app_theme)
+        });
+        cx.subscribe(&pan_direction_mode_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+            let SegmentedControlEvent::Change(option) = event;
+            this.working_settings.keyboard_mouse.pan_direction_mode = match option.value.as_str() {
+                "image" => PanDirectionMode::MoveImage,
+                "viewport" => PanDirectionMode::MoveViewport,
+                _ => PanDirectionMode::MoveImage,
+            };
             cx.notify();
         }).detach();
 
@@ -748,6 +773,7 @@ impl SettingsWindow {
             default_contrast_stepper,
             default_gamma_stepper,
             zoom_mode_control,
+            pan_direction_mode_control,
             sort_mode_control,
             save_format_control,
             save_location_mode_control,
@@ -825,6 +851,14 @@ impl SettingsWindow {
         };
         self.zoom_mode_control.update(cx, |control, cx| {
             control.set_selected_value(zoom_value, cx);
+        });
+
+        let pan_direction_value = match defaults.keyboard_mouse.pan_direction_mode {
+            PanDirectionMode::MoveImage => "image",
+            PanDirectionMode::MoveViewport => "viewport",
+        };
+        self.pan_direction_mode_control.update(cx, |control, cx| {
+            control.set_selected_value(pan_direction_value, cx);
         });
 
         let sort_value = match defaults.sort_navigation.default_sort_mode {
@@ -1093,6 +1127,15 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .child(self.render_section_header("Keyboard & Mouse".to_string()))
+            .child(
+                div()
+                    .mb(Spacing::md())
+                    .child(self.render_label(
+                        "Pan Direction Mode".to_string(),
+                        Some("\"Move Image\" moves the image on screen in the key direction; \"Move Viewport\" scrolls the view".to_string()),
+                    ))
+                    .child(self.pan_direction_mode_control.clone()),
+            )
             .child(self.render_stepper_row(
                 "Pan speed (normal)".to_string(),
                 Some("Base keyboard pan speed in pixels".to_string()),

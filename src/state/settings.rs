@@ -74,6 +74,15 @@ impl Default for Performance {
     }
 }
 
+/// Pan direction mode — what the direction keys (WASD/IJKL) move
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PanDirectionMode {
+    /// Direction keys move the image on screen (W moves image up)
+    MoveImage,
+    /// Direction keys move the viewport/camera (W moves viewport up, image appears to move down)
+    MoveViewport,
+}
+
 /// Keyboard and mouse input settings
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KeyboardMouse {
@@ -83,6 +92,9 @@ pub struct KeyboardMouse {
     pub pan_speed_fast: f32,
     /// Pan speed with Cmd/Ctrl modifier (pixels)
     pub pan_speed_slow: f32,
+    /// What the direction keys move: the image or the viewport
+    #[serde(default)]
+    pub pan_direction_mode: PanDirectionMode,
     /// Scroll wheel zoom sensitivity (zoom factor per notch)
     pub scroll_wheel_sensitivity: f32,
     /// Z-drag zoom sensitivity (percentage per pixel)
@@ -91,12 +103,19 @@ pub struct KeyboardMouse {
     pub spacebar_pan_accelerated: bool,
 }
 
+impl Default for PanDirectionMode {
+    fn default() -> Self {
+        PanDirectionMode::MoveImage
+    }
+}
+
 impl Default for KeyboardMouse {
     fn default() -> Self {
         Self {
             pan_speed_normal: 10.0,
             pan_speed_fast: 30.0,
             pan_speed_slow: 3.0,
+            pan_direction_mode: PanDirectionMode::default(),
             scroll_wheel_sensitivity: 1.1,
             z_drag_sensitivity: 0.01,
             spacebar_pan_accelerated: false,
@@ -479,6 +498,7 @@ mod tests {
         assert_eq!(km.pan_speed_normal, DEFAULT_PAN_SPEED_NORMAL);
         assert_eq!(km.pan_speed_fast, DEFAULT_PAN_SPEED_FAST);
         assert_eq!(km.pan_speed_slow, DEFAULT_PAN_SPEED_SLOW);
+        assert_eq!(km.pan_direction_mode, PanDirectionMode::MoveImage);
         assert_eq!(km.scroll_wheel_sensitivity, 1.1);
         assert_eq!(km.z_drag_sensitivity, 0.01);
         assert!(!km.spacebar_pan_accelerated);

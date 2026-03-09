@@ -232,6 +232,7 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Implement S/K key for pan down
 - [x] Implement D/L key for pan right
 - [x] Set base pan speed (10 pixels)
+- [x] Pan direction mode preference (Move Image vs Move Viewport)
 
 ### Pan Speed Modifiers
 - [x] Detect Shift modifier (3x speed = 30px)

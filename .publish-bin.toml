@@ -1,3 +1,6 @@
 auto_publish = true
 release_only = true
+destination = []
+debug_destination = []
 app_destination = ["/Applications", "/Users/chris/Library/CloudStorage/Dropbox/Shared/Andy-Chris/MacApps"]
+companion_files = ["README.md"]
