@@ -710,6 +710,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 - Apply button (Cmd+Enter) saves changes to disk
 - Cancel button (Esc) discards changes
 - Reset to Defaults button restores all settings to default values
+- **Per-setting reset buttons** ✅ — small "↺" icon next to each setting, grayed when at default, green hover when changed, resets individual setting on click (~31 settings)
 
 ⏳ **Optional Enhancements (Low Priority - rarely changed settings):**
 - Text input fields (window title format, file paths)

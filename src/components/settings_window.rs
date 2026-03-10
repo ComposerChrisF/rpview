@@ -989,6 +989,31 @@ impl SettingsWindow {
             })
     }
 
+    /// Render a small reset button ("↺") that is dimmed when the setting is at default
+    fn render_reset_button<T: Into<ElementId>, U: Fn(&mut SettingsWindow, &MouseDownEvent, &mut Window, &mut Context<Self>) + 'static>(
+        id: T,
+        is_default: bool,
+        on_click: U,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<T, U> {
+        if is_default {
+            div()
+                .id(id.into())
+                .text_size(TextSize::sm())
+                .text_color(rgb(0x555555))
+                .child("↺")
+        } else {
+            div()
+                .id(id.into())
+                .text_size(TextSize::sm())
+                .text_color(rgb(0xaaaaaa))
+                .cursor_pointer()
+                .hover(|s| s.text_color(Colors::info()))
+                .on_mouse_down(MouseButton::Left, cx.listener(on_click))
+                .child("↺")
+        }
+    }
+
     /// Render a simple text input
     #[allow(dead_code)]
     fn render_text_input(
@@ -1034,12 +1059,21 @@ impl SettingsWindow {
         label: String,
         description: Option<String>,
         stepper: &Entity<NumberStepper>,
+        reset_button: impl IntoElement,
     ) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
             .mb(Spacing::md())
-            .child(self.render_label(label, description))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(Spacing::sm())
+                    .child(self.render_label(label, description))
+                    .child(reset_button),
+            )
             .child(
                 div()
                     .w(px(150.0))  // Constrain stepper width
@@ -1052,12 +1086,21 @@ impl SettingsWindow {
         &self,
         description: Option<String>,
         toggle: &Entity<ToggleSwitch>,
+        reset_button: impl IntoElement,
     ) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
             .mb(Spacing::md())
-            .child(toggle.clone())
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(Spacing::sm())
+                    .child(toggle.clone())
+                    .child(reset_button),
+            )
             .when_some(description, |el, desc| {
                 el.child(
                     div()
@@ -1070,7 +1113,58 @@ impl SettingsWindow {
     }
 
     /// Render viewer behavior section
-    fn render_viewer_behavior(&self) -> impl IntoElement {
+    fn render_viewer_behavior(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let defaults = AppSettings::default();
+
+        let zoom_mode_reset = Self::render_reset_button(
+            "reset-zoom-mode",
+            self.working_settings.viewer_behavior.default_zoom_mode == defaults.viewer_behavior.default_zoom_mode,
+            |this, _, _, cx| {
+                let d = AppSettings::default().viewer_behavior.default_zoom_mode;
+                this.working_settings.viewer_behavior.default_zoom_mode = d;
+                let v = match d { ZoomMode::FitToWindow => "fit", ZoomMode::OneHundredPercent => "100" };
+                this.zoom_mode_control.update(cx, |c, cx| c.set_selected_value(v, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let remember_state_reset = Self::render_reset_button(
+            "reset-remember-state",
+            self.working_settings.viewer_behavior.remember_per_image_state == defaults.viewer_behavior.remember_per_image_state,
+            |this, _, _, cx| {
+                let d = AppSettings::default().viewer_behavior.remember_per_image_state;
+                this.working_settings.viewer_behavior.remember_per_image_state = d;
+                this.remember_per_image_state_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let cache_size_reset = Self::render_reset_button(
+            "reset-state-cache-size",
+            self.working_settings.viewer_behavior.state_cache_size == defaults.viewer_behavior.state_cache_size,
+            |this, _, _, cx| {
+                let d = AppSettings::default().viewer_behavior.state_cache_size;
+                this.working_settings.viewer_behavior.state_cache_size = d;
+                this.state_cache_size_stepper.update(cx, |s, cx| s.set_value(d as f64, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let auto_play_reset = Self::render_reset_button(
+            "reset-animation-auto-play",
+            self.working_settings.viewer_behavior.animation_auto_play == defaults.viewer_behavior.animation_auto_play,
+            |this, _, _, cx| {
+                let d = AppSettings::default().viewer_behavior.animation_auto_play;
+                this.working_settings.viewer_behavior.animation_auto_play = d;
+                this.animation_auto_play_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -1078,29 +1172,78 @@ impl SettingsWindow {
             .child(
                 div()
                     .mb(Spacing::md())
-                    .child(self.render_label(
-                        "Default Zoom Mode".to_string(),
-                        Some("How images are initially displayed".to_string()),
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(Spacing::sm())
+                            .child(self.render_label(
+                                "Default Zoom Mode".to_string(),
+                                Some("How images are initially displayed".to_string()),
+                            ))
+                            .child(zoom_mode_reset),
+                    )
                     .child(self.zoom_mode_control.clone()),
             )
             .child(self.render_toggle_row(
                 Some("Remember zoom, pan, and filters for each image".to_string()),
                 &self.remember_per_image_state_toggle,
+                remember_state_reset,
             ))
             .child(self.render_stepper_row(
                 "State cache size".to_string(),
                 Some("Maximum number of images to cache state for".to_string()),
                 &self.state_cache_size_stepper,
+                cache_size_reset,
             ))
             .child(self.render_toggle_row(
                 Some("Start animated GIFs/WEBPs playing automatically".to_string()),
                 &self.animation_auto_play_toggle,
+                auto_play_reset,
             ))
     }
 
     /// Render performance section
-    fn render_performance(&self) -> impl IntoElement {
+    fn render_performance(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let defaults = AppSettings::default();
+
+        let preload_reset = Self::render_reset_button(
+            "reset-preload",
+            self.working_settings.performance.preload_adjacent_images == defaults.performance.preload_adjacent_images,
+            |this, _, _, cx| {
+                let d = AppSettings::default().performance.preload_adjacent_images;
+                this.working_settings.performance.preload_adjacent_images = d;
+                this.preload_adjacent_images_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let threads_reset = Self::render_reset_button(
+            "reset-threads",
+            self.working_settings.performance.filter_processing_threads == defaults.performance.filter_processing_threads,
+            |this, _, _, cx| {
+                let d = AppSettings::default().performance.filter_processing_threads;
+                this.working_settings.performance.filter_processing_threads = d;
+                this.filter_processing_threads_stepper.update(cx, |s, cx| s.set_value(d as f64, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let max_dim_reset = Self::render_reset_button(
+            "reset-max-dim",
+            self.working_settings.performance.max_image_dimension == defaults.performance.max_image_dimension,
+            |this, _, _, cx| {
+                let d = AppSettings::default().performance.max_image_dimension;
+                this.working_settings.performance.max_image_dimension = d;
+                this.max_image_dimension_stepper.update(cx, |s, cx| s.set_value(d as f64, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -1108,21 +1251,111 @@ impl SettingsWindow {
             .child(self.render_toggle_row(
                 Some("Load next/previous images in background for faster navigation".to_string()),
                 &self.preload_adjacent_images_toggle,
+                preload_reset,
             ))
             .child(self.render_stepper_row(
                 "Filter processing threads".to_string(),
                 Some("Number of CPU threads for filter processing".to_string()),
                 &self.filter_processing_threads_stepper,
+                threads_reset,
             ))
             .child(self.render_stepper_row(
                 "Maximum image dimension".to_string(),
                 Some("Maximum allowed width or height for loading images".to_string()),
                 &self.max_image_dimension_stepper,
+                max_dim_reset,
             ))
     }
 
     /// Render keyboard & mouse section
-    fn render_keyboard_mouse(&self) -> impl IntoElement {
+    fn render_keyboard_mouse(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let defaults = AppSettings::default();
+
+        let pan_dir_reset = Self::render_reset_button(
+            "reset-pan-direction",
+            self.working_settings.keyboard_mouse.pan_direction_mode == defaults.keyboard_mouse.pan_direction_mode,
+            |this, _, _, cx| {
+                let d = AppSettings::default().keyboard_mouse.pan_direction_mode;
+                this.working_settings.keyboard_mouse.pan_direction_mode = d;
+                let v = match d { PanDirectionMode::MoveImage => "image", PanDirectionMode::MoveViewport => "viewport" };
+                this.pan_direction_mode_control.update(cx, |c, cx| c.set_selected_value(v, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let pan_normal_reset = Self::render_reset_button(
+            "reset-pan-normal",
+            self.working_settings.keyboard_mouse.pan_speed_normal == defaults.keyboard_mouse.pan_speed_normal,
+            |this, _, _, cx| {
+                let d = AppSettings::default().keyboard_mouse.pan_speed_normal;
+                this.working_settings.keyboard_mouse.pan_speed_normal = d;
+                this.pan_speed_normal_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let pan_fast_reset = Self::render_reset_button(
+            "reset-pan-fast",
+            self.working_settings.keyboard_mouse.pan_speed_fast == defaults.keyboard_mouse.pan_speed_fast,
+            |this, _, _, cx| {
+                let d = AppSettings::default().keyboard_mouse.pan_speed_fast;
+                this.working_settings.keyboard_mouse.pan_speed_fast = d;
+                this.pan_speed_fast_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let pan_slow_reset = Self::render_reset_button(
+            "reset-pan-slow",
+            self.working_settings.keyboard_mouse.pan_speed_slow == defaults.keyboard_mouse.pan_speed_slow,
+            |this, _, _, cx| {
+                let d = AppSettings::default().keyboard_mouse.pan_speed_slow;
+                this.working_settings.keyboard_mouse.pan_speed_slow = d;
+                this.pan_speed_slow_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let scroll_reset = Self::render_reset_button(
+            "reset-scroll-sensitivity",
+            self.working_settings.keyboard_mouse.scroll_wheel_sensitivity == defaults.keyboard_mouse.scroll_wheel_sensitivity,
+            |this, _, _, cx| {
+                let d = AppSettings::default().keyboard_mouse.scroll_wheel_sensitivity;
+                this.working_settings.keyboard_mouse.scroll_wheel_sensitivity = d;
+                this.scroll_wheel_sensitivity_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let zdrag_reset = Self::render_reset_button(
+            "reset-zdrag-sensitivity",
+            self.working_settings.keyboard_mouse.z_drag_sensitivity == defaults.keyboard_mouse.z_drag_sensitivity,
+            |this, _, _, cx| {
+                let d = AppSettings::default().keyboard_mouse.z_drag_sensitivity;
+                this.working_settings.keyboard_mouse.z_drag_sensitivity = d;
+                this.z_drag_sensitivity_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let spacebar_reset = Self::render_reset_button(
+            "reset-spacebar-accel",
+            self.working_settings.keyboard_mouse.spacebar_pan_accelerated == defaults.keyboard_mouse.spacebar_pan_accelerated,
+            |this, _, _, cx| {
+                let d = AppSettings::default().keyboard_mouse.spacebar_pan_accelerated;
+                this.working_settings.keyboard_mouse.spacebar_pan_accelerated = d;
+                this.spacebar_pan_accelerated_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -1130,45 +1363,61 @@ impl SettingsWindow {
             .child(
                 div()
                     .mb(Spacing::md())
-                    .child(self.render_label(
-                        "Pan Direction Mode".to_string(),
-                        Some("\"Move Image\" moves the image on screen in the key direction; \"Move Viewport\" scrolls the view".to_string()),
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(Spacing::sm())
+                            .child(self.render_label(
+                                "Pan Direction Mode".to_string(),
+                                Some("\"Move Image\" moves the image on screen in the key direction; \"Move Viewport\" scrolls the view".to_string()),
+                            ))
+                            .child(pan_dir_reset),
+                    )
                     .child(self.pan_direction_mode_control.clone()),
             )
             .child(self.render_stepper_row(
                 "Pan speed (normal)".to_string(),
                 Some("Base keyboard pan speed in pixels".to_string()),
                 &self.pan_speed_normal_stepper,
+                pan_normal_reset,
             ))
             .child(self.render_stepper_row(
                 "Pan speed (fast, with Shift)".to_string(),
                 Some("Pan speed with Shift modifier".to_string()),
                 &self.pan_speed_fast_stepper,
+                pan_fast_reset,
             ))
             .child(self.render_stepper_row(
                 "Pan speed (slow, with Alt)".to_string(),
                 Some("Pan speed with Alt modifier".to_string()),
                 &self.pan_speed_slow_stepper,
+                pan_slow_reset,
             ))
             .child(self.render_stepper_row(
                 "Scroll wheel sensitivity".to_string(),
                 Some("Zoom factor per scroll wheel notch".to_string()),
                 &self.scroll_wheel_sensitivity_stepper,
+                scroll_reset,
             ))
             .child(self.render_stepper_row(
                 "Z-drag zoom sensitivity".to_string(),
                 Some("Zoom percentage change per pixel when Z-dragging".to_string()),
                 &self.z_drag_sensitivity_stepper,
+                zdrag_reset,
             ))
             .child(self.render_toggle_row(
                 Some("Enable acceleration for spacebar+mouse panning".to_string()),
                 &self.spacebar_pan_accelerated_toggle,
+                spacebar_reset,
             ))
     }
 
     /// Render file operations section
     fn render_file_operations(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let defaults = AppSettings::default();
+
         let is_custom_location = self
             .save_location_mode_control
             .read(cx)
@@ -1187,6 +1436,61 @@ impl SettingsWindow {
             "Destination save defaults to \"Same as current image\"".to_string()
         };
 
+        let save_dir_reset = Self::render_reset_button(
+            "reset-save-directory",
+            self.working_settings.file_operations.default_save_directory == defaults.file_operations.default_save_directory,
+            |this, _, _, cx| {
+                this.working_settings.file_operations.default_save_directory = None;
+                this.save_location_mode_control.update(cx, |c, cx| c.set_selected_value("same", cx));
+                this.default_save_directory_picker.update(cx, |p, cx| {
+                    p.set_value("", cx);
+                    p.set_enabled(false, cx);
+                });
+                cx.notify();
+            },
+            cx,
+        );
+
+        let save_format_reset = Self::render_reset_button(
+            "reset-save-format",
+            self.working_settings.file_operations.default_save_format == defaults.file_operations.default_save_format,
+            |this, _, _, cx| {
+                let d = AppSettings::default().file_operations.default_save_format;
+                this.working_settings.file_operations.default_save_format = d;
+                let v = match d {
+                    SaveFormat::SameAsLoaded => "same", SaveFormat::Png => "png", SaveFormat::Jpeg => "jpeg",
+                    SaveFormat::Bmp => "bmp", SaveFormat::Tiff => "tiff", SaveFormat::Webp => "webp",
+                };
+                this.save_format_control.update(cx, |c, cx| c.set_selected_value(v, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let auto_save_reset = Self::render_reset_button(
+            "reset-auto-save-cache",
+            self.working_settings.file_operations.auto_save_filtered_cache == defaults.file_operations.auto_save_filtered_cache,
+            |this, _, _, cx| {
+                let d = AppSettings::default().file_operations.auto_save_filtered_cache;
+                this.working_settings.file_operations.auto_save_filtered_cache = d;
+                this.auto_save_filtered_cache_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let remember_dir_reset = Self::render_reset_button(
+            "reset-remember-dir",
+            self.working_settings.file_operations.remember_last_directory == defaults.file_operations.remember_last_directory,
+            |this, _, _, cx| {
+                let d = AppSettings::default().file_operations.remember_last_directory;
+                this.working_settings.file_operations.remember_last_directory = d;
+                this.remember_last_directory_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -1196,10 +1500,18 @@ impl SettingsWindow {
                     .flex()
                     .flex_col()
                     .mb(Spacing::md())
-                    .child(self.render_label(
-                        "Default save directory".to_string(),
-                        Some("Where filtered images are saved by default".to_string()),
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(Spacing::sm())
+                            .child(self.render_label(
+                                "Default save directory".to_string(),
+                                Some("Where filtered images are saved by default".to_string()),
+                            ))
+                            .child(save_dir_reset),
+                    )
                     // Save location mode selector
                     .child(
                         div()
@@ -1221,24 +1533,98 @@ impl SettingsWindow {
             .child(
                 div()
                     .mb(Spacing::md())
-                    .child(self.render_label(
-                        "Default save format".to_string(),
-                        Some("Format for saving filtered images".to_string()),
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(Spacing::sm())
+                            .child(self.render_label(
+                                "Default save format".to_string(),
+                                Some("Format for saving filtered images".to_string()),
+                            ))
+                            .child(save_format_reset),
+                    )
                     .child(self.save_format_control.clone()),
             )
             .child(self.render_toggle_row(
                 Some("Permanently save filtered image cache to disk".to_string()),
                 &self.auto_save_filtered_cache_toggle,
+                auto_save_reset,
             ))
             .child(self.render_toggle_row(
                 Some("Remember last used directory in file dialogs".to_string()),
                 &self.remember_last_directory_toggle,
+                remember_dir_reset,
             ))
     }
 
     /// Render appearance section
-    fn render_appearance(&self) -> impl IntoElement {
+    fn render_appearance(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let defaults = AppSettings::default();
+
+        let bg_dark_reset = Self::render_reset_button(
+            "reset-bg-dark",
+            self.working_settings.appearance.background_color_dark == defaults.appearance.background_color_dark,
+            |this, _, _, cx| {
+                let d = AppSettings::default().appearance.background_color_dark;
+                this.working_settings.appearance.background_color_dark = d;
+                let hex = format!("#{:02x}{:02x}{:02x}", d[0], d[1], d[2]);
+                this.bg_color_dark_swatch.update(cx, |s, cx| s.set_value(&hex, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let bg_light_reset = Self::render_reset_button(
+            "reset-bg-light",
+            self.working_settings.appearance.background_color_light == defaults.appearance.background_color_light,
+            |this, _, _, cx| {
+                let d = AppSettings::default().appearance.background_color_light;
+                this.working_settings.appearance.background_color_light = d;
+                let hex = format!("#{:02x}{:02x}{:02x}", d[0], d[1], d[2]);
+                this.bg_color_light_swatch.update(cx, |s, cx| s.set_value(&hex, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let overlay_reset = Self::render_reset_button(
+            "reset-overlay-transparency",
+            self.working_settings.appearance.overlay_transparency == defaults.appearance.overlay_transparency,
+            |this, _, _, cx| {
+                let d = AppSettings::default().appearance.overlay_transparency;
+                this.working_settings.appearance.overlay_transparency = d;
+                this.overlay_transparency_stepper.update(cx, |s, cx| s.set_value(d as f64, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let font_scale_reset = Self::render_reset_button(
+            "reset-font-scale",
+            self.working_settings.appearance.font_size_scale == defaults.appearance.font_size_scale,
+            |this, _, _, cx| {
+                let d = AppSettings::default().appearance.font_size_scale;
+                this.working_settings.appearance.font_size_scale = d;
+                this.font_size_scale_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let title_reset = Self::render_reset_button(
+            "reset-window-title",
+            self.working_settings.appearance.window_title_format == defaults.appearance.window_title_format,
+            |this, _, _, cx| {
+                let d = AppSettings::default().appearance.window_title_format;
+                this.working_settings.appearance.window_title_format = d.clone();
+                this.window_title_input.update(cx, |i, cx| i.set_value(&d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -1248,7 +1634,15 @@ impl SettingsWindow {
                     .flex()
                     .flex_col()
                     .mb(Spacing::md())
-                    .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string())))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(Spacing::sm())
+                            .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string())))
+                            .child(bg_dark_reset),
+                    )
                     .child(self.bg_color_dark_swatch.clone())
             )
             .child(
@@ -1256,33 +1650,100 @@ impl SettingsWindow {
                     .flex()
                     .flex_col()
                     .mb(Spacing::md())
-                    .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string())))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(Spacing::sm())
+                            .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string())))
+                            .child(bg_light_reset),
+                    )
                     .child(self.bg_color_light_swatch.clone())
             )
             .child(self.render_stepper_row(
                 "Overlay transparency".to_string(),
                 Some("Transparency for overlay backgrounds (0-255)".to_string()),
                 &self.overlay_transparency_stepper,
+                overlay_reset,
             ))
             .child(self.render_stepper_row(
                 "Font size scale".to_string(),
                 Some("Scale factor for overlay text (0.5 - 8.0)".to_string()),
                 &self.font_size_scale_stepper,
+                font_scale_reset,
             ))
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .mb(Spacing::md())
-                    .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(Spacing::sm())
+                            .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
+                            .child(title_reset),
+                    )
                     .child(self.window_title_input.clone())
             )
     }
 
     /// Render filters section
     #[allow(dead_code)]
-    fn render_filters(&self) -> impl IntoElement {
+    fn render_filters(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let defaults = AppSettings::default();
         let filter_presets = self.working_settings.filters.filter_presets.clone();
+
+        let brightness_reset = Self::render_reset_button(
+            "reset-brightness",
+            self.working_settings.filters.default_brightness == defaults.filters.default_brightness,
+            |this, _, _, cx| {
+                let d = AppSettings::default().filters.default_brightness;
+                this.working_settings.filters.default_brightness = d;
+                this.default_brightness_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let contrast_reset = Self::render_reset_button(
+            "reset-contrast",
+            self.working_settings.filters.default_contrast == defaults.filters.default_contrast,
+            |this, _, _, cx| {
+                let d = AppSettings::default().filters.default_contrast;
+                this.working_settings.filters.default_contrast = d;
+                this.default_contrast_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let gamma_reset = Self::render_reset_button(
+            "reset-gamma",
+            self.working_settings.filters.default_gamma == defaults.filters.default_gamma,
+            |this, _, _, cx| {
+                let d = AppSettings::default().filters.default_gamma;
+                this.working_settings.filters.default_gamma = d;
+                this.default_gamma_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let filter_state_reset = Self::render_reset_button(
+            "reset-filter-state",
+            self.working_settings.filters.remember_filter_state == defaults.filters.remember_filter_state,
+            |this, _, _, cx| {
+                let d = AppSettings::default().filters.remember_filter_state;
+                this.working_settings.filters.remember_filter_state = d;
+                this.remember_filter_state_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
 
         div()
             .flex()
@@ -1292,20 +1753,24 @@ impl SettingsWindow {
                 "Default brightness".to_string(),
                 Some("Default brightness value when resetting (-100 to +100)".to_string()),
                 &self.default_brightness_stepper,
+                brightness_reset,
             ))
             .child(self.render_stepper_row(
                 "Default contrast".to_string(),
                 Some("Default contrast value when resetting (-100 to +100)".to_string()),
                 &self.default_contrast_stepper,
+                contrast_reset,
             ))
             .child(self.render_stepper_row(
                 "Default gamma".to_string(),
                 Some("Default gamma value when resetting (0.1 to 10.0)".to_string()),
                 &self.default_gamma_stepper,
+                gamma_reset,
             ))
             .child(self.render_toggle_row(
                 Some("Remember filter settings for each image separately".to_string()),
                 &self.remember_filter_state_toggle,
+                filter_state_reset,
             ))
             .child(
                 div()
@@ -1337,7 +1802,46 @@ impl SettingsWindow {
     }
 
     /// Render sort & navigation section
-    fn render_sort_navigation(&self) -> impl IntoElement {
+    fn render_sort_navigation(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let defaults = AppSettings::default();
+
+        let sort_mode_reset = Self::render_reset_button(
+            "reset-sort-mode",
+            self.working_settings.sort_navigation.default_sort_mode == defaults.sort_navigation.default_sort_mode,
+            |this, _, _, cx| {
+                let d = AppSettings::default().sort_navigation.default_sort_mode;
+                this.working_settings.sort_navigation.default_sort_mode = d;
+                let v = match d { SortModeWrapper::Alphabetical => "alpha", SortModeWrapper::ModifiedDate => "date" };
+                this.sort_mode_control.update(cx, |c, cx| c.set_selected_value(v, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let wrap_nav_reset = Self::render_reset_button(
+            "reset-wrap-nav",
+            self.working_settings.sort_navigation.wrap_navigation == defaults.sort_navigation.wrap_navigation,
+            |this, _, _, cx| {
+                let d = AppSettings::default().sort_navigation.wrap_navigation;
+                this.working_settings.sort_navigation.wrap_navigation = d;
+                this.wrap_navigation_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
+        let counter_reset = Self::render_reset_button(
+            "reset-show-counter",
+            self.working_settings.sort_navigation.show_image_counter == defaults.sort_navigation.show_image_counter,
+            |this, _, _, cx| {
+                let d = AppSettings::default().sort_navigation.show_image_counter;
+                this.working_settings.sort_navigation.show_image_counter = d;
+                this.show_image_counter_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -1345,30 +1849,53 @@ impl SettingsWindow {
             .child(
                 div()
                     .mb(Spacing::md())
-                    .child(self.render_label(
-                        "Default sort mode".to_string(),
-                        Some("How images are sorted on startup".to_string()),
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(Spacing::sm())
+                            .child(self.render_label(
+                                "Default sort mode".to_string(),
+                                Some("How images are sorted on startup".to_string()),
+                            ))
+                            .child(sort_mode_reset),
+                    )
                     .child(self.sort_mode_control.clone()),
             )
             .child(self.render_toggle_row(
                 Some("Navigate from last image to first (and vice versa)".to_string()),
                 &self.wrap_navigation_toggle,
+                wrap_nav_reset,
             ))
             .child(self.render_toggle_row(
                 Some("Display image position in window title".to_string()),
                 &self.show_image_counter_toggle,
+                counter_reset,
             ))
     }
 
     /// Render external tools section
-    fn render_external_tools(&self) -> impl IntoElement {
+    fn render_external_tools(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let defaults = AppSettings::default();
         let external_viewers = self
             .working_settings
             .external_tools
             .external_viewers
             .clone();
         let external_editor = self.working_settings.external_tools.external_editor.clone();
+
+        let file_mgr_reset = Self::render_reset_button(
+            "reset-file-manager",
+            self.working_settings.external_tools.enable_file_manager_integration == defaults.external_tools.enable_file_manager_integration,
+            |this, _, _, cx| {
+                let d = AppSettings::default().external_tools.enable_file_manager_integration;
+                this.working_settings.external_tools.enable_file_manager_integration = d;
+                this.file_manager_integration_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
 
         div()
             .flex()
@@ -1498,6 +2025,7 @@ impl SettingsWindow {
             .child(self.render_toggle_row(
                 Some("Show 'Reveal in Finder/Explorer' menu option".to_string()),
                 &self.file_manager_integration_toggle,
+                file_mgr_reset,
             ))
     }
 
@@ -1685,20 +2213,20 @@ impl SettingsWindow {
         div().flex_1().child(
             scrollable_vertical(div().p(Spacing::xl()).child(match self.current_section {
                 SettingsSection::ViewerBehavior => {
-                    self.render_viewer_behavior().into_any_element()
+                    self.render_viewer_behavior(cx).into_any_element()
                 }
-                SettingsSection::Performance => self.render_performance().into_any_element(),
-                SettingsSection::KeyboardMouse => self.render_keyboard_mouse().into_any_element(),
+                SettingsSection::Performance => self.render_performance(cx).into_any_element(),
+                SettingsSection::KeyboardMouse => self.render_keyboard_mouse(cx).into_any_element(),
                 SettingsSection::FileOperations => {
                     self.render_file_operations(cx).into_any_element()
                 }
                 SettingsSection::Appearance => {
-                    self.render_appearance().into_any_element()
+                    self.render_appearance(cx).into_any_element()
                 }
                 SettingsSection::SortNavigation => {
-                    self.render_sort_navigation().into_any_element()
+                    self.render_sort_navigation(cx).into_any_element()
                 }
-                SettingsSection::ExternalTools => self.render_external_tools().into_any_element(),
+                SettingsSection::ExternalTools => self.render_external_tools(cx).into_any_element(),
                 SettingsSection::SettingsFile => self.render_settings_file(cx).into_any_element(),
             }))
             .id("settings-content-scroll"),
