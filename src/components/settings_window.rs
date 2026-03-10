@@ -1069,21 +1069,21 @@ impl SettingsWindow {
     ) -> impl IntoElement {
         div()
             .flex()
-            .flex_col()
+            .flex_row()
+            .items_start()
+            .gap(Spacing::sm())
             .mb(Spacing::md())
+            .child(reset_button)
             .child(
                 div()
                     .flex()
-                    .flex_row()
-                    .items_start()
-                    .gap(Spacing::sm())
-                    .child(reset_button)
-                    .child(self.render_label(label, description)),
-            )
-            .child(
-                div()
-                    .w(px(150.0))  // Constrain stepper width
-                    .child(stepper.clone())
+                    .flex_col()
+                    .child(self.render_label(label, description))
+                    .child(
+                        div()
+                            .w(px(150.0))
+                            .child(stepper.clone())
+                    ),
             )
     }
 
@@ -1096,26 +1096,26 @@ impl SettingsWindow {
     ) -> impl IntoElement {
         div()
             .flex()
-            .flex_col()
+            .flex_row()
+            .items_center()
+            .gap(Spacing::sm())
             .mb(Spacing::md())
+            .child(reset_button)
             .child(
                 div()
                     .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(Spacing::sm())
-                    .child(reset_button)
-                    .child(toggle.clone()),
+                    .flex_col()
+                    .child(toggle.clone())
+                    .when_some(description, |el, desc| {
+                        el.child(
+                            div()
+                                .text_size(TextSize::sm())
+                                .text_color(rgb(0x888888))
+                                .mt(Spacing::xs())
+                                .child(desc)
+                        )
+                    }),
             )
-            .when_some(description, |el, desc| {
-                el.child(
-                    div()
-                        .text_size(TextSize::sm())
-                        .text_color(rgb(0x888888))
-                        .mt(Spacing::xs())
-                        .child(desc)
-                )
-            })
     }
 
     /// Render viewer behavior section
@@ -1177,20 +1177,22 @@ impl SettingsWindow {
             .child(self.render_section_header("Viewer Behavior".to_string()))
             .child(
                 div()
+                    .flex()
+                    .flex_row()
+                    .items_start()
+                    .gap(Spacing::sm())
                     .mb(Spacing::md())
+                    .child(zoom_mode_reset)
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(Spacing::sm())
-                            .child(zoom_mode_reset)
+                            .flex_col()
                             .child(self.render_label(
                                 "Default Zoom Mode".to_string(),
                                 Some("How images are initially displayed".to_string()),
-                            )),
-                    )
-                    .child(self.zoom_mode_control.clone()),
+                            ))
+                            .child(self.zoom_mode_control.clone()),
+                    ),
             )
             .child(self.render_toggle_row(
                 Some("Remember zoom, pan, and filters for each image".to_string()),
@@ -1368,20 +1370,22 @@ impl SettingsWindow {
             .child(self.render_section_header("Keyboard & Mouse".to_string()))
             .child(
                 div()
+                    .flex()
+                    .flex_row()
+                    .items_start()
+                    .gap(Spacing::sm())
                     .mb(Spacing::md())
+                    .child(pan_dir_reset)
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(Spacing::sm())
-                            .child(pan_dir_reset)
+                            .flex_col()
                             .child(self.render_label(
                                 "Pan Direction Mode".to_string(),
                                 Some("\"Move Image\" moves the image on screen in the key direction; \"Move Viewport\" scrolls the view".to_string()),
-                            )),
-                    )
-                    .child(self.pan_direction_mode_control.clone()),
+                            ))
+                            .child(self.pan_direction_mode_control.clone()),
+                    ),
             )
             .child(self.render_stepper_row(
                 "Pan speed (normal)".to_string(),
@@ -1504,54 +1508,56 @@ impl SettingsWindow {
             .child(
                 div()
                     .flex()
-                    .flex_col()
+                    .flex_row()
+                    .items_start()
+                    .gap(Spacing::sm())
                     .mb(Spacing::md())
+                    .child(save_dir_reset)
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(Spacing::sm())
-                            .child(save_dir_reset)
+                            .flex_col()
                             .child(self.render_label(
                                 "Default save directory".to_string(),
                                 Some("Where filtered images are saved by default".to_string()),
-                            )),
-                    )
-                    // Save location mode selector
-                    .child(
-                        div()
-                            .mb(Spacing::sm())
-                            .child(self.save_location_mode_control.clone()),
-                    )
-                    // Directory picker (enabled only when custom location is selected)
-                    .child(self.default_save_directory_picker.clone())
-                    // Always show destination info
-                    .child(
-                        div()
-                            .text_size(TextSize::sm())
-                            .text_color(rgb(0x888888))
-                            .italic()
-                            .mt(Spacing::sm())
-                            .child(destination_text),
+                            ))
+                            // Save location mode selector
+                            .child(
+                                div()
+                                    .mb(Spacing::sm())
+                                    .child(self.save_location_mode_control.clone()),
+                            )
+                            // Directory picker (enabled only when custom location is selected)
+                            .child(self.default_save_directory_picker.clone())
+                            // Always show destination info
+                            .child(
+                                div()
+                                    .text_size(TextSize::sm())
+                                    .text_color(rgb(0x888888))
+                                    .italic()
+                                    .mt(Spacing::sm())
+                                    .child(destination_text),
+                            ),
                     ),
             )
             .child(
                 div()
+                    .flex()
+                    .flex_row()
+                    .items_start()
+                    .gap(Spacing::sm())
                     .mb(Spacing::md())
+                    .child(save_format_reset)
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(Spacing::sm())
-                            .child(save_format_reset)
+                            .flex_col()
                             .child(self.render_label(
                                 "Default save format".to_string(),
                                 Some("Format for saving filtered images".to_string()),
-                            )),
-                    )
-                    .child(self.save_format_control.clone()),
+                            ))
+                            .child(self.save_format_control.clone()),
+                    ),
             )
             .child(self.render_toggle_row(
                 Some("Permanently save filtered image cache to disk".to_string()),
@@ -1638,34 +1644,34 @@ impl SettingsWindow {
             .child(
                 div()
                     .flex()
-                    .flex_col()
+                    .flex_row()
+                    .items_start()
+                    .gap(Spacing::sm())
                     .mb(Spacing::md())
+                    .child(bg_dark_reset)
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(Spacing::sm())
-                            .child(bg_dark_reset)
-                            .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string()))),
-                    )
-                    .child(self.bg_color_dark_swatch.clone())
+                            .flex_col()
+                            .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string())))
+                            .child(self.bg_color_dark_swatch.clone()),
+                    ),
             )
             .child(
                 div()
                     .flex()
-                    .flex_col()
+                    .flex_row()
+                    .items_start()
+                    .gap(Spacing::sm())
                     .mb(Spacing::md())
+                    .child(bg_light_reset)
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(Spacing::sm())
-                            .child(bg_light_reset)
-                            .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string()))),
-                    )
-                    .child(self.bg_color_light_swatch.clone())
+                            .flex_col()
+                            .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string())))
+                            .child(self.bg_color_light_swatch.clone()),
+                    ),
             )
             .child(self.render_stepper_row(
                 "Overlay transparency".to_string(),
@@ -1682,18 +1688,18 @@ impl SettingsWindow {
             .child(
                 div()
                     .flex()
-                    .flex_col()
+                    .flex_row()
+                    .items_start()
+                    .gap(Spacing::sm())
                     .mb(Spacing::md())
+                    .child(title_reset)
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(Spacing::sm())
-                            .child(title_reset)
-                            .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string()))),
-                    )
-                    .child(self.window_title_input.clone())
+                            .flex_col()
+                            .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
+                            .child(self.window_title_input.clone()),
+                    ),
             )
     }
 
@@ -1854,20 +1860,22 @@ impl SettingsWindow {
             .child(self.render_section_header("Sort & Navigation".to_string()))
             .child(
                 div()
+                    .flex()
+                    .flex_row()
+                    .items_start()
+                    .gap(Spacing::sm())
                     .mb(Spacing::md())
+                    .child(sort_mode_reset)
                     .child(
                         div()
                             .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap(Spacing::sm())
-                            .child(sort_mode_reset)
+                            .flex_col()
                             .child(self.render_label(
                                 "Default sort mode".to_string(),
                                 Some("How images are sorted on startup".to_string()),
-                            )),
-                    )
-                    .child(self.sort_mode_control.clone()),
+                            ))
+                            .child(self.sort_mode_control.clone()),
+                    ),
             )
             .child(self.render_toggle_row(
                 Some("Navigate from last image to first (and vice versa)".to_string()),
