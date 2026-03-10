@@ -54,11 +54,7 @@ impl std::error::Error for AppError {
 
 impl From<io::Error> for AppError {
     fn from(err: io::Error) -> Self {
-        match err.kind() {
-            io::ErrorKind::NotFound => AppError::FileNotFound(PathBuf::new()),
-            io::ErrorKind::PermissionDenied => AppError::PermissionDenied(PathBuf::new()),
-            _ => AppError::Io(err),
-        }
+        AppError::Io(err)
     }
 }
 

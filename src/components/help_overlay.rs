@@ -1,4 +1,4 @@
-use crate::utils::style::{Colors, Spacing, scaled_text_size};
+use crate::utils::style::{Colors, Spacing, format_shortcut, modifier_key, scaled_text_size, shift_prefix};
 use ccf_gpui_widgets::prelude::scrollable_vertical;
 use gpui::prelude::*;
 use gpui::*;
@@ -68,11 +68,9 @@ impl HelpOverlay {
     }
 
     fn render_actual_help_content(&self) -> Vec<AnyElement> {
-        let platform_key = if cfg!(target_os = "macos") {
-            "Cmd"
-        } else {
-            "Ctrl"
-        };
+        // Zoom shortcuts use modifier_key() directly since they show "+/−" alternatives
+        let mod_key = modifier_key();
+        let shift = shift_prefix();
 
         vec![
             // Navigation section
@@ -81,12 +79,12 @@ impl HelpOverlay {
             self.render_shortcut("← →".to_string(), "Previous/Next image".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                format!("Shift+{}-A", platform_key),
+                format_shortcut("A", true, false),
                 "Sort alphabetically".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("Shift+{}-M", platform_key),
+                format_shortcut("M", true, false),
                 "Sort by modified date".to_string(),
             )
             .into_any_element(),
@@ -105,17 +103,17 @@ impl HelpOverlay {
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{} + / -", platform_key),
+                format!("{}{} +/−", mod_key, if cfg!(target_os = "macos") { "" } else { " " }),
                 "Slow zoom (1.05x steps)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("Shift+{} + / -", platform_key),
+                format!("{}{}{} +/−", shift, mod_key, if cfg!(target_os = "macos") { "" } else { " " }),
                 "Incremental zoom (1% steps)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}-Scroll", platform_key),
+                format_shortcut("Scroll", false, false),
                 "Zoom at cursor (mouse wheel)".to_string(),
             )
             .into_any_element(),
@@ -151,10 +149,10 @@ impl HelpOverlay {
             // Window section
             self.render_section_header("Window".to_string())
                 .into_any_element(),
-            self.render_shortcut(format!("{}-W", platform_key), "Close window".to_string())
+            self.render_shortcut(format_shortcut("W", false, false), "Close window".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                format!("{}-Q", platform_key),
+                format_shortcut("Q", false, false),
                 "Quit application".to_string(),
             )
             .into_any_element(),
@@ -167,16 +165,16 @@ impl HelpOverlay {
             self.render_section_header("Filters".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                format!("{}-F", platform_key),
+                format_shortcut("F", false, false),
                 "Toggle filter controls".to_string(),
             )
             .into_any_element(),
-            self.render_shortcut(format!("{}-1", platform_key), "Disable filters".to_string())
+            self.render_shortcut(format_shortcut("1", false, false), "Disable filters".to_string())
                 .into_any_element(),
-            self.render_shortcut(format!("{}-2", platform_key), "Enable filters".to_string())
+            self.render_shortcut(format_shortcut("2", false, false), "Enable filters".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                format!("Shift+{}-R", platform_key),
+                format_shortcut("R", true, false),
                 "Reset all filters".to_string(),
             )
             .into_any_element(),
@@ -184,47 +182,47 @@ impl HelpOverlay {
             self.render_section_header("File Operations".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                format!("{}-O", platform_key),
+                format_shortcut("O", false, false),
                 "Open image file(s)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}-S", platform_key),
+                format_shortcut("S", false, false),
                 "Save image (current folder)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}-Option-S", platform_key),
+                format_shortcut("S", false, true),
                 "Save to Downloads folder".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}-R", platform_key),
+                format_shortcut("R", false, false),
                 "Reveal in Finder".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}-Option-V", platform_key),
+                format_shortcut("V", false, true),
                 "Open in external viewer (Preview/Photos)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("Shift+{}-Option-V", platform_key),
+                format_shortcut("V", true, true),
                 "Open externally and quit".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}-E", platform_key),
+                format_shortcut("E", false, false),
                 "Open in external editor".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}-Delete", platform_key),
+                format_shortcut("Delete", false, false),
                 "Delete file (to Trash)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("Shift+{}-Delete", platform_key),
+                format_shortcut("Delete", true, false),
                 "Permanently delete file".to_string(),
             )
             .into_any_element(),
@@ -248,7 +246,7 @@ impl HelpOverlay {
             self.render_shortcut("B".to_string(), "Toggle light/dark background".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                format!("{}-,", platform_key),
+                format_shortcut(",", false, false),
                 "Open settings window".to_string(),
             )
             .into_any_element(),

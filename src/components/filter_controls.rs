@@ -123,7 +123,8 @@ impl Render for FilterControls {
         let brightness_value = self.brightness_slider.read(cx).value();
         let contrast_value = self.contrast_slider.read(cx).value();
         let gamma_value = self.gamma_slider.read(cx).value();
-        let platform_key = crate::utils::style::format_shortcut("Cmd");
+        let disable_enable = crate::utils::style::format_shortcut("1", false, false);
+        let reset_all = crate::utils::style::format_shortcut("R", true, false);
 
         div()
             .absolute()
@@ -245,13 +246,13 @@ impl Render for FilterControls {
                                 div()
                                     .text_size(TextSize::sm())
                                     .text_color(rgb(0xAAAAAA))
-                                    .child(format!("{}/1: Disable/Enable", platform_key)),
+                                    .child(format!("{}: Disable/Enable", disable_enable)),
                             )
                             .child(
                                 div()
                                     .text_size(TextSize::sm())
                                     .text_color(rgb(0xAAAAAA))
-                                    .child(format!("Shift+{}/R: Reset all", platform_key)),
+                                    .child(format!("{}: Reset all", reset_all)),
                             ),
                     ),
             )
