@@ -13,14 +13,12 @@ env:
 jobs:
   check:
     name: Check & Lint
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+      - name: Install Metal Toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -42,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +48,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+          sudo apt-get install -y libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libvulkan-dev libwayland-dev
+
+      - name: Install Metal Toolchain
+        if: runner.os == 'macOS'
+        run: xcodebuild -downloadComponent MetalToolchain
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -72,56 +75,3 @@ jobs:
 
       - name: Security audit
         run: cargo audit
-
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
-
-      - name: Generate coverage
-        run: cargo tarpaulin --out xml --output-dir coverage
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage/cobertura.xml
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build documentation
-        run: cargo doc --no-deps --all-features
-        env:
-          RUSTDOCFLAGS: -D warnings

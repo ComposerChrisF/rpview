@@ -20,6 +20,9 @@ target/
 *.local
 .claude/settings.local.json
 
+# Local cargo config (path overrides for development)
+.cargo/config.toml
+
 # Test artifacts
 *.profraw
 lcov.info
