@@ -35,17 +35,7 @@ pub struct ImageState {
 impl ImageState {
     /// Create a new ImageState with default values
     pub fn new() -> Self {
-        Self {
-            zoom: 1.0,
-            pan: (0.0, 0.0),
-            is_fit_to_window: true,
-            last_accessed: Instant::now(),
-            filters: FilterSettings::default(),
-            filters_enabled: true,
-            filtered_image_path: None,
-            animation: None,
-            override_size_limit: false,
-        }
+        Self::new_with_filter_defaults(FilterSettings::default())
     }
 
     /// Create a new ImageState with custom default filters

@@ -1,7 +1,7 @@
 use crate::error::{AppError, AppResult};
+use crate::utils::file_scanner;
 use clap::Parser;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// rpview-gpui - A fast, keyboard-driven image viewer built with GPUI
 #[derive(Parser, Debug)]
@@ -18,11 +18,6 @@ pub struct Cli {
     #[arg(value_name = "PATH")]
     pub paths: Vec<PathBuf>,
 }
-
-/// Supported image extensions
-const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp", "svg",
-];
 
 impl Cli {
     /// Parse command-line arguments and return a list of image paths and the starting index
@@ -41,7 +36,7 @@ impl Cli {
             let specified_file = paths[0].clone();
 
             // Check if it's a supported image
-            if !Self::is_supported_image(&specified_file) {
+            if !file_scanner::is_supported_image(&specified_file) {
                 return Err(AppError::InvalidFormat(
                     specified_file,
                     "Unsupported image format".to_string(),
@@ -51,7 +46,7 @@ impl Cli {
             // Get the parent directory
             if let Some(parent_dir) = specified_file.parent() {
                 // Scan the directory for all images
-                let mut all_images = Self::scan_directory(parent_dir)?;
+                let mut all_images = file_scanner::scan_directory(parent_dir)?;
 
                 // Even if empty, return the result - the app will display a message
                 if all_images.is_empty() {
@@ -59,11 +54,7 @@ impl Cli {
                 }
 
                 // Sort alphabetically (case-insensitive)
-                all_images.sort_by(|a, b| {
-                    a.to_string_lossy()
-                        .to_lowercase()
-                        .cmp(&b.to_string_lossy().to_lowercase())
-                });
+                file_scanner::sort_alphabetically(&mut all_images);
 
                 // Find the index of the specified file
                 let start_index = all_images
@@ -93,7 +84,7 @@ impl Cli {
 
             if path.is_file() {
                 // Single file: check if it's a supported image format
-                if Self::is_supported_image(path) {
+                if file_scanner::is_supported_image(path) {
                     image_paths.push(path.clone());
                 } else {
                     return Err(AppError::InvalidFormat(
@@ -103,73 +94,35 @@ impl Cli {
                 }
             } else if path.is_dir() {
                 // Directory: scan for all supported images
-                let dir_images = Self::scan_directory(path)?;
+                let dir_images = file_scanner::scan_directory(path)?;
                 image_paths.extend(dir_images);
             }
         }
 
         // Sort alphabetically by default (case-insensitive)
-        image_paths.sort_by(|a, b| {
-            a.to_string_lossy()
-                .to_lowercase()
-                .cmp(&b.to_string_lossy().to_lowercase())
-        });
+        file_scanner::sort_alphabetically(&mut image_paths);
 
         // Return empty list if no images found - app will display a message
         Ok(image_paths)
-    }
-
-    /// Scan a directory for supported image files
-    fn scan_directory(dir: &Path) -> AppResult<Vec<PathBuf>> {
-        let mut images = Vec::new();
-
-        let entries = fs::read_dir(dir).map_err(|e| {
-            if e.kind() == std::io::ErrorKind::PermissionDenied {
-                AppError::PermissionDenied(dir.to_path_buf())
-            } else {
-                AppError::from(e)
-            }
-        })?;
-
-        for entry in entries {
-            let entry = entry?;
-            let path = entry.path();
-
-            // Only process files (not subdirectories)
-            if path.is_file() && Self::is_supported_image(&path) {
-                images.push(path);
-            }
-        }
-
-        Ok(images)
-    }
-
-    /// Check if a file has a supported image extension
-    fn is_supported_image(path: &Path) -> bool {
-        if let Some(extension) = path.extension() {
-            let ext = extension.to_string_lossy().to_lowercase();
-            SUPPORTED_EXTENSIONS.contains(&ext.as_str())
-        } else {
-            false
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::utils::file_scanner;
+    use std::path::Path;
 
     #[test]
     fn test_is_supported_image() {
-        assert!(Cli::is_supported_image(Path::new("test.png")));
-        assert!(Cli::is_supported_image(Path::new("test.PNG")));
-        assert!(Cli::is_supported_image(Path::new("test.jpg")));
-        assert!(Cli::is_supported_image(Path::new("test.jpeg")));
-        assert!(Cli::is_supported_image(Path::new("test.bmp")));
-        assert!(Cli::is_supported_image(Path::new("test.gif")));
-        assert!(Cli::is_supported_image(Path::new("test.webp")));
-        assert!(!Cli::is_supported_image(Path::new("test.txt")));
-        assert!(!Cli::is_supported_image(Path::new("test.pdf")));
-        assert!(!Cli::is_supported_image(Path::new("test")));
+        assert!(file_scanner::is_supported_image(Path::new("test.png")));
+        assert!(file_scanner::is_supported_image(Path::new("test.PNG")));
+        assert!(file_scanner::is_supported_image(Path::new("test.jpg")));
+        assert!(file_scanner::is_supported_image(Path::new("test.jpeg")));
+        assert!(file_scanner::is_supported_image(Path::new("test.bmp")));
+        assert!(file_scanner::is_supported_image(Path::new("test.gif")));
+        assert!(file_scanner::is_supported_image(Path::new("test.webp")));
+        assert!(!file_scanner::is_supported_image(Path::new("test.txt")));
+        assert!(!file_scanner::is_supported_image(Path::new("test.pdf")));
+        assert!(!file_scanner::is_supported_image(Path::new("test")));
     }
 }

@@ -18,6 +18,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Instant;
 
+/// Result type for SVG re-rasterization background tasks
+type SvgRerasterResult = Result<(PathBuf, Option<SvgRerasterRegion>), String>;
+
 /// Loaded image data
 ///
 /// # Animation Frame Caching Strategy
@@ -126,7 +129,7 @@ pub struct ImageViewer {
     pub pending_svg_reraster_preload_frames: u32,
 
     /// Channel receiving completed re-raster results from background thread
-    pub svg_reraster_handle: Option<mpsc::Receiver<Result<(PathBuf, Option<SvgRerasterRegion>), String>>>,
+    pub svg_reraster_handle: Option<mpsc::Receiver<SvgRerasterResult>>,
     /// Whether a re-raster is currently in progress on a background thread
     pub is_svg_rerastering: bool,
     /// Cancel flag for in-flight re-raster
@@ -525,11 +528,11 @@ impl ImageViewer {
                 self.is_loading = false;
 
                 match msg {
-                    image_loader::LoaderMessage::Success(data) => {
+                    image_loader::LoaderMessage::Success(mut data) => {
                         eprintln!("[ASYNC] Load complete: {}", data.path.display());
 
                         // Prepare frame cache paths
-                        let mut frame_cache_paths = data.initial_frame_paths.clone();
+                        let mut frame_cache_paths = std::mem::take(&mut data.initial_frame_paths);
                         if let Some(ref anim_data) = data.animation_data {
                             // Pre-allocate empty slots for remaining frames
                             while frame_cache_paths.len() < anim_data.frames.len() {
@@ -832,9 +835,8 @@ impl ImageViewer {
         use crate::utils::svg;
 
         // Must have a pending debounce timestamp
-        let changed_at = match self.last_zoom_pan_change {
-            Some(t) => t,
-            None => return false,
+        let Some(changed_at) = self.last_zoom_pan_change else {
+            return false;
         };
 
         // Debounce: wait at least 150ms since the last zoom/pan change
@@ -847,14 +849,12 @@ impl ImageViewer {
             return false;
         }
 
-        let loaded = match &self.current_image {
-            Some(l) => l,
-            None => return false,
+        let Some(loaded) = &self.current_image else {
+            return false;
         };
 
-        let tree = match &loaded.svg_tree {
-            Some(t) => t,
-            None => return false,
+        let Some(tree) = &loaded.svg_tree else {
+            return false;
         };
 
         let current_zoom = self.image_state.zoom;
@@ -864,14 +864,12 @@ impl ImageViewer {
         // initial rasterization is sharp enough — no need to re-render.
         if current_zoom <= base_scale * 1.1 {
             // Clear any existing re-raster since we're zoomed out enough
-            if self.svg_reraster_path.is_some() {
-                if let Some(ref path) = self.svg_reraster_path {
-                    let _ = std::fs::remove_file(path);
-                }
-                self.svg_reraster_path = None;
-                self.svg_reraster_region = None;
-                self.svg_reraster_scale = None;
+            if let Some(ref path) = self.svg_reraster_path {
+                let _ = std::fs::remove_file(path);
             }
+            self.svg_reraster_path = None;
+            self.svg_reraster_region = None;
+            self.svg_reraster_scale = None;
             self.last_zoom_pan_change = None;
             return false;
         }
@@ -1078,14 +1076,12 @@ impl ImageViewer {
     /// Caching happens synchronously but is called during animation playback,
     /// so it happens while previous frames are being displayed (non-blocking UX).
     pub fn cache_frame(&mut self, frame_index: usize) -> bool {
-        let loaded = match self.current_image.as_mut() {
-            Some(l) => l,
-            None => return false,
+        let Some(loaded) = self.current_image.as_mut() else {
+            return false;
         };
 
-        let anim_data = match &loaded.animation_data {
-            Some(d) => d,
-            None => return false,
+        let Some(anim_data) = &loaded.animation_data else {
+            return false;
         };
 
         // Check if frame is already cached
@@ -1528,303 +1524,17 @@ impl ImageViewer {
 
 impl Render for ImageViewer {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Note: viewport size is now updated in App::render() before calling render
-
-        let content = if self.is_loading {
-            // Show loading indicator
-            use crate::components::loading_indicator::LoadingIndicator;
-            div()
-                .size_full()
-                .child(cx.new(|_cx| LoadingIndicator::new("Loading image...")))
-                .into_any_element()
-        } else if let Some(ref path) = self.no_images_path {
-            // Show friendly notice when directory has no images (not an error)
-            let display_path = path.display().to_string();
-            div()
-                .size_full()
-                .flex()
-                .flex_col()
-                .justify_center()
-                .items_center()
-                .gap(Spacing::lg())
-                .child(
-                    div()
-                        .text_size(TextSize::xl())
-                        .text_color(Colors::text())
-                        .text_align(gpui::TextAlign::Center)
-                        .child("The current directory does not contain any images."),
-                )
-                .child(
-                    div()
-                        .text_size(TextSize::xl())
-                        .text_color(Colors::text())
-                        .text_align(gpui::TextAlign::Center)
-                        .child(display_path),
-                )
-                .child(
-                    div()
-                        .mt(Spacing::lg())
-                        .px(Spacing::lg())
-                        .py(Spacing::sm())
-                        .bg(Colors::info())
-                        .rounded(px(6.0))
-                        .text_size(TextSize::md())
-                        .text_color(rgb(0x1a1a1a))
-                        .font_weight(FontWeight::MEDIUM)
-                        .cursor_pointer()
-                        .hover(|style| style.bg(rgb(0x6272a4)))
-                        .on_mouse_down(MouseButton::Left, |_event, window, cx| {
-                            window.dispatch_action(OpenFile.boxed_clone(), cx);
-                        })
-                        .child("Open Image"),
-                )
-                .into_any_element()
-        } else if let Some(ref error) = self.error_message {
-            // Show error message with full canonical path if available
-            let full_message = if let Some(ref path) = self.error_path {
-                let canonical_path = path
-                    .canonicalize()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_else(|_| path.display().to_string());
-                format!("{}\n\nFull path: {}", error, canonical_path)
-            } else {
-                error.clone()
-            };
-
-            div()
-                .size_full()
-                .child(cx.new(|_cx| ErrorDisplay::new(full_message)))
-                .into_any_element()
-        } else if let Some(ref loaded) = self.current_image {
-            // Render the actual image using GPUI's img() function
-            let width = loaded.width;
-            let height = loaded.height;
-
-            // Get the display path (handles animation frames and filters)
-            let path = if let Some(ref anim_state) = self.image_state.animation {
-                let frame_index = anim_state.current_frame;
-
-                // Get current frame path
-                if frame_index < loaded.frame_cache_paths.len() {
-                    let cached_path = &loaded.frame_cache_paths[frame_index];
-                    if !cached_path.as_os_str().is_empty() && cached_path.exists() {
-                        cached_path.clone()
-                    } else {
-                        // Frame not cached, show error
-                        return div()
-                            .size_full()
-                            .child(cx.new(|_cx| {
-                                ErrorDisplay::new("Failed to load image frame".to_string())
-                            }))
-                            .into_any_element();
-                    }
-                } else {
-                    // Invalid frame index
-                    return div()
-                        .size_full()
-                        .child(cx.new(|_cx| ErrorDisplay::new("Invalid frame index".to_string())))
-                        .into_any_element();
-                }
-            } else {
-                // Static image priority: filtered → full SVG re-raster (no region) → rasterized → original
-                let full_reraster = self.svg_reraster_path.as_ref()
-                    .filter(|_| self.svg_reraster_region.is_none());
-                loaded
-                    .filtered_path
-                    .as_ref()
-                    .or(full_reraster)
-                    .or(loaded.rasterized_path.as_ref())
-                    .unwrap_or(&loaded.path)
-                    .clone()
-            };
-
-            // Apply zoom to image dimensions
-            let zoomed_width = (width as f32 * self.image_state.zoom) as u32;
-            let zoomed_height = (height as f32 * self.image_state.zoom) as u32;
-
-            // Get pan offset
-            let (pan_x, pan_y) = self.image_state.pan;
-
-            // Main image area with zoom indicator overlay
-            let zoom_level = self.image_state.zoom;
-            let is_fit = self.image_state.is_fit_to_window;
-
-            // Create a unique ID for the image based on its path to force GPUI to reload when path changes
-            let image_id = ElementId::Name(format!("image-{}", path.display()).into());
-
-            let mut container = div()
-                .size_full()
-                .bg(Colors::background())
-                .overflow_hidden()
-                .relative()
-                .child(
-                    img(path.clone())
-                        .id(image_id)
-                        .w(px(zoomed_width as f32))
-                        .h(px(zoomed_height as f32))
-                        .absolute()
-                        .left(px(pan_x))
-                        .top(px(pan_y)),
-                );
-
-            // Overlay sharp viewport-only SVG re-raster on top of the base image
-            if let (Some(rr_path), Some(region)) = (&self.svg_reraster_path, &self.svg_reraster_region) {
-                if rr_path.exists() {
-                    let screen_x = region.svg_x * zoom_level + pan_x;
-                    let screen_y = region.svg_y * zoom_level + pan_y;
-                    let screen_w = region.svg_w * zoom_level;
-                    let screen_h = region.svg_h * zoom_level;
-                    container = container.child(
-                        img(rr_path.clone())
-                            .id(ElementId::Name(format!("svg-reraster-{}", rr_path.display()).into()))
-                            .w(px(screen_w))
-                            .h(px(screen_h))
-                            .absolute()
-                            .left(px(screen_x))
-                            .top(px(screen_y)),
-                    );
-                }
-            }
-
-            // Preload next frame for animations to avoid GPU texture loading flash
-            // This is critical: even though frames are cached to disk, GPUI needs time
-            // to load them into GPU memory. By rendering the next frame invisibly,
-            // we force GPUI to load it into the GPU before it's needed for display.
-            if let Some(ref anim_state) = self.image_state.animation {
-                let next_frame_index = (anim_state.current_frame + 1) % anim_state.frame_count;
-                if next_frame_index < loaded.frame_cache_paths.len() {
-                    let next_frame_path = &loaded.frame_cache_paths[next_frame_index];
-                    if !next_frame_path.as_os_str().is_empty() && next_frame_path.exists() {
-                        // Render next frame invisibly to preload it into GPU memory
-                        // This prevents black flashing when advancing to the next frame
-                        container = container.child(
-                            img(next_frame_path.clone())
-                                .w(px(zoomed_width as f32))
-                                .h(px(zoomed_height as f32))
-                                .absolute()
-                                .left(px(-10000.0)) // Position off-screen
-                                .top(px(0.0))
-                                .opacity(0.0), // Make invisible
-                        );
-                    }
-                }
-            }
-
-            // Preload pending SVG re-raster (GPU cache priming before swap)
-            if let Some(ref pending_path) = self.pending_svg_reraster_path {
-                if pending_path.exists() {
-                    let preload_id =
-                        ElementId::Name(format!("pending-svg-reraster-{}", pending_path.display()).into());
-                    container = container.child(
-                        img(pending_path.clone())
-                            .id(preload_id)
-                            .w(px(zoomed_width as f32))
-                            .h(px(zoomed_height as f32))
-                            .absolute()
-                            .left(px(-10000.0))
-                            .top(px(0.0))
-                            .opacity(0.0),
-                    );
-                }
-            }
-
-            // Preload next/previous images in navigation list to avoid GPU texture loading flash
-            // Uses the EXACT same technique as animation frame preloading above:
-            // - Render off-screen at -10000px
-            // - Use opacity(0.0) to make invisible
-            // - Use full zoomed dimensions to ensure texture is loaded
-            // This forces GPUI to load textures into GPU memory before navigation
-            for preload_path in &self.preload_paths {
-                if preload_path.exists() {
-                    let preload_id =
-                        ElementId::Name(format!("preload-{}", preload_path.display()).into());
-                    container = container.child(
-                        img(preload_path.clone())
-                            .id(preload_id)
-                            .w(px(zoomed_width as f32)) // Use full size like animation preload
-                            .h(px(zoomed_height as f32))
-                            .absolute()
-                            .left(px(-10000.0)) // Position off-screen like animation preload
-                            .top(px(0.0))
-                            .opacity(0.0), // Make invisible like animation preload
-                    );
-                }
-            }
-
-            // Use default appearance settings for Render trait (not used by main app, which uses render_view)
-            let default_overlay_transparency = 204; // ~80% opacity (default)
-            let default_font_size_scale = 1.0; // 1x (default)
-
-            container = container.child(
-                // Zoom indicator overlay
-                cx.new(|_cx| {
-                    ZoomIndicator::new(
-                        zoom_level,
-                        is_fit,
-                        Some((width, height)),
-                        default_overlay_transparency,
-                        default_font_size_scale,
-                    )
-                }),
-            );
-
-            // Add processing indicator if filters are being processed
-            if self.is_processing_filters {
-                container = container.child(cx.new(|_cx| {
-                    ProcessingIndicator::new(
-                        "Processing filters...",
-                        default_overlay_transparency,
-                        default_font_size_scale,
-                    )
-                }));
-            }
-
-            // Add animation indicator if this is an animated image
-            if let Some(ref anim_state) = self.image_state.animation {
-                container = container.child(cx.new(|_cx| {
-                    AnimationIndicator::new(
-                        anim_state.current_frame,
-                        anim_state.frame_count,
-                        anim_state.is_playing,
-                        default_overlay_transparency,
-                        default_font_size_scale,
-                    )
-                }));
-            }
-
-            container.into_any_element()
-        } else {
-            // Show "no image" message
-            div()
-                .flex()
-                .flex_col()
-                .size_full()
-                .justify_center()
-                .items_center()
-                .gap(Spacing::md())
-                .child(
-                    div()
-                        .text_size(TextSize::xl())
-                        .text_color(Colors::text())
-                        .child("No image loaded"),
-                )
-                .child(
-                    div()
-                        .text_size(TextSize::sm())
-                        .text_color(Colors::text())
-                        .child(format!(
-                            "Press {} to open an image",
-                            crate::utils::style::format_shortcut("O")
-                        )),
-                )
-                .into_any_element()
-        };
-
         div()
             .track_focus(&self.focus_handle)
             .size_full()
             .bg(Colors::background())
-            .child(content)
+            .child(self.render_view(
+                [0x1e, 0x1e, 0x1e],
+                204,
+                1.0,
+                true,
+                cx,
+            ))
             .into_any_element()
     }
 }

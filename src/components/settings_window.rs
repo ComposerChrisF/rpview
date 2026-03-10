@@ -666,15 +666,15 @@ impl SettingsWindow {
         });
         cx.subscribe(&bg_color_dark_swatch, |this, _swatch, event: &ColorSwatchEvent, cx| {
             let ColorSwatchEvent::Change(hex) = event;
-            if hex.len() >= 7 && hex.starts_with('#') {
-                if let (Ok(r), Ok(g), Ok(b)) = (
+            if hex.len() >= 7 && hex.starts_with('#')
+                && let (Ok(r), Ok(g), Ok(b)) = (
                     u8::from_str_radix(&hex[1..3], 16),
                     u8::from_str_radix(&hex[3..5], 16),
                     u8::from_str_radix(&hex[5..7], 16),
-                ) {
-                    this.working_settings.appearance.background_color_dark = [r, g, b];
-                    cx.notify();
-                }
+                )
+            {
+                this.working_settings.appearance.background_color_dark = [r, g, b];
+                cx.notify();
             }
         }).detach();
 
@@ -687,15 +687,15 @@ impl SettingsWindow {
         });
         cx.subscribe(&bg_color_light_swatch, |this, _swatch, event: &ColorSwatchEvent, cx| {
             let ColorSwatchEvent::Change(hex) = event;
-            if hex.len() >= 7 && hex.starts_with('#') {
-                if let (Ok(r), Ok(g), Ok(b)) = (
+            if hex.len() >= 7 && hex.starts_with('#')
+                && let (Ok(r), Ok(g), Ok(b)) = (
                     u8::from_str_radix(&hex[1..3], 16),
                     u8::from_str_radix(&hex[3..5], 16),
                     u8::from_str_radix(&hex[5..7], 16),
-                ) {
-                    this.working_settings.appearance.background_color_light = [r, g, b];
-                    cx.notify();
-                }
+                )
+            {
+                this.working_settings.appearance.background_color_light = [r, g, b];
+                cx.notify();
             }
         }).detach();
 
@@ -1032,45 +1032,6 @@ impl SettingsWindow {
                 .on_mouse_down(MouseButton::Left, cx.listener(on_click))
                 .child("↺")
         }
-    }
-
-    /// Render a simple text input
-    #[allow(dead_code)]
-    fn render_text_input(
-        &mut self,
-        label: String,
-        value: String,
-        description: Option<String>,
-        _on_change: impl Fn(&mut SettingsWindow, String, &mut Context<Self>) + 'static,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        div()
-            .flex()
-            .flex_col()
-            .mb(Spacing::md())
-            .child(self.render_label(label, description))
-            .child(
-                div()
-                    .w_full()
-                    .px(Spacing::sm())
-                    .py(Spacing::xs())
-                    .bg(rgb(0x2a2a2a))
-                    .border_1()
-                    .border_color(rgb(0x444444))
-                    .rounded(px(4.0))
-                    .text_size(TextSize::sm())
-                    .text_color(Colors::text())
-                    .cursor(gpui::CursorStyle::IBeam)
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |_this, _event: &MouseDownEvent, _window, cx| {
-                            // Simple click-to-edit: For now, we'll use a simpler approach
-                            // User can edit the value in the JSON file for complex editing
-                            cx.notify();
-                        }),
-                    )
-                    .child(value),
-            )
     }
 
     /// Render a row with a label and NumberStepper
@@ -1713,116 +1674,6 @@ impl SettingsWindow {
                             .flex_col()
                             .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
                             .child(self.window_title_input.clone()),
-                    ),
-            )
-    }
-
-    /// Render filters section
-    #[allow(dead_code)]
-    fn render_filters(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let defaults = AppSettings::default();
-        let filter_presets = self.working_settings.filters.filter_presets.clone();
-
-        let brightness_reset = Self::render_reset_button(
-            "reset-brightness",
-            self.working_settings.filters.default_brightness == defaults.filters.default_brightness,
-            |this, _, _, cx| {
-                let d = AppSettings::default().filters.default_brightness;
-                this.working_settings.filters.default_brightness = d;
-                this.default_brightness_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
-                cx.notify();
-            },
-            cx,
-        );
-
-        let contrast_reset = Self::render_reset_button(
-            "reset-contrast",
-            self.working_settings.filters.default_contrast == defaults.filters.default_contrast,
-            |this, _, _, cx| {
-                let d = AppSettings::default().filters.default_contrast;
-                this.working_settings.filters.default_contrast = d;
-                this.default_contrast_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
-                cx.notify();
-            },
-            cx,
-        );
-
-        let gamma_reset = Self::render_reset_button(
-            "reset-gamma",
-            self.working_settings.filters.default_gamma == defaults.filters.default_gamma,
-            |this, _, _, cx| {
-                let d = AppSettings::default().filters.default_gamma;
-                this.working_settings.filters.default_gamma = d;
-                this.default_gamma_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
-                cx.notify();
-            },
-            cx,
-        );
-
-        let filter_state_reset = Self::render_reset_button(
-            "reset-filter-state",
-            self.working_settings.filters.remember_filter_state == defaults.filters.remember_filter_state,
-            |this, _, _, cx| {
-                let d = AppSettings::default().filters.remember_filter_state;
-                this.working_settings.filters.remember_filter_state = d;
-                this.remember_filter_state_toggle.update(cx, |t, cx| t.set_on(d, cx));
-                cx.notify();
-            },
-            cx,
-        );
-
-        div()
-            .flex()
-            .flex_col()
-            .child(self.render_section_header("Filters".to_string()))
-            .child(self.render_stepper_row(
-                "Default brightness".to_string(),
-                Some("Default brightness value when resetting (-100 to +100)".to_string()),
-                &self.default_brightness_stepper,
-                brightness_reset,
-            ))
-            .child(self.render_stepper_row(
-                "Default contrast".to_string(),
-                Some("Default contrast value when resetting (-100 to +100)".to_string()),
-                &self.default_contrast_stepper,
-                contrast_reset,
-            ))
-            .child(self.render_stepper_row(
-                "Default gamma".to_string(),
-                Some("Default gamma value when resetting (0.1 to 10.0)".to_string()),
-                &self.default_gamma_stepper,
-                gamma_reset,
-            ))
-            .child(self.render_toggle_row(
-                Some("Remember filter settings for each image separately".to_string()),
-                &self.remember_filter_state_toggle,
-                filter_state_reset,
-            ))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .mb(Spacing::md())
-                    .child(self.render_label(
-                        "Filter presets".to_string(),
-                        Some("Saved filter combinations".to_string()),
-                    ))
-                    .child(
-                        div()
-                            .px(Spacing::md())
-                            .py(Spacing::md())
-                            .bg(rgb(0x2a2a2a))
-                            .border_1()
-                            .border_color(rgb(0x444444))
-                            .rounded(px(4.0))
-                            .text_size(TextSize::sm())
-                            .text_color(rgb(0xaaaaaa))
-                            .when(filter_presets.is_empty(), |el| el.child("No presets saved"))
-                            .when(!filter_presets.is_empty(), |el| {
-                                el.children(filter_presets.iter().map(|preset| {
-                                    div().mb(Spacing::xs()).child(preset.name.clone())
-                                }))
-                            }),
                     ),
             )
     }

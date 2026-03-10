@@ -43,10 +43,6 @@ pub struct SvgRerasterRegion {
     pub svg_w: f32,
     /// SVG-space height of the rendered area
     pub svg_h: f32,
-    /// Output pixmap width in pixels
-    pub pixel_w: u32,
-    /// Output pixmap height in pixels
-    pub pixel_h: u32,
 }
 
 /// Generate a unique temp file path with the given prefix.
@@ -175,8 +171,6 @@ pub fn rerasterize_svg_viewport(
         svg_y: region_y,
         svg_w: region_w,
         svg_h: region_h,
-        pixel_w,
-        pixel_h,
     };
 
     eprintln!(

@@ -31,18 +31,16 @@ impl AnimationData {
     }
 }
 
-/// Check if a file is an animated GIF
+/// Check if a file is an animated GIF (stops after finding 2 frames)
+#[allow(dead_code)]
 pub fn is_animated_gif(path: &Path) -> Result<bool, AppError> {
     let file = File::open(path).map_err(AppError::Io)?;
     let reader = BufReader::new(file);
 
     match GifDecoder::new(reader) {
         Ok(decoder) => {
-            // Try to get frames to check if it's animated
-            match decoder.into_frames().collect_frames() {
-                Ok(frames) => Ok(frames.len() > 1),
-                Err(_) => Ok(false),
-            }
+            let count = decoder.into_frames().take(2).count();
+            Ok(count > 1)
         }
         Err(_) => Ok(false),
     }
@@ -145,13 +143,12 @@ pub fn load_animation(path: &Path) -> Result<Option<AnimationData>, AppError> {
         .map(|e| e.to_lowercase());
 
     match extension.as_deref() {
-        Some("gif") => {
-            if is_animated_gif(path)? {
-                Ok(Some(load_gif_animation(path)?))
-            } else {
-                Ok(None)
-            }
-        }
+        Some("gif") => match load_gif_animation(path) {
+            Ok(data) if data.frame_count > 1 => Ok(Some(data)),
+            Ok(_) => Ok(None),
+            Err(AppError::Io(e)) => Err(AppError::Io(e)),
+            Err(_) => Ok(None),
+        },
         Some("webp") => {
             if is_animated_webp(path)? {
                 Ok(Some(load_webp_animation(path)?))
