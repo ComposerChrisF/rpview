@@ -43,11 +43,14 @@ impl FilterControls {
         });
 
         // Subscribe to brightness slider changes
-        cx.subscribe(&brightness_slider, |_this, _slider, event: &SliderEvent, cx| {
-            if let SliderEvent::Change(_) = event {
-                cx.emit(FilterControlsEvent::FiltersChanged);
-            }
-        })
+        cx.subscribe(
+            &brightness_slider,
+            |_this, _slider, event: &SliderEvent, cx| {
+                if let SliderEvent::Change(_) = event {
+                    cx.emit(FilterControlsEvent::FiltersChanged);
+                }
+            },
+        )
         .detach();
 
         // Create contrast slider (-100 to +100, current value)
@@ -61,11 +64,14 @@ impl FilterControls {
         });
 
         // Subscribe to contrast slider changes
-        cx.subscribe(&contrast_slider, |_this, _slider, event: &SliderEvent, cx| {
-            if let SliderEvent::Change(_) = event {
-                cx.emit(FilterControlsEvent::FiltersChanged);
-            }
-        })
+        cx.subscribe(
+            &contrast_slider,
+            |_this, _slider, event: &SliderEvent, cx| {
+                if let SliderEvent::Change(_) = event {
+                    cx.emit(FilterControlsEvent::FiltersChanged);
+                }
+            },
+        )
         .detach();
 
         // Create gamma slider (0.1 to 10.0, current value)

@@ -52,9 +52,7 @@ fn url_decode(input: &str) -> String {
     }
 
     // Convert bytes to UTF-8 string, replacing invalid sequences
-    String::from_utf8(bytes).unwrap_or_else(|e| {
-        String::from_utf8_lossy(e.as_bytes()).into_owned()
-    })
+    String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
 mod app_handlers;
@@ -80,12 +78,12 @@ use rpview_gpui::{
     ContrastUp, DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp, NextFrame,
     NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit,
     PanDown, PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
-    PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, ResetFilters,
-    RequestDelete, RequestPermanentDelete, ResetSettingsToDefaults, RevealInFinder, SaveFile,
+    PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, RequestDelete,
+    RequestPermanentDelete, ResetFilters, ResetSettingsToDefaults, RevealInFinder, SaveFile,
     SaveFileToDownloads, SortAlphabetical, SortByModified, ToggleAnimationPlayPause,
-    ToggleBackground, ToggleDebug, ToggleFilters, ToggleHelp, ToggleSettings,
-    ToggleZoomIndicator, ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast,
-    ZoomOutIncremental, ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
+    ToggleBackground, ToggleDebug, ToggleFilters, ToggleHelp, ToggleSettings, ToggleZoomIndicator,
+    ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental,
+    ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
 };
 
 /// What kind of delete is pending
@@ -150,7 +148,6 @@ struct App {
 // - app_handlers.rs: impl App handler methods
 // - app_render.rs: impl Render for App
 // - app_keybindings.rs: setup_key_bindings(), setup_menus()
-
 
 fn main() {
     // Load settings from disk (or use defaults if file doesn't exist)
@@ -218,10 +215,7 @@ fn main() {
 
     // Register handler for macOS "Open With" events
     application.on_open_urls(|urls| {
-        let paths: Vec<PathBuf> = urls
-            .iter()
-            .filter_map(|url| parse_file_url(url))
-            .collect();
+        let paths: Vec<PathBuf> = urls.iter().filter_map(|url| parse_file_url(url)).collect();
 
         if !paths.is_empty() {
             if let Ok(mut pending) = PENDING_OPEN_PATHS.lock() {
@@ -345,8 +339,7 @@ fn main() {
                             &filter_controls,
                             |this, _fc, _event: &FilterControlsEvent, cx| {
                                 // Update viewer with new filter values
-                                let current_filters =
-                                    this.filter_controls.read(cx).get_filters(cx);
+                                let current_filters = this.filter_controls.read(cx).get_filters(cx);
                                 this.viewer.image_state.filters = current_filters;
                                 this.viewer.update_filtered_cache();
                                 this.save_current_image_state();
@@ -415,7 +408,8 @@ fn main() {
             loop {
                 executor.timer(Duration::from_millis(250)).await;
 
-                let has_pending = PENDING_OPEN_PATHS.lock()
+                let has_pending = PENDING_OPEN_PATHS
+                    .lock()
                     .map(|p| !p.is_empty())
                     .unwrap_or(false);
 
@@ -428,7 +422,8 @@ fn main() {
                     });
                 }
             }
-        }).detach();
+        })
+        .detach();
     });
 }
 

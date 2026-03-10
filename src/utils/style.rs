@@ -68,8 +68,7 @@ impl Colors {
     /// Text color that contrasts with the given background RGB
     pub fn text_for_background(bg: [u8; 3]) -> Hsla {
         // Relative luminance using sRGB coefficients
-        let luminance =
-            0.299 * bg[0] as f32 + 0.587 * bg[1] as f32 + 0.114 * bg[2] as f32;
+        let luminance = 0.299 * bg[0] as f32 + 0.587 * bg[1] as f32 + 0.114 * bg[2] as f32;
         if luminance > 150.0 {
             rgb(0x1a1a1a).into() // dark text on light background
         } else {

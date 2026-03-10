@@ -82,12 +82,20 @@ impl App {
         cx.notify();
     }
 
-    pub(crate) fn handle_toggle_zoom_indicator(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_toggle_zoom_indicator(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.show_zoom_indicator = !self.show_zoom_indicator;
         cx.notify();
     }
 
-    pub(crate) fn handle_toggle_background(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_toggle_background(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.settings.appearance.use_light_background =
             !self.settings.appearance.use_light_background;
         if let Err(e) = settings_io::save_settings(&self.settings) {
@@ -137,7 +145,11 @@ impl App {
         cx.notify();
     }
 
-    pub(crate) fn handle_reset_settings_to_defaults(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_reset_settings_to_defaults(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Reset settings window to defaults
         self.settings_window.update(cx, |sw, cx| {
             sw.reset_to_defaults(cx);
@@ -146,7 +158,11 @@ impl App {
         cx.notify();
     }
 
-    pub(crate) fn handle_load_oversized_image_anyway(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_load_oversized_image_anyway(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Get the current image path from the oversized_image state
         if let Some((ref path, _, _, _)) = self.viewer.oversized_image {
             let path = path.clone();
@@ -214,7 +230,11 @@ impl App {
         cx.notify();
     }
 
-    fn adjust_filter(&mut self, f: impl FnOnce(&mut state::image_state::FilterSettings), cx: &mut Context<Self>) {
+    fn adjust_filter(
+        &mut self,
+        f: impl FnOnce(&mut state::image_state::FilterSettings),
+        cx: &mut Context<Self>,
+    ) {
         if self.is_modal_open() {
             return;
         }
@@ -308,7 +328,11 @@ impl App {
         self.handle_save_file_impl(None, cx);
     }
 
-    pub(crate) fn handle_save_file_to_downloads(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_save_file_to_downloads(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.is_modal_open() {
             return;
         }
@@ -467,7 +491,11 @@ impl App {
         save_result.map_err(|e| format!("Failed to save image: {}", e))
     }
 
-    pub(crate) fn handle_open_in_external_viewer(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_open_in_external_viewer(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.is_modal_open() {
             return;
         }
@@ -497,7 +525,11 @@ impl App {
         }
     }
 
-    pub(crate) fn handle_open_in_external_editor(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_open_in_external_editor(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.is_modal_open() {
             return;
         }
@@ -532,7 +564,11 @@ impl App {
         cx.notify();
     }
 
-    pub(crate) fn handle_request_permanent_delete(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_request_permanent_delete(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.is_modal_open() {
             return;
         }
@@ -743,7 +779,12 @@ impl App {
         }
     }
 
-    fn import_image_paths(&mut self, paths: &[PathBuf], window: &mut Window, cx: &mut Context<Self>) {
+    fn import_image_paths(
+        &mut self,
+        paths: &[PathBuf],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let mut all_images: Vec<PathBuf> = Vec::new();
         let mut target_index: usize = 0;
 
@@ -789,7 +830,11 @@ impl App {
     }
 
     /// Check for and process any pending file open requests from macOS "Open With" events.
-    pub(crate) fn process_pending_open_paths(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn process_pending_open_paths(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let mut pending_paths: Vec<PathBuf> = {
             let Ok(mut pending) = PENDING_OPEN_PATHS.lock() else {
                 return;
@@ -915,7 +960,11 @@ impl App {
         self.do_zoom(|v| v.reset_zoom(), cx);
     }
 
-    pub(crate) fn handle_zoom_reset_and_center(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_zoom_reset_and_center(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.do_zoom(|v| v.reset_zoom_and_pan(), cx);
     }
 
@@ -935,20 +984,38 @@ impl App {
         self.do_zoom(|v| v.zoom_out(utils::zoom::ZOOM_STEP_SLOW), cx);
     }
 
-    pub(crate) fn handle_zoom_in_incremental(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.do_zoom(|v| {
-            let new_zoom = utils::zoom::clamp_zoom(v.image_state.zoom + utils::zoom::ZOOM_STEP_INCREMENTAL);
-            v.image_state.zoom = new_zoom;
-            v.image_state.is_fit_to_window = false;
-        }, cx);
+    pub(crate) fn handle_zoom_in_incremental(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.do_zoom(
+            |v| {
+                let new_zoom = utils::zoom::clamp_zoom(
+                    v.image_state.zoom + utils::zoom::ZOOM_STEP_INCREMENTAL,
+                );
+                v.image_state.zoom = new_zoom;
+                v.image_state.is_fit_to_window = false;
+            },
+            cx,
+        );
     }
 
-    pub(crate) fn handle_zoom_out_incremental(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.do_zoom(|v| {
-            let new_zoom = utils::zoom::clamp_zoom(v.image_state.zoom - utils::zoom::ZOOM_STEP_INCREMENTAL);
-            v.image_state.zoom = new_zoom;
-            v.image_state.is_fit_to_window = false;
-        }, cx);
+    pub(crate) fn handle_zoom_out_incremental(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.do_zoom(
+            |v| {
+                let new_zoom = utils::zoom::clamp_zoom(
+                    v.image_state.zoom - utils::zoom::ZOOM_STEP_INCREMENTAL,
+                );
+                v.image_state.zoom = new_zoom;
+                v.image_state.is_fit_to_window = false;
+            },
+            cx,
+        );
     }
 
     /// Returns the sign multiplier for pan direction based on the user's preference.
@@ -1073,8 +1140,7 @@ impl App {
 
             // Load the image asynchronously (non-blocking)
             let max_dim = Some(self.settings.performance.max_image_dimension);
-            self.viewer
-                .load_image_async(path, max_dim, force_load);
+            self.viewer.load_image_async(path, max_dim, force_load);
 
             // State will be loaded when async load completes (in render loop)
         } else {

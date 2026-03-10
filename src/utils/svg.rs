@@ -69,7 +69,10 @@ fn svg_temp_path(prefix: &str) -> Result<PathBuf, String> {
 /// (fontdb is not needed for subsequent renders).
 pub fn parse_svg(path: &Path) -> AppResult<resvg::usvg::Tree> {
     let svg_data = std::fs::read(path).map_err(|e| {
-        AppError::ImageLoadError(path.to_path_buf(), format!("Failed to read SVG file: {}", e))
+        AppError::ImageLoadError(
+            path.to_path_buf(),
+            format!("Failed to read SVG file: {}", e),
+        )
     })?;
 
     let tree = resvg::usvg::Tree::from_data(&svg_data, &svg_options()).map_err(|e| {
@@ -81,10 +84,7 @@ pub fn parse_svg(path: &Path) -> AppResult<resvg::usvg::Tree> {
 
 /// Render an entire SVG tree at the given scale factor to a temp PNG.
 /// Returns the path to the temp PNG file.
-pub fn rerasterize_svg_full(
-    tree: &resvg::usvg::Tree,
-    scale: f32,
-) -> Result<PathBuf, String> {
+pub fn rerasterize_svg_full(tree: &resvg::usvg::Tree, scale: f32) -> Result<PathBuf, String> {
     let size = tree.size();
     let scaled_w = (size.width() * scale).ceil() as u32;
     let scaled_h = (size.height() * scale).ceil() as u32;
@@ -93,8 +93,12 @@ pub fn rerasterize_svg_full(
         return Err("SVG has zero dimensions at this scale".to_string());
     }
 
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(scaled_w, scaled_h)
-        .ok_or_else(|| format!("Failed to create pixmap ({}x{} may be too large)", scaled_w, scaled_h))?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(scaled_w, scaled_h).ok_or_else(|| {
+        format!(
+            "Failed to create pixmap ({}x{} may be too large)",
+            scaled_w, scaled_h
+        )
+    })?;
 
     let transform = resvg::tiny_skia::Transform::from_scale(scale, scale);
     resvg::render(tree, transform, &mut pixmap.as_mut());
@@ -153,12 +157,16 @@ pub fn rerasterize_svg_viewport(
         return Err("Viewport region too small at this scale".to_string());
     }
 
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(pixel_w, pixel_h)
-        .ok_or_else(|| format!("Failed to create pixmap ({}x{} may be too large)", pixel_w, pixel_h))?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(pixel_w, pixel_h).ok_or_else(|| {
+        format!(
+            "Failed to create pixmap ({}x{} may be too large)",
+            pixel_w, pixel_h
+        )
+    })?;
 
     // Scale then translate so that the region origin maps to pixel (0,0)
-    let transform = resvg::tiny_skia::Transform::from_scale(scale, scale)
-        .pre_translate(-region_x, -region_y);
+    let transform =
+        resvg::tiny_skia::Transform::from_scale(scale, scale).pre_translate(-region_x, -region_y);
     resvg::render(tree, transform, &mut pixmap.as_mut());
 
     let temp_path = svg_temp_path("svg_viewport")?;
@@ -175,8 +183,14 @@ pub fn rerasterize_svg_viewport(
 
     eprintln!(
         "[SVG] Viewport re-raster at {:.1}x, region ({:.0},{:.0} {}x{}) -> {} ({}x{})",
-        scale, region_x, region_y, region_w as u32, region_h as u32,
-        temp_path.display(), pixel_w, pixel_h
+        scale,
+        region_x,
+        region_y,
+        region_w as u32,
+        region_h as u32,
+        temp_path.display(),
+        pixel_w,
+        pixel_h
     );
 
     Ok((temp_path, region))
@@ -185,7 +199,10 @@ pub fn rerasterize_svg_viewport(
 /// Get the intrinsic dimensions of an SVG file
 pub fn get_svg_dimensions(path: &Path) -> AppResult<(u32, u32)> {
     let svg_data = std::fs::read(path).map_err(|e| {
-        AppError::ImageLoadError(path.to_path_buf(), format!("Failed to read SVG file: {}", e))
+        AppError::ImageLoadError(
+            path.to_path_buf(),
+            format!("Failed to read SVG file: {}", e),
+        )
     })?;
 
     let tree = resvg::usvg::Tree::from_data(&svg_data, &svg_options()).map_err(|e| {
@@ -225,9 +242,8 @@ pub fn rasterize_svg(path: &Path, scale_factor: f32) -> AppResult<(PathBuf, u32,
         ));
     }
 
-    let temp_path = rerasterize_svg_full(&tree, scale_factor).map_err(|e| {
-        AppError::ImageLoadError(path.to_path_buf(), e)
-    })?;
+    let temp_path = rerasterize_svg_full(&tree, scale_factor)
+        .map_err(|e| AppError::ImageLoadError(path.to_path_buf(), e))?;
 
     let scaled_w = (size.width() * scale_factor).ceil() as u32;
     let scaled_h = (size.height() * scale_factor).ceil() as u32;

@@ -44,10 +44,10 @@ use crate::utils::settings_io;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::{CloseSettings, NextImage, PreviousImage, ResetSettingsToDefaults};
 use ccf_gpui_widgets::prelude::{
-    scrollable_vertical, ColorSwatch, ColorSwatchEvent, DirectoryPicker, DirectoryPickerEvent,
-    NumberStepper, NumberStepperEvent, SegmentOption, SegmentedControl, SegmentedControlEvent,
-    SelectionItem, SidebarNav, SidebarNavEvent, TextInput, TextInputEvent, Theme, ToggleSwitch,
-    ToggleSwitchEvent,
+    ColorSwatch, ColorSwatchEvent, DirectoryPicker, DirectoryPickerEvent, NumberStepper,
+    NumberStepperEvent, SegmentOption, SegmentedControl, SegmentedControlEvent, SelectionItem,
+    SidebarNav, SidebarNavEvent, TextInput, TextInputEvent, Theme, ToggleSwitch, ToggleSwitchEvent,
+    scrollable_vertical,
 };
 use gpui::prelude::*;
 use gpui::*;
@@ -174,8 +174,8 @@ impl SettingsWindow {
     pub fn new(settings: AppSettings, cx: &mut Context<Self>) -> Self {
         // App-wide theme with lime green accent colors
         let app_theme = Theme::dark()
-            .with_accent(0x50fa7b)       // lime green for selected text, accents
-            .with_primary(0x50fa7b)      // lime green for toggle "on" state
+            .with_accent(0x50fa7b) // lime green for selected text, accents
+            .with_primary(0x50fa7b) // lime green for toggle "on" state
             .with_border_focus(0x50fa7b); // lime green for focus rings
 
         // Toggle switches need a dark green "off" state background
@@ -189,15 +189,19 @@ impl SettingsWindow {
                 .min(10.0)
                 .max(10000.0)
                 .step(100.0)
-                .step_small(0.01)  // Alt+click steps by 1
+                .step_small(0.01) // Alt+click steps by 1
                 .display_precision(0)
                 .theme(app_theme)
         });
-        cx.subscribe(&state_cache_size_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.viewer_behavior.state_cache_size = *value as usize;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &state_cache_size_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.viewer_behavior.state_cache_size = *value as usize;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let filter_processing_threads_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -208,11 +212,15 @@ impl SettingsWindow {
                 .display_precision(0)
                 .theme(app_theme)
         });
-        cx.subscribe(&filter_processing_threads_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.performance.filter_processing_threads = *value as usize;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &filter_processing_threads_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.performance.filter_processing_threads = *value as usize;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let max_image_dimension_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -220,15 +228,19 @@ impl SettingsWindow {
                 .min(1000.0)
                 .max(100000.0)
                 .step(1000.0)
-                .step_small(0.001)  // Alt+click steps by 1
+                .step_small(0.001) // Alt+click steps by 1
                 .display_precision(0)
                 .theme(app_theme)
         });
-        cx.subscribe(&max_image_dimension_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.performance.max_image_dimension = *value as u32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &max_image_dimension_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.performance.max_image_dimension = *value as u32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let pan_speed_normal_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -239,11 +251,15 @@ impl SettingsWindow {
                 .display_precision(1)
                 .theme(app_theme)
         });
-        cx.subscribe(&pan_speed_normal_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.keyboard_mouse.pan_speed_normal = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &pan_speed_normal_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.keyboard_mouse.pan_speed_normal = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let pan_speed_fast_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -251,15 +267,19 @@ impl SettingsWindow {
                 .min(1.0)
                 .max(200.0)
                 .step(5.0)
-                .step_small(0.2)  // Alt+click steps by 1
+                .step_small(0.2) // Alt+click steps by 1
                 .display_precision(1)
                 .theme(app_theme)
         });
-        cx.subscribe(&pan_speed_fast_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.keyboard_mouse.pan_speed_fast = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &pan_speed_fast_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.keyboard_mouse.pan_speed_fast = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let pan_speed_slow_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -270,11 +290,15 @@ impl SettingsWindow {
                 .display_precision(1)
                 .theme(app_theme)
         });
-        cx.subscribe(&pan_speed_slow_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.keyboard_mouse.pan_speed_slow = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &pan_speed_slow_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.keyboard_mouse.pan_speed_slow = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         // Segmented control for pan direction mode
         let initial_pan_direction = match settings.keyboard_mouse.pan_direction_mode {
@@ -283,22 +307,24 @@ impl SettingsWindow {
         };
         let pan_direction_mode_control = cx.new(|cx| {
             SegmentedControl::new(cx)
-                .options(vec![
-                    ("image", "Move Image"),
-                    ("viewport", "Move Viewport"),
-                ])
+                .options(vec![("image", "Move Image"), ("viewport", "Move Viewport")])
                 .with_selected_value(initial_pan_direction)
                 .theme(app_theme)
         });
-        cx.subscribe(&pan_direction_mode_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
-            let SegmentedControlEvent::Change(option) = event;
-            this.working_settings.keyboard_mouse.pan_direction_mode = match option.value.as_str() {
-                "image" => PanDirectionMode::MoveImage,
-                "viewport" => PanDirectionMode::MoveViewport,
-                _ => PanDirectionMode::MoveImage,
-            };
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &pan_direction_mode_control,
+            |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+                let SegmentedControlEvent::Change(option) = event;
+                this.working_settings.keyboard_mouse.pan_direction_mode =
+                    match option.value.as_str() {
+                        "image" => PanDirectionMode::MoveImage,
+                        "viewport" => PanDirectionMode::MoveViewport,
+                        _ => PanDirectionMode::MoveImage,
+                    };
+                cx.notify();
+            },
+        )
+        .detach();
 
         let scroll_wheel_sensitivity_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -309,11 +335,17 @@ impl SettingsWindow {
                 .display_precision(2)
                 .theme(app_theme)
         });
-        cx.subscribe(&scroll_wheel_sensitivity_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.keyboard_mouse.scroll_wheel_sensitivity = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &scroll_wheel_sensitivity_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings
+                    .keyboard_mouse
+                    .scroll_wheel_sensitivity = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let z_drag_sensitivity_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -324,11 +356,15 @@ impl SettingsWindow {
                 .display_precision(3)
                 .theme(app_theme)
         });
-        cx.subscribe(&z_drag_sensitivity_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.keyboard_mouse.z_drag_sensitivity = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &z_drag_sensitivity_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.keyboard_mouse.z_drag_sensitivity = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let overlay_transparency_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -336,15 +372,19 @@ impl SettingsWindow {
                 .min(0.0)
                 .max(255.0)
                 .step(10.0)
-                .step_small(0.1)  // Alt+click steps by 1
+                .step_small(0.1) // Alt+click steps by 1
                 .display_precision(0)
                 .theme(app_theme)
         });
-        cx.subscribe(&overlay_transparency_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.appearance.overlay_transparency = *value as u8;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &overlay_transparency_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.appearance.overlay_transparency = *value as u8;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let font_size_scale_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -355,11 +395,15 @@ impl SettingsWindow {
                 .display_precision(1)
                 .theme(app_theme)
         });
-        cx.subscribe(&font_size_scale_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.appearance.font_size_scale = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &font_size_scale_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.appearance.font_size_scale = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let default_brightness_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -367,15 +411,19 @@ impl SettingsWindow {
                 .min(-100.0)
                 .max(100.0)
                 .step(5.0)
-                .step_small(0.2)  // Alt+click steps by 1
+                .step_small(0.2) // Alt+click steps by 1
                 .display_precision(0)
                 .theme(app_theme)
         });
-        cx.subscribe(&default_brightness_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.filters.default_brightness = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &default_brightness_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.filters.default_brightness = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let default_contrast_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -383,15 +431,19 @@ impl SettingsWindow {
                 .min(-100.0)
                 .max(100.0)
                 .step(5.0)
-                .step_small(0.2)  // Alt+click steps by 1
+                .step_small(0.2) // Alt+click steps by 1
                 .display_precision(0)
                 .theme(app_theme)
         });
-        cx.subscribe(&default_contrast_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.filters.default_contrast = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &default_contrast_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.filters.default_contrast = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let default_gamma_stepper = cx.new(|cx| {
             NumberStepper::new(cx)
@@ -402,11 +454,15 @@ impl SettingsWindow {
                 .display_precision(2)
                 .theme(app_theme)
         });
-        cx.subscribe(&default_gamma_stepper, |this, _stepper, event: &NumberStepperEvent, cx| {
-            let NumberStepperEvent::Change(value) = event;
-            this.working_settings.filters.default_gamma = *value as f32;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &default_gamma_stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                this.working_settings.filters.default_gamma = *value as f32;
+                cx.notify();
+            },
+        )
+        .detach();
 
         // Segmented control for zoom mode
         let initial_zoom = match settings.viewer_behavior.default_zoom_mode {
@@ -422,15 +478,20 @@ impl SettingsWindow {
                 .with_selected_value(initial_zoom)
                 .theme(app_theme)
         });
-        cx.subscribe(&zoom_mode_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
-            let SegmentedControlEvent::Change(option) = event;
-            this.working_settings.viewer_behavior.default_zoom_mode = match option.value.as_str() {
-                "fit" => ZoomMode::FitToWindow,
-                "100" => ZoomMode::OneHundredPercent,
-                _ => ZoomMode::FitToWindow,
-            };
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &zoom_mode_control,
+            |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+                let SegmentedControlEvent::Change(option) = event;
+                this.working_settings.viewer_behavior.default_zoom_mode =
+                    match option.value.as_str() {
+                        "fit" => ZoomMode::FitToWindow,
+                        "100" => ZoomMode::OneHundredPercent,
+                        _ => ZoomMode::FitToWindow,
+                    };
+                cx.notify();
+            },
+        )
+        .detach();
 
         // Segmented control for sort mode
         let initial_sort = match settings.sort_navigation.default_sort_mode {
@@ -439,22 +500,24 @@ impl SettingsWindow {
         };
         let sort_mode_control = cx.new(|cx| {
             SegmentedControl::new(cx)
-                .options(vec![
-                    ("alpha", "Alphabetical"),
-                    ("date", "Modified Date"),
-                ])
+                .options(vec![("alpha", "Alphabetical"), ("date", "Modified Date")])
                 .with_selected_value(initial_sort)
                 .theme(app_theme)
         });
-        cx.subscribe(&sort_mode_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
-            let SegmentedControlEvent::Change(option) = event;
-            this.working_settings.sort_navigation.default_sort_mode = match option.value.as_str() {
-                "alpha" => SortModeWrapper::Alphabetical,
-                "date" => SortModeWrapper::ModifiedDate,
-                _ => SortModeWrapper::Alphabetical,
-            };
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &sort_mode_control,
+            |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+                let SegmentedControlEvent::Change(option) = event;
+                this.working_settings.sort_navigation.default_sort_mode =
+                    match option.value.as_str() {
+                        "alpha" => SortModeWrapper::Alphabetical,
+                        "date" => SortModeWrapper::ModifiedDate,
+                        _ => SortModeWrapper::Alphabetical,
+                    };
+                cx.notify();
+            },
+        )
+        .detach();
 
         // Segmented control for save format
         let initial_format = match settings.file_operations.default_save_format {
@@ -478,19 +541,24 @@ impl SettingsWindow {
                 .with_selected_value(initial_format)
                 .theme(app_theme)
         });
-        cx.subscribe(&save_format_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
-            let SegmentedControlEvent::Change(option) = event;
-            this.working_settings.file_operations.default_save_format = match option.value.as_str() {
-                "same" => SaveFormat::SameAsLoaded,
-                "png" => SaveFormat::Png,
-                "jpeg" => SaveFormat::Jpeg,
-                "bmp" => SaveFormat::Bmp,
-                "tiff" => SaveFormat::Tiff,
-                "webp" => SaveFormat::Webp,
-                _ => SaveFormat::SameAsLoaded,
-            };
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &save_format_control,
+            |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+                let SegmentedControlEvent::Change(option) = event;
+                this.working_settings.file_operations.default_save_format =
+                    match option.value.as_str() {
+                        "same" => SaveFormat::SameAsLoaded,
+                        "png" => SaveFormat::Png,
+                        "jpeg" => SaveFormat::Jpeg,
+                        "bmp" => SaveFormat::Bmp,
+                        "tiff" => SaveFormat::Tiff,
+                        "webp" => SaveFormat::Webp,
+                        _ => SaveFormat::SameAsLoaded,
+                    };
+                cx.notify();
+            },
+        )
+        .detach();
 
         // Segmented control for save location mode
         let initial_save_location = if settings.file_operations.default_save_directory.is_some() {
@@ -507,33 +575,41 @@ impl SettingsWindow {
                 .with_selected_value(initial_save_location)
                 .theme(app_theme)
         });
-        cx.subscribe(&save_location_mode_control, |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
-            let SegmentedControlEvent::Change(option) = event;
-            match option.value.as_str() {
-                "same" => {
-                    // Disable picker and clear directory setting
-                    this.default_save_directory_picker.update(cx, |picker, cx| {
-                        picker.set_enabled(false, cx);
-                    });
-                    this.working_settings.file_operations.default_save_directory = None;
-                }
-                "custom" => {
-                    // Enable picker and set directory from picker value
-                    this.default_save_directory_picker.update(cx, |picker, cx| {
-                        picker.set_enabled(true, cx);
-                    });
-                    let path = this.default_save_directory_picker.read(cx).value().to_string();
-                    if path.is_empty() {
+        cx.subscribe(
+            &save_location_mode_control,
+            |this, _control, event: &SegmentedControlEvent<SegmentOption>, cx| {
+                let SegmentedControlEvent::Change(option) = event;
+                match option.value.as_str() {
+                    "same" => {
+                        // Disable picker and clear directory setting
+                        this.default_save_directory_picker.update(cx, |picker, cx| {
+                            picker.set_enabled(false, cx);
+                        });
                         this.working_settings.file_operations.default_save_directory = None;
-                    } else {
-                        this.working_settings.file_operations.default_save_directory =
-                            Some(std::path::PathBuf::from(path));
                     }
+                    "custom" => {
+                        // Enable picker and set directory from picker value
+                        this.default_save_directory_picker.update(cx, |picker, cx| {
+                            picker.set_enabled(true, cx);
+                        });
+                        let path = this
+                            .default_save_directory_picker
+                            .read(cx)
+                            .value()
+                            .to_string();
+                        if path.is_empty() {
+                            this.working_settings.file_operations.default_save_directory = None;
+                        } else {
+                            this.working_settings.file_operations.default_save_directory =
+                                Some(std::path::PathBuf::from(path));
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
-            cx.notify();
-        }).detach();
+                cx.notify();
+            },
+        )
+        .detach();
 
         // Create toggle switch entities for boolean settings
         let remember_per_image_state_toggle = cx.new(|cx| {
@@ -542,11 +618,17 @@ impl SettingsWindow {
                 .label("Remember per-image state")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&remember_per_image_state_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.viewer_behavior.remember_per_image_state = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &remember_per_image_state_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings
+                    .viewer_behavior
+                    .remember_per_image_state = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let animation_auto_play_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -554,11 +636,15 @@ impl SettingsWindow {
                 .label("Auto-play animations")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&animation_auto_play_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.viewer_behavior.animation_auto_play = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &animation_auto_play_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings.viewer_behavior.animation_auto_play = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let preload_adjacent_images_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -566,11 +652,15 @@ impl SettingsWindow {
                 .label("Preload adjacent images")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&preload_adjacent_images_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.performance.preload_adjacent_images = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &preload_adjacent_images_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings.performance.preload_adjacent_images = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let spacebar_pan_accelerated_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -578,11 +668,17 @@ impl SettingsWindow {
                 .label("Spacebar pan acceleration")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&spacebar_pan_accelerated_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.keyboard_mouse.spacebar_pan_accelerated = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &spacebar_pan_accelerated_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings
+                    .keyboard_mouse
+                    .spacebar_pan_accelerated = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let auto_save_filtered_cache_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -590,11 +686,17 @@ impl SettingsWindow {
                 .label("Auto-save filtered cache")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&auto_save_filtered_cache_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.file_operations.auto_save_filtered_cache = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &auto_save_filtered_cache_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings
+                    .file_operations
+                    .auto_save_filtered_cache = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let remember_last_directory_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -602,11 +704,17 @@ impl SettingsWindow {
                 .label("Remember last directory")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&remember_last_directory_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.file_operations.remember_last_directory = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &remember_last_directory_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings
+                    .file_operations
+                    .remember_last_directory = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let remember_filter_state_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -614,11 +722,15 @@ impl SettingsWindow {
                 .label("Remember filter state per-image")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&remember_filter_state_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.filters.remember_filter_state = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &remember_filter_state_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings.filters.remember_filter_state = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let wrap_navigation_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -626,11 +738,15 @@ impl SettingsWindow {
                 .label("Wrap navigation")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&wrap_navigation_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.sort_navigation.wrap_navigation = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &wrap_navigation_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings.sort_navigation.wrap_navigation = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let show_image_counter_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -638,11 +754,15 @@ impl SettingsWindow {
                 .label("Show image counter")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&show_image_counter_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.sort_navigation.show_image_counter = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &show_image_counter_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings.sort_navigation.show_image_counter = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         let file_manager_integration_toggle = cx.new(|cx| {
             ToggleSwitch::new(cx)
@@ -650,11 +770,17 @@ impl SettingsWindow {
                 .label("File manager integration")
                 .theme(toggle_theme)
         });
-        cx.subscribe(&file_manager_integration_toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
-            let ToggleSwitchEvent::Toggle(on) = event;
-            this.working_settings.external_tools.enable_file_manager_integration = *on;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &file_manager_integration_toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                this.working_settings
+                    .external_tools
+                    .enable_file_manager_integration = *on;
+                cx.notify();
+            },
+        )
+        .detach();
 
         // Create color swatches for dark and light background colors
         let bg_dark = &settings.appearance.background_color_dark;
@@ -664,40 +790,51 @@ impl SettingsWindow {
                 .with_value(initial_dark_hex)
                 .theme(app_theme)
         });
-        cx.subscribe(&bg_color_dark_swatch, |this, _swatch, event: &ColorSwatchEvent, cx| {
-            let ColorSwatchEvent::Change(hex) = event;
-            if hex.len() >= 7 && hex.starts_with('#')
-                && let (Ok(r), Ok(g), Ok(b)) = (
-                    u8::from_str_radix(&hex[1..3], 16),
-                    u8::from_str_radix(&hex[3..5], 16),
-                    u8::from_str_radix(&hex[5..7], 16),
-                )
-            {
-                this.working_settings.appearance.background_color_dark = [r, g, b];
-                cx.notify();
-            }
-        }).detach();
+        cx.subscribe(
+            &bg_color_dark_swatch,
+            |this, _swatch, event: &ColorSwatchEvent, cx| {
+                let ColorSwatchEvent::Change(hex) = event;
+                if hex.len() >= 7
+                    && hex.starts_with('#')
+                    && let (Ok(r), Ok(g), Ok(b)) = (
+                        u8::from_str_radix(&hex[1..3], 16),
+                        u8::from_str_radix(&hex[3..5], 16),
+                        u8::from_str_radix(&hex[5..7], 16),
+                    )
+                {
+                    this.working_settings.appearance.background_color_dark = [r, g, b];
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
 
         let bg_light = &settings.appearance.background_color_light;
-        let initial_light_hex = format!("#{:02x}{:02x}{:02x}", bg_light[0], bg_light[1], bg_light[2]);
+        let initial_light_hex =
+            format!("#{:02x}{:02x}{:02x}", bg_light[0], bg_light[1], bg_light[2]);
         let bg_color_light_swatch = cx.new(|cx| {
             ColorSwatch::new(cx)
                 .with_value(initial_light_hex)
                 .theme(app_theme)
         });
-        cx.subscribe(&bg_color_light_swatch, |this, _swatch, event: &ColorSwatchEvent, cx| {
-            let ColorSwatchEvent::Change(hex) = event;
-            if hex.len() >= 7 && hex.starts_with('#')
-                && let (Ok(r), Ok(g), Ok(b)) = (
-                    u8::from_str_radix(&hex[1..3], 16),
-                    u8::from_str_radix(&hex[3..5], 16),
-                    u8::from_str_radix(&hex[5..7], 16),
-                )
-            {
-                this.working_settings.appearance.background_color_light = [r, g, b];
-                cx.notify();
-            }
-        }).detach();
+        cx.subscribe(
+            &bg_color_light_swatch,
+            |this, _swatch, event: &ColorSwatchEvent, cx| {
+                let ColorSwatchEvent::Change(hex) = event;
+                if hex.len() >= 7
+                    && hex.starts_with('#')
+                    && let (Ok(r), Ok(g), Ok(b)) = (
+                        u8::from_str_radix(&hex[1..3], 16),
+                        u8::from_str_radix(&hex[3..5], 16),
+                        u8::from_str_radix(&hex[5..7], 16),
+                    )
+                {
+                    this.working_settings.appearance.background_color_light = [r, g, b];
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
 
         // Create text input for window title format
         let window_title_input = cx.new(|cx| {
@@ -706,13 +843,17 @@ impl SettingsWindow {
                 .placeholder("e.g., {filename} - rpview ({index}/{total})")
                 .theme(app_theme)
         });
-        cx.subscribe(&window_title_input, |this, input, event: &TextInputEvent, cx| {
-            if let TextInputEvent::Change = event {
-                let value = input.read(cx).content().to_string();
-                this.working_settings.appearance.window_title_format = value;
-                cx.notify();
-            }
-        }).detach();
+        cx.subscribe(
+            &window_title_input,
+            |this, input, event: &TextInputEvent, cx| {
+                if let TextInputEvent::Change = event {
+                    let value = input.read(cx).content().to_string();
+                    this.working_settings.appearance.window_title_format = value;
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
 
         // Create directory picker for default save directory
         let has_custom_dir = settings.file_operations.default_save_directory.is_some();
@@ -730,16 +871,20 @@ impl SettingsWindow {
                 .browse_shortcut(false) // Disable Cmd+O to avoid conflicts
                 .theme(app_theme)
         });
-        cx.subscribe(&default_save_directory_picker, |this, _picker, event: &DirectoryPickerEvent, cx| {
-            let DirectoryPickerEvent::Change(path) = event;
-            if path.is_empty() {
-                this.working_settings.file_operations.default_save_directory = None;
-            } else {
-                this.working_settings.file_operations.default_save_directory =
-                    Some(std::path::PathBuf::from(path));
-            }
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &default_save_directory_picker,
+            |this, _picker, event: &DirectoryPickerEvent, cx| {
+                let DirectoryPickerEvent::Change(path) = event;
+                if path.is_empty() {
+                    this.working_settings.file_operations.default_save_directory = None;
+                } else {
+                    this.working_settings.file_operations.default_save_directory =
+                        Some(std::path::PathBuf::from(path));
+                }
+                cx.notify();
+            },
+        )
+        .detach();
 
         // Create sidebar navigation widget
         let sidebar_nav = cx.new(|cx| {
@@ -747,11 +892,15 @@ impl SettingsWindow {
                 .with_width(px(200.0))
                 .theme(app_theme)
         });
-        cx.subscribe(&sidebar_nav, |this, _, event: &SidebarNavEvent<SettingsSection>, cx| {
-            let SidebarNavEvent::Change(section) = event;
-            this.current_section = *section;
-            cx.notify();
-        }).detach();
+        cx.subscribe(
+            &sidebar_nav,
+            |this, _, event: &SidebarNavEvent<SettingsSection>, cx| {
+                let SidebarNavEvent::Change(section) = event;
+                this.current_section = *section;
+                cx.notify();
+            },
+        )
+        .detach();
 
         Self {
             window_title_input,
@@ -807,9 +956,10 @@ impl SettingsWindow {
         self.state_cache_size_stepper.update(cx, |stepper, cx| {
             stepper.set_value(defaults.viewer_behavior.state_cache_size as f64, cx);
         });
-        self.filter_processing_threads_stepper.update(cx, |stepper, cx| {
-            stepper.set_value(defaults.performance.filter_processing_threads as f64, cx);
-        });
+        self.filter_processing_threads_stepper
+            .update(cx, |stepper, cx| {
+                stepper.set_value(defaults.performance.filter_processing_threads as f64, cx);
+            });
         self.max_image_dimension_stepper.update(cx, |stepper, cx| {
             stepper.set_value(defaults.performance.max_image_dimension as f64, cx);
         });
@@ -822,9 +972,10 @@ impl SettingsWindow {
         self.pan_speed_slow_stepper.update(cx, |stepper, cx| {
             stepper.set_value(defaults.keyboard_mouse.pan_speed_slow.into(), cx);
         });
-        self.scroll_wheel_sensitivity_stepper.update(cx, |stepper, cx| {
-            stepper.set_value(defaults.keyboard_mouse.scroll_wheel_sensitivity.into(), cx);
-        });
+        self.scroll_wheel_sensitivity_stepper
+            .update(cx, |stepper, cx| {
+                stepper.set_value(defaults.keyboard_mouse.scroll_wheel_sensitivity.into(), cx);
+            });
         self.z_drag_sensitivity_stepper.update(cx, |stepper, cx| {
             stepper.set_value(defaults.keyboard_mouse.z_drag_sensitivity.into(), cx);
         });
@@ -905,24 +1056,29 @@ impl SettingsWindow {
         });
 
         // Reset toggle switches
-        self.remember_per_image_state_toggle.update(cx, |toggle, cx| {
-            toggle.set_on(defaults.viewer_behavior.remember_per_image_state, cx);
-        });
+        self.remember_per_image_state_toggle
+            .update(cx, |toggle, cx| {
+                toggle.set_on(defaults.viewer_behavior.remember_per_image_state, cx);
+            });
         self.animation_auto_play_toggle.update(cx, |toggle, cx| {
             toggle.set_on(defaults.viewer_behavior.animation_auto_play, cx);
         });
-        self.preload_adjacent_images_toggle.update(cx, |toggle, cx| {
-            toggle.set_on(defaults.performance.preload_adjacent_images, cx);
-        });
-        self.spacebar_pan_accelerated_toggle.update(cx, |toggle, cx| {
-            toggle.set_on(defaults.keyboard_mouse.spacebar_pan_accelerated, cx);
-        });
-        self.auto_save_filtered_cache_toggle.update(cx, |toggle, cx| {
-            toggle.set_on(defaults.file_operations.auto_save_filtered_cache, cx);
-        });
-        self.remember_last_directory_toggle.update(cx, |toggle, cx| {
-            toggle.set_on(defaults.file_operations.remember_last_directory, cx);
-        });
+        self.preload_adjacent_images_toggle
+            .update(cx, |toggle, cx| {
+                toggle.set_on(defaults.performance.preload_adjacent_images, cx);
+            });
+        self.spacebar_pan_accelerated_toggle
+            .update(cx, |toggle, cx| {
+                toggle.set_on(defaults.keyboard_mouse.spacebar_pan_accelerated, cx);
+            });
+        self.auto_save_filtered_cache_toggle
+            .update(cx, |toggle, cx| {
+                toggle.set_on(defaults.file_operations.auto_save_filtered_cache, cx);
+            });
+        self.remember_last_directory_toggle
+            .update(cx, |toggle, cx| {
+                toggle.set_on(defaults.file_operations.remember_last_directory, cx);
+            });
         self.remember_filter_state_toggle.update(cx, |toggle, cx| {
             toggle.set_on(defaults.filters.remember_filter_state, cx);
         });
@@ -932,9 +1088,10 @@ impl SettingsWindow {
         self.show_image_counter_toggle.update(cx, |toggle, cx| {
             toggle.set_on(defaults.sort_navigation.show_image_counter, cx);
         });
-        self.file_manager_integration_toggle.update(cx, |toggle, cx| {
-            toggle.set_on(defaults.external_tools.enable_file_manager_integration, cx);
-        });
+        self.file_manager_integration_toggle
+            .update(cx, |toggle, cx| {
+                toggle.set_on(defaults.external_tools.enable_file_manager_integration, cx);
+            });
     }
 
     /// Get the final settings (for apply)
@@ -1004,7 +1161,10 @@ impl SettingsWindow {
     }
 
     /// Render a small reset button ("↺") that is dimmed when the setting is at default
-    fn render_reset_button<T: Into<ElementId>, U: Fn(&mut SettingsWindow, &MouseDownEvent, &mut Window, &mut Context<Self>) + 'static>(
+    fn render_reset_button<
+        T: Into<ElementId>,
+        U: Fn(&mut SettingsWindow, &MouseDownEvent, &mut Window, &mut Context<Self>) + 'static,
+    >(
         id: T,
         is_default: bool,
         on_click: U,
@@ -1054,11 +1214,7 @@ impl SettingsWindow {
                     .flex()
                     .flex_col()
                     .child(self.render_label(label, description))
-                    .child(
-                        div()
-                            .w(px(150.0))
-                            .child(stepper.clone())
-                    ),
+                    .child(div().w(px(150.0)).child(stepper.clone())),
             )
     }
 
@@ -1076,21 +1232,18 @@ impl SettingsWindow {
             .gap(Spacing::sm())
             .mb(Spacing::md())
             .child(div().pt(px(3.0)).child(reset_button))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(toggle.clone())
-                    .when_some(description, |el, desc| {
-                        el.child(
-                            div()
-                                .text_size(TextSize::sm())
-                                .text_color(rgb(0x888888))
-                                .mt(Spacing::xs())
-                                .child(desc)
-                        )
-                    }),
-            )
+            .child(div().flex().flex_col().child(toggle.clone()).when_some(
+                description,
+                |el, desc| {
+                    el.child(
+                        div()
+                            .text_size(TextSize::sm())
+                            .text_color(rgb(0x888888))
+                            .mt(Spacing::xs())
+                            .child(desc),
+                    )
+                },
+            ))
     }
 
     /// Render viewer behavior section
@@ -1099,12 +1252,17 @@ impl SettingsWindow {
 
         let zoom_mode_reset = Self::render_reset_button(
             "reset-zoom-mode",
-            self.working_settings.viewer_behavior.default_zoom_mode == defaults.viewer_behavior.default_zoom_mode,
+            self.working_settings.viewer_behavior.default_zoom_mode
+                == defaults.viewer_behavior.default_zoom_mode,
             |this, _, _, cx| {
                 let d = AppSettings::default().viewer_behavior.default_zoom_mode;
                 this.working_settings.viewer_behavior.default_zoom_mode = d;
-                let v = match d { ZoomMode::FitToWindow => "fit", ZoomMode::OneHundredPercent => "100" };
-                this.zoom_mode_control.update(cx, |c, cx| c.set_selected_value(v, cx));
+                let v = match d {
+                    ZoomMode::FitToWindow => "fit",
+                    ZoomMode::OneHundredPercent => "100",
+                };
+                this.zoom_mode_control
+                    .update(cx, |c, cx| c.set_selected_value(v, cx));
                 cx.notify();
             },
             cx,
@@ -1112,11 +1270,19 @@ impl SettingsWindow {
 
         let remember_state_reset = Self::render_reset_button(
             "reset-remember-state",
-            self.working_settings.viewer_behavior.remember_per_image_state == defaults.viewer_behavior.remember_per_image_state,
+            self.working_settings
+                .viewer_behavior
+                .remember_per_image_state
+                == defaults.viewer_behavior.remember_per_image_state,
             |this, _, _, cx| {
-                let d = AppSettings::default().viewer_behavior.remember_per_image_state;
-                this.working_settings.viewer_behavior.remember_per_image_state = d;
-                this.remember_per_image_state_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                let d = AppSettings::default()
+                    .viewer_behavior
+                    .remember_per_image_state;
+                this.working_settings
+                    .viewer_behavior
+                    .remember_per_image_state = d;
+                this.remember_per_image_state_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -1124,11 +1290,13 @@ impl SettingsWindow {
 
         let cache_size_reset = Self::render_reset_button(
             "reset-state-cache-size",
-            self.working_settings.viewer_behavior.state_cache_size == defaults.viewer_behavior.state_cache_size,
+            self.working_settings.viewer_behavior.state_cache_size
+                == defaults.viewer_behavior.state_cache_size,
             |this, _, _, cx| {
                 let d = AppSettings::default().viewer_behavior.state_cache_size;
                 this.working_settings.viewer_behavior.state_cache_size = d;
-                this.state_cache_size_stepper.update(cx, |s, cx| s.set_value(d as f64, cx));
+                this.state_cache_size_stepper
+                    .update(cx, |s, cx| s.set_value(d as f64, cx));
                 cx.notify();
             },
             cx,
@@ -1136,11 +1304,13 @@ impl SettingsWindow {
 
         let auto_play_reset = Self::render_reset_button(
             "reset-animation-auto-play",
-            self.working_settings.viewer_behavior.animation_auto_play == defaults.viewer_behavior.animation_auto_play,
+            self.working_settings.viewer_behavior.animation_auto_play
+                == defaults.viewer_behavior.animation_auto_play,
             |this, _, _, cx| {
                 let d = AppSettings::default().viewer_behavior.animation_auto_play;
                 this.working_settings.viewer_behavior.animation_auto_play = d;
-                this.animation_auto_play_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                this.animation_auto_play_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -1193,11 +1363,13 @@ impl SettingsWindow {
 
         let preload_reset = Self::render_reset_button(
             "reset-preload",
-            self.working_settings.performance.preload_adjacent_images == defaults.performance.preload_adjacent_images,
+            self.working_settings.performance.preload_adjacent_images
+                == defaults.performance.preload_adjacent_images,
             |this, _, _, cx| {
                 let d = AppSettings::default().performance.preload_adjacent_images;
                 this.working_settings.performance.preload_adjacent_images = d;
-                this.preload_adjacent_images_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                this.preload_adjacent_images_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -1205,11 +1377,13 @@ impl SettingsWindow {
 
         let threads_reset = Self::render_reset_button(
             "reset-threads",
-            self.working_settings.performance.filter_processing_threads == defaults.performance.filter_processing_threads,
+            self.working_settings.performance.filter_processing_threads
+                == defaults.performance.filter_processing_threads,
             |this, _, _, cx| {
                 let d = AppSettings::default().performance.filter_processing_threads;
                 this.working_settings.performance.filter_processing_threads = d;
-                this.filter_processing_threads_stepper.update(cx, |s, cx| s.set_value(d as f64, cx));
+                this.filter_processing_threads_stepper
+                    .update(cx, |s, cx| s.set_value(d as f64, cx));
                 cx.notify();
             },
             cx,
@@ -1217,11 +1391,13 @@ impl SettingsWindow {
 
         let max_dim_reset = Self::render_reset_button(
             "reset-max-dim",
-            self.working_settings.performance.max_image_dimension == defaults.performance.max_image_dimension,
+            self.working_settings.performance.max_image_dimension
+                == defaults.performance.max_image_dimension,
             |this, _, _, cx| {
                 let d = AppSettings::default().performance.max_image_dimension;
                 this.working_settings.performance.max_image_dimension = d;
-                this.max_image_dimension_stepper.update(cx, |s, cx| s.set_value(d as f64, cx));
+                this.max_image_dimension_stepper
+                    .update(cx, |s, cx| s.set_value(d as f64, cx));
                 cx.notify();
             },
             cx,
@@ -1256,12 +1432,17 @@ impl SettingsWindow {
 
         let pan_dir_reset = Self::render_reset_button(
             "reset-pan-direction",
-            self.working_settings.keyboard_mouse.pan_direction_mode == defaults.keyboard_mouse.pan_direction_mode,
+            self.working_settings.keyboard_mouse.pan_direction_mode
+                == defaults.keyboard_mouse.pan_direction_mode,
             |this, _, _, cx| {
                 let d = AppSettings::default().keyboard_mouse.pan_direction_mode;
                 this.working_settings.keyboard_mouse.pan_direction_mode = d;
-                let v = match d { PanDirectionMode::MoveImage => "image", PanDirectionMode::MoveViewport => "viewport" };
-                this.pan_direction_mode_control.update(cx, |c, cx| c.set_selected_value(v, cx));
+                let v = match d {
+                    PanDirectionMode::MoveImage => "image",
+                    PanDirectionMode::MoveViewport => "viewport",
+                };
+                this.pan_direction_mode_control
+                    .update(cx, |c, cx| c.set_selected_value(v, cx));
                 cx.notify();
             },
             cx,
@@ -1269,11 +1450,13 @@ impl SettingsWindow {
 
         let pan_normal_reset = Self::render_reset_button(
             "reset-pan-normal",
-            self.working_settings.keyboard_mouse.pan_speed_normal == defaults.keyboard_mouse.pan_speed_normal,
+            self.working_settings.keyboard_mouse.pan_speed_normal
+                == defaults.keyboard_mouse.pan_speed_normal,
             |this, _, _, cx| {
                 let d = AppSettings::default().keyboard_mouse.pan_speed_normal;
                 this.working_settings.keyboard_mouse.pan_speed_normal = d;
-                this.pan_speed_normal_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                this.pan_speed_normal_stepper
+                    .update(cx, |s, cx| s.set_value(d.into(), cx));
                 cx.notify();
             },
             cx,
@@ -1281,11 +1464,13 @@ impl SettingsWindow {
 
         let pan_fast_reset = Self::render_reset_button(
             "reset-pan-fast",
-            self.working_settings.keyboard_mouse.pan_speed_fast == defaults.keyboard_mouse.pan_speed_fast,
+            self.working_settings.keyboard_mouse.pan_speed_fast
+                == defaults.keyboard_mouse.pan_speed_fast,
             |this, _, _, cx| {
                 let d = AppSettings::default().keyboard_mouse.pan_speed_fast;
                 this.working_settings.keyboard_mouse.pan_speed_fast = d;
-                this.pan_speed_fast_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                this.pan_speed_fast_stepper
+                    .update(cx, |s, cx| s.set_value(d.into(), cx));
                 cx.notify();
             },
             cx,
@@ -1293,11 +1478,13 @@ impl SettingsWindow {
 
         let pan_slow_reset = Self::render_reset_button(
             "reset-pan-slow",
-            self.working_settings.keyboard_mouse.pan_speed_slow == defaults.keyboard_mouse.pan_speed_slow,
+            self.working_settings.keyboard_mouse.pan_speed_slow
+                == defaults.keyboard_mouse.pan_speed_slow,
             |this, _, _, cx| {
                 let d = AppSettings::default().keyboard_mouse.pan_speed_slow;
                 this.working_settings.keyboard_mouse.pan_speed_slow = d;
-                this.pan_speed_slow_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                this.pan_speed_slow_stepper
+                    .update(cx, |s, cx| s.set_value(d.into(), cx));
                 cx.notify();
             },
             cx,
@@ -1305,11 +1492,19 @@ impl SettingsWindow {
 
         let scroll_reset = Self::render_reset_button(
             "reset-scroll-sensitivity",
-            self.working_settings.keyboard_mouse.scroll_wheel_sensitivity == defaults.keyboard_mouse.scroll_wheel_sensitivity,
+            self.working_settings
+                .keyboard_mouse
+                .scroll_wheel_sensitivity
+                == defaults.keyboard_mouse.scroll_wheel_sensitivity,
             |this, _, _, cx| {
-                let d = AppSettings::default().keyboard_mouse.scroll_wheel_sensitivity;
-                this.working_settings.keyboard_mouse.scroll_wheel_sensitivity = d;
-                this.scroll_wheel_sensitivity_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                let d = AppSettings::default()
+                    .keyboard_mouse
+                    .scroll_wheel_sensitivity;
+                this.working_settings
+                    .keyboard_mouse
+                    .scroll_wheel_sensitivity = d;
+                this.scroll_wheel_sensitivity_stepper
+                    .update(cx, |s, cx| s.set_value(d.into(), cx));
                 cx.notify();
             },
             cx,
@@ -1317,11 +1512,13 @@ impl SettingsWindow {
 
         let zdrag_reset = Self::render_reset_button(
             "reset-zdrag-sensitivity",
-            self.working_settings.keyboard_mouse.z_drag_sensitivity == defaults.keyboard_mouse.z_drag_sensitivity,
+            self.working_settings.keyboard_mouse.z_drag_sensitivity
+                == defaults.keyboard_mouse.z_drag_sensitivity,
             |this, _, _, cx| {
                 let d = AppSettings::default().keyboard_mouse.z_drag_sensitivity;
                 this.working_settings.keyboard_mouse.z_drag_sensitivity = d;
-                this.z_drag_sensitivity_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                this.z_drag_sensitivity_stepper
+                    .update(cx, |s, cx| s.set_value(d.into(), cx));
                 cx.notify();
             },
             cx,
@@ -1329,11 +1526,19 @@ impl SettingsWindow {
 
         let spacebar_reset = Self::render_reset_button(
             "reset-spacebar-accel",
-            self.working_settings.keyboard_mouse.spacebar_pan_accelerated == defaults.keyboard_mouse.spacebar_pan_accelerated,
+            self.working_settings
+                .keyboard_mouse
+                .spacebar_pan_accelerated
+                == defaults.keyboard_mouse.spacebar_pan_accelerated,
             |this, _, _, cx| {
-                let d = AppSettings::default().keyboard_mouse.spacebar_pan_accelerated;
-                this.working_settings.keyboard_mouse.spacebar_pan_accelerated = d;
-                this.spacebar_pan_accelerated_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                let d = AppSettings::default()
+                    .keyboard_mouse
+                    .spacebar_pan_accelerated;
+                this.working_settings
+                    .keyboard_mouse
+                    .spacebar_pan_accelerated = d;
+                this.spacebar_pan_accelerated_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -1403,11 +1608,8 @@ impl SettingsWindow {
     fn render_file_operations(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let defaults = AppSettings::default();
 
-        let is_custom_location = self
-            .save_location_mode_control
-            .read(cx)
-            .selected_value()
-            == "custom";
+        let is_custom_location =
+            self.save_location_mode_control.read(cx).selected_value() == "custom";
         let directory_path = self
             .default_save_directory_picker
             .read(cx)
@@ -1423,10 +1625,12 @@ impl SettingsWindow {
 
         let save_dir_reset = Self::render_reset_button(
             "reset-save-directory",
-            self.working_settings.file_operations.default_save_directory == defaults.file_operations.default_save_directory,
+            self.working_settings.file_operations.default_save_directory
+                == defaults.file_operations.default_save_directory,
             |this, _, _, cx| {
                 this.working_settings.file_operations.default_save_directory = None;
-                this.save_location_mode_control.update(cx, |c, cx| c.set_selected_value("same", cx));
+                this.save_location_mode_control
+                    .update(cx, |c, cx| c.set_selected_value("same", cx));
                 this.default_save_directory_picker.update(cx, |p, cx| {
                     p.set_value("", cx);
                     p.set_enabled(false, cx);
@@ -1438,15 +1642,21 @@ impl SettingsWindow {
 
         let save_format_reset = Self::render_reset_button(
             "reset-save-format",
-            self.working_settings.file_operations.default_save_format == defaults.file_operations.default_save_format,
+            self.working_settings.file_operations.default_save_format
+                == defaults.file_operations.default_save_format,
             |this, _, _, cx| {
                 let d = AppSettings::default().file_operations.default_save_format;
                 this.working_settings.file_operations.default_save_format = d;
                 let v = match d {
-                    SaveFormat::SameAsLoaded => "same", SaveFormat::Png => "png", SaveFormat::Jpeg => "jpeg",
-                    SaveFormat::Bmp => "bmp", SaveFormat::Tiff => "tiff", SaveFormat::Webp => "webp",
+                    SaveFormat::SameAsLoaded => "same",
+                    SaveFormat::Png => "png",
+                    SaveFormat::Jpeg => "jpeg",
+                    SaveFormat::Bmp => "bmp",
+                    SaveFormat::Tiff => "tiff",
+                    SaveFormat::Webp => "webp",
                 };
-                this.save_format_control.update(cx, |c, cx| c.set_selected_value(v, cx));
+                this.save_format_control
+                    .update(cx, |c, cx| c.set_selected_value(v, cx));
                 cx.notify();
             },
             cx,
@@ -1454,11 +1664,19 @@ impl SettingsWindow {
 
         let auto_save_reset = Self::render_reset_button(
             "reset-auto-save-cache",
-            self.working_settings.file_operations.auto_save_filtered_cache == defaults.file_operations.auto_save_filtered_cache,
+            self.working_settings
+                .file_operations
+                .auto_save_filtered_cache
+                == defaults.file_operations.auto_save_filtered_cache,
             |this, _, _, cx| {
-                let d = AppSettings::default().file_operations.auto_save_filtered_cache;
-                this.working_settings.file_operations.auto_save_filtered_cache = d;
-                this.auto_save_filtered_cache_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                let d = AppSettings::default()
+                    .file_operations
+                    .auto_save_filtered_cache;
+                this.working_settings
+                    .file_operations
+                    .auto_save_filtered_cache = d;
+                this.auto_save_filtered_cache_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -1466,11 +1684,19 @@ impl SettingsWindow {
 
         let remember_dir_reset = Self::render_reset_button(
             "reset-remember-dir",
-            self.working_settings.file_operations.remember_last_directory == defaults.file_operations.remember_last_directory,
+            self.working_settings
+                .file_operations
+                .remember_last_directory
+                == defaults.file_operations.remember_last_directory,
             |this, _, _, cx| {
-                let d = AppSettings::default().file_operations.remember_last_directory;
-                this.working_settings.file_operations.remember_last_directory = d;
-                this.remember_last_directory_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                let d = AppSettings::default()
+                    .file_operations
+                    .remember_last_directory;
+                this.working_settings
+                    .file_operations
+                    .remember_last_directory = d;
+                this.remember_last_directory_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -1552,12 +1778,14 @@ impl SettingsWindow {
 
         let bg_dark_reset = Self::render_reset_button(
             "reset-bg-dark",
-            self.working_settings.appearance.background_color_dark == defaults.appearance.background_color_dark,
+            self.working_settings.appearance.background_color_dark
+                == defaults.appearance.background_color_dark,
             |this, _, _, cx| {
                 let d = AppSettings::default().appearance.background_color_dark;
                 this.working_settings.appearance.background_color_dark = d;
                 let hex = format!("#{:02x}{:02x}{:02x}", d[0], d[1], d[2]);
-                this.bg_color_dark_swatch.update(cx, |s, cx| s.set_value(&hex, cx));
+                this.bg_color_dark_swatch
+                    .update(cx, |s, cx| s.set_value(&hex, cx));
                 cx.notify();
             },
             cx,
@@ -1565,12 +1793,14 @@ impl SettingsWindow {
 
         let bg_light_reset = Self::render_reset_button(
             "reset-bg-light",
-            self.working_settings.appearance.background_color_light == defaults.appearance.background_color_light,
+            self.working_settings.appearance.background_color_light
+                == defaults.appearance.background_color_light,
             |this, _, _, cx| {
                 let d = AppSettings::default().appearance.background_color_light;
                 this.working_settings.appearance.background_color_light = d;
                 let hex = format!("#{:02x}{:02x}{:02x}", d[0], d[1], d[2]);
-                this.bg_color_light_swatch.update(cx, |s, cx| s.set_value(&hex, cx));
+                this.bg_color_light_swatch
+                    .update(cx, |s, cx| s.set_value(&hex, cx));
                 cx.notify();
             },
             cx,
@@ -1578,11 +1808,13 @@ impl SettingsWindow {
 
         let overlay_reset = Self::render_reset_button(
             "reset-overlay-transparency",
-            self.working_settings.appearance.overlay_transparency == defaults.appearance.overlay_transparency,
+            self.working_settings.appearance.overlay_transparency
+                == defaults.appearance.overlay_transparency,
             |this, _, _, cx| {
                 let d = AppSettings::default().appearance.overlay_transparency;
                 this.working_settings.appearance.overlay_transparency = d;
-                this.overlay_transparency_stepper.update(cx, |s, cx| s.set_value(d as f64, cx));
+                this.overlay_transparency_stepper
+                    .update(cx, |s, cx| s.set_value(d as f64, cx));
                 cx.notify();
             },
             cx,
@@ -1594,7 +1826,8 @@ impl SettingsWindow {
             |this, _, _, cx| {
                 let d = AppSettings::default().appearance.font_size_scale;
                 this.working_settings.appearance.font_size_scale = d;
-                this.font_size_scale_stepper.update(cx, |s, cx| s.set_value(d.into(), cx));
+                this.font_size_scale_stepper
+                    .update(cx, |s, cx| s.set_value(d.into(), cx));
                 cx.notify();
             },
             cx,
@@ -1602,11 +1835,13 @@ impl SettingsWindow {
 
         let title_reset = Self::render_reset_button(
             "reset-window-title",
-            self.working_settings.appearance.window_title_format == defaults.appearance.window_title_format,
+            self.working_settings.appearance.window_title_format
+                == defaults.appearance.window_title_format,
             |this, _, _, cx| {
                 let d = AppSettings::default().appearance.window_title_format;
                 this.working_settings.appearance.window_title_format = d.clone();
-                this.window_title_input.update(cx, |i, cx| i.set_value(&d, cx));
+                this.window_title_input
+                    .update(cx, |i, cx| i.set_value(&d, cx));
                 cx.notify();
             },
             cx,
@@ -1628,7 +1863,10 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_col()
-                            .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string())))
+                            .child(self.render_label(
+                                "Dark Background".to_string(),
+                                Some("Background color when in dark mode (default)".to_string()),
+                            ))
                             .child(self.bg_color_dark_swatch.clone()),
                     ),
             )
@@ -1644,7 +1882,15 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_col()
-                            .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string())))
+                            .child(
+                                self.render_label(
+                                    "Light Background".to_string(),
+                                    Some(
+                                        "Background color when in light mode (toggle with B key)"
+                                            .to_string(),
+                                    ),
+                                ),
+                            )
                             .child(self.bg_color_light_swatch.clone()),
                     ),
             )
@@ -1672,7 +1918,10 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_col()
-                            .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
+                            .child(self.render_label(
+                                "Window title format".to_string(),
+                                Some("Template: {filename}, {index}, {total}".to_string()),
+                            ))
                             .child(self.window_title_input.clone()),
                     ),
             )
@@ -1684,12 +1933,17 @@ impl SettingsWindow {
 
         let sort_mode_reset = Self::render_reset_button(
             "reset-sort-mode",
-            self.working_settings.sort_navigation.default_sort_mode == defaults.sort_navigation.default_sort_mode,
+            self.working_settings.sort_navigation.default_sort_mode
+                == defaults.sort_navigation.default_sort_mode,
             |this, _, _, cx| {
                 let d = AppSettings::default().sort_navigation.default_sort_mode;
                 this.working_settings.sort_navigation.default_sort_mode = d;
-                let v = match d { SortModeWrapper::Alphabetical => "alpha", SortModeWrapper::ModifiedDate => "date" };
-                this.sort_mode_control.update(cx, |c, cx| c.set_selected_value(v, cx));
+                let v = match d {
+                    SortModeWrapper::Alphabetical => "alpha",
+                    SortModeWrapper::ModifiedDate => "date",
+                };
+                this.sort_mode_control
+                    .update(cx, |c, cx| c.set_selected_value(v, cx));
                 cx.notify();
             },
             cx,
@@ -1697,11 +1951,13 @@ impl SettingsWindow {
 
         let wrap_nav_reset = Self::render_reset_button(
             "reset-wrap-nav",
-            self.working_settings.sort_navigation.wrap_navigation == defaults.sort_navigation.wrap_navigation,
+            self.working_settings.sort_navigation.wrap_navigation
+                == defaults.sort_navigation.wrap_navigation,
             |this, _, _, cx| {
                 let d = AppSettings::default().sort_navigation.wrap_navigation;
                 this.working_settings.sort_navigation.wrap_navigation = d;
-                this.wrap_navigation_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                this.wrap_navigation_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -1709,11 +1965,13 @@ impl SettingsWindow {
 
         let counter_reset = Self::render_reset_button(
             "reset-show-counter",
-            self.working_settings.sort_navigation.show_image_counter == defaults.sort_navigation.show_image_counter,
+            self.working_settings.sort_navigation.show_image_counter
+                == defaults.sort_navigation.show_image_counter,
             |this, _, _, cx| {
                 let d = AppSettings::default().sort_navigation.show_image_counter;
                 this.working_settings.sort_navigation.show_image_counter = d;
-                this.show_image_counter_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                this.show_image_counter_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -1766,11 +2024,19 @@ impl SettingsWindow {
 
         let file_mgr_reset = Self::render_reset_button(
             "reset-file-manager",
-            self.working_settings.external_tools.enable_file_manager_integration == defaults.external_tools.enable_file_manager_integration,
+            self.working_settings
+                .external_tools
+                .enable_file_manager_integration
+                == defaults.external_tools.enable_file_manager_integration,
             |this, _, _, cx| {
-                let d = AppSettings::default().external_tools.enable_file_manager_integration;
-                this.working_settings.external_tools.enable_file_manager_integration = d;
-                this.file_manager_integration_toggle.update(cx, |t, cx| t.set_on(d, cx));
+                let d = AppSettings::default()
+                    .external_tools
+                    .enable_file_manager_integration;
+                this.working_settings
+                    .external_tools
+                    .enable_file_manager_integration = d;
+                this.file_manager_integration_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
                 cx.notify();
             },
             cx,
@@ -2099,9 +2365,7 @@ impl SettingsWindow {
                 SettingsSection::FileOperations => {
                     self.render_file_operations(cx).into_any_element()
                 }
-                SettingsSection::Appearance => {
-                    self.render_appearance(cx).into_any_element()
-                }
+                SettingsSection::Appearance => self.render_appearance(cx).into_any_element(),
                 SettingsSection::SortNavigation => {
                     self.render_sort_navigation(cx).into_any_element()
                 }

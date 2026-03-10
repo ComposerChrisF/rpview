@@ -110,7 +110,6 @@ pub struct ImageViewer {
     pub pending_filter_preload_frames: u32,
 
     // --- SVG dynamic re-rasterization state ---
-
     /// Active sharp re-raster path (replaces blurry base raster when zoomed in)
     pub svg_reraster_path: Option<PathBuf>,
     /// Region info if this is a viewport-only re-raster (None = full render)
@@ -933,8 +932,7 @@ impl ImageViewer {
                 if cancel_clone.lock().map(|f| *f).unwrap_or(false) {
                     return;
                 }
-                let result = svg::rerasterize_svg_full(&tree_clone, zoom)
-                    .map(|path| (path, None));
+                let result = svg::rerasterize_svg_full(&tree_clone, zoom).map(|path| (path, None));
                 let _ = tx.send(result);
             });
         } else {
@@ -1016,7 +1014,10 @@ impl ImageViewer {
             self.svg_reraster_scale = Some(self.image_state.zoom);
             self.pending_svg_reraster_preload_frames = 0;
 
-            eprintln!("[SVG] Applied re-raster at zoom {:.2}", self.image_state.zoom);
+            eprintln!(
+                "[SVG] Applied re-raster at zoom {:.2}",
+                self.image_state.zoom
+            );
         }
     }
 
@@ -1137,7 +1138,9 @@ impl ImageViewer {
             let text_color = Colors::text_for_background(background_color);
             div()
                 .size_full()
-                .child(cx.new(|_cx| LoadingIndicator::new("Loading image...").with_text_color(text_color)))
+                .child(cx.new(|_cx| {
+                    LoadingIndicator::new("Loading image...").with_text_color(text_color)
+                }))
                 .into_any_element()
         } else if let Some((ref path, width, height, max_dim)) = self.oversized_image {
             // Show oversized image warning with Load Anyway button
@@ -1344,7 +1347,9 @@ impl ImageViewer {
                 }
             } else {
                 // Static image priority: filtered → full SVG re-raster (no region) → rasterized → original
-                let full_reraster = self.svg_reraster_path.as_ref()
+                let full_reraster = self
+                    .svg_reraster_path
+                    .as_ref()
                     .filter(|_| self.svg_reraster_region.is_none());
                 loaded
                     .filtered_path
@@ -1387,7 +1392,8 @@ impl ImageViewer {
             );
 
         // Overlay sharp viewport-only SVG re-raster on top of the base image
-        if let (Some(rr_path), Some(region)) = (&self.svg_reraster_path, &self.svg_reraster_region) {
+        if let (Some(rr_path), Some(region)) = (&self.svg_reraster_path, &self.svg_reraster_region)
+        {
             if rr_path.exists() {
                 let screen_x = region.svg_x * zoom_level + pan_x;
                 let screen_y = region.svg_y * zoom_level + pan_y;
@@ -1395,7 +1401,9 @@ impl ImageViewer {
                 let screen_h = region.svg_h * zoom_level;
                 container = container.child(
                     img(rr_path.clone())
-                        .id(ElementId::Name(format!("svg-reraster-{}", rr_path.display()).into()))
+                        .id(ElementId::Name(
+                            format!("svg-reraster-{}", rr_path.display()).into(),
+                        ))
                         .w(px(screen_w))
                         .h(px(screen_h))
                         .absolute()
@@ -1446,8 +1454,9 @@ impl ImageViewer {
         // Preload pending SVG re-raster (GPU cache priming before swap)
         if let Some(ref pending_path) = self.pending_svg_reraster_path {
             if pending_path.exists() {
-                let preload_id =
-                    ElementId::Name(format!("pending-svg-reraster-{}", pending_path.display()).into());
+                let preload_id = ElementId::Name(
+                    format!("pending-svg-reraster-{}", pending_path.display()).into(),
+                );
                 container = container.child(
                     img(pending_path.clone())
                         .id(preload_id)
@@ -1526,13 +1535,7 @@ impl Render for ImageViewer {
             .focus(|s| s)
             .size_full()
             .bg(Colors::background())
-            .child(self.render_view(
-                [0x1e, 0x1e, 0x1e],
-                204,
-                1.0,
-                true,
-                cx,
-            ))
+            .child(self.render_view([0x1e, 0x1e, 0x1e], 204, 1.0, true, cx))
             .into_any_element()
     }
 }
