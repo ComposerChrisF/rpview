@@ -17,7 +17,9 @@ static OPEN_FILES_PATHS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
 /// Get and clear pending file paths from "Open With" events
 pub fn take_pending_paths() -> Vec<PathBuf> {
-    let mut paths = OPEN_FILES_PATHS.lock().unwrap();
+    let Ok(mut paths) = OPEN_FILES_PATHS.lock() else {
+        return Vec::new();
+    };
     std::mem::take(&mut *paths)
 }
 

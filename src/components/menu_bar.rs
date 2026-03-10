@@ -5,7 +5,7 @@
 //!
 //! On macOS, native menus are used instead (via cx.set_menus()).
 
-use crate::utils::style::{Colors, Spacing, format_shortcut};
+use crate::utils::style::{format_shortcut, Colors, Spacing};
 use gpui::prelude::*;
 use gpui::*;
 
@@ -77,47 +77,44 @@ impl MenuBar {
             MenuDef {
                 name: "File".to_string(),
                 items: vec![
-                    MenuItemDef::action("Open File...", Some(&format_shortcut("O")), OpenFile),
-                    MenuItemDef::action("Save File...", Some(&format_shortcut("S")), SaveFile),
+                    MenuItemDef::action("Open File...", Some(&format_shortcut("O", false, false)), OpenFile),
+                    MenuItemDef::action("Save File...", Some(&format_shortcut("S", false, false)), SaveFile),
                     MenuItemDef::action(
                         "Save to Downloads...",
-                        Some(&format!("{}+Alt+S", crate::utils::style::modifier_key())),
+                        Some(&format_shortcut("S", false, true)),
                         SaveFileToDownloads,
                     ),
                     MenuItemDef::separator(),
                     MenuItemDef::action(
                         "Reveal in Explorer",
-                        Some(&format_shortcut("R")),
+                        Some(&format_shortcut("R", false, false)),
                         RevealInFinder,
                     ),
                     MenuItemDef::action(
                         "Open in External Viewer",
-                        Some(&format!("{}+Alt+V", crate::utils::style::modifier_key())),
+                        Some(&format_shortcut("V", false, true)),
                         OpenInExternalViewer,
                     ),
                     MenuItemDef::action(
                         "Open in Viewer and Quit",
-                        Some(&format!(
-                            "Shift+{}+Alt+V",
-                            crate::utils::style::modifier_key()
-                        )),
+                        Some(&format_shortcut("V", true, true)),
                         OpenInExternalViewerAndQuit,
                     ),
                     MenuItemDef::action(
                         "Open in External Editor",
-                        Some(&format_shortcut("E")),
+                        Some(&format_shortcut("E", false, false)),
                         OpenInExternalEditor,
                     ),
                     MenuItemDef::separator(),
-                    MenuItemDef::action("Close Window", Some(&format_shortcut("W")), CloseWindow),
-                    MenuItemDef::action("Quit", Some(&format_shortcut("Q")), Quit),
+                    MenuItemDef::action("Close Window", Some(&format_shortcut("W", false, false)), CloseWindow),
+                    MenuItemDef::action("Quit", Some(&format_shortcut("Q", false, false)), Quit),
                 ],
             },
             MenuDef {
                 name: "Edit".to_string(),
                 items: vec![MenuItemDef::action(
                     "Settings...",
-                    Some(&format_shortcut(",")),
+                    Some(&format_shortcut(",", false, false)),
                     ToggleSettings,
                 )],
             },
@@ -130,22 +127,22 @@ impl MenuBar {
                     MenuItemDef::separator(),
                     MenuItemDef::action(
                         "Toggle Filters",
-                        Some(&format_shortcut("F")),
+                        Some(&format_shortcut("F", false, false)),
                         ToggleFilters,
                     ),
                     MenuItemDef::action(
                         "Disable Filters",
-                        Some(&format_shortcut("1")),
+                        Some(&format_shortcut("1", false, false)),
                         DisableFilters,
                     ),
                     MenuItemDef::action(
                         "Enable Filters",
-                        Some(&format_shortcut("2")),
+                        Some(&format_shortcut("2", false, false)),
                         EnableFilters,
                     ),
                     MenuItemDef::action(
                         "Reset Filters",
-                        Some(&format!("Shift+{}+R", crate::utils::style::modifier_key())),
+                        Some(&format_shortcut("R", true, false)),
                         ResetFilters,
                     ),
                     MenuItemDef::separator(),
@@ -161,12 +158,12 @@ impl MenuBar {
                     MenuItemDef::separator(),
                     MenuItemDef::action(
                         "Sort Alphabetically",
-                        Some(&format!("Shift+{}+A", crate::utils::style::modifier_key())),
+                        Some(&format_shortcut("A", true, false)),
                         SortAlphabetical,
                     ),
                     MenuItemDef::action(
                         "Sort by Modified Date",
-                        Some(&format!("Shift+{}+M", crate::utils::style::modifier_key())),
+                        Some(&format_shortcut("M", true, false)),
                         SortByModified,
                     ),
                 ],

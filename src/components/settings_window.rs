@@ -2114,11 +2114,7 @@ impl SettingsWindow {
 
     /// Render the footer with buttons
     fn render_footer(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let platform_key = if cfg!(target_os = "macos") {
-            "Cmd"
-        } else {
-            "Ctrl"
-        };
+        let close_shortcut = crate::utils::style::format_shortcut("Enter", false, false);
 
         div()
             .px(Spacing::xl())
@@ -2134,7 +2130,7 @@ impl SettingsWindow {
                 div()
                     .text_size(TextSize::sm())
                     .text_color(rgb(0xaaaaaa))
-                    .child(format!("{}-Enter or Esc to close and save", platform_key)),
+                    .child(format!("{} or Esc to close and save", close_shortcut)),
             )
             .child(
                 div()

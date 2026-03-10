@@ -87,15 +87,12 @@ pub struct ImageViewer {
     pub image_state: ImageState,
     /// Last known viewport size (for fit-to-window calculations)
     pub viewport_size: Option<Size<Pixels>>,
-    /// Z key drag zoom state: (last_mouse_x, last_mouse_y, zoom_center_x, zoom_center_y)
-    /// - last_mouse_x, last_mouse_y: Previous mouse position for calculating incremental delta
-    /// - zoom_center_x, zoom_center_y: Initial click position that zoom is centered on
-    /// - Sentinel value (0,0,0,0) indicates Z key held but not actively dragging
-    pub z_drag_state: Option<(f32, f32, f32, f32)>,
-    /// Spacebar drag pan state: (last_mouse_x, last_mouse_y)
-    /// - Tracks previous mouse position for 1:1 pixel movement panning
-    /// - Sentinel value (0,0) indicates spacebar held but not actively dragging
-    pub spacebar_drag_state: Option<(f32, f32)>,
+    /// Z key drag zoom state: outer Option = Z key held, inner Option = actively dragging
+    /// Inner tuple: (last_mouse_x, last_mouse_y, zoom_center_x, zoom_center_y)
+    pub z_drag_state: Option<Option<(f32, f32, f32, f32)>>,
+    /// Spacebar drag pan state: outer Option = spacebar held, inner Option = actively dragging
+    /// Inner tuple: (last_mouse_x, last_mouse_y) for 1:1 pixel movement panning
+    pub spacebar_drag_state: Option<Option<(f32, f32)>>,
     /// Paths to preload into GPU (for smooth navigation)
     /// These images are rendered invisibly to prime the GPU texture cache
     pub preload_paths: Vec<PathBuf>,
@@ -1526,6 +1523,7 @@ impl Render for ImageViewer {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .track_focus(&self.focus_handle)
+            .focus(|s| s)
             .size_full()
             .bg(Colors::background())
             .child(self.render_view(

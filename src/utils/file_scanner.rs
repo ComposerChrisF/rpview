@@ -53,11 +53,7 @@ pub fn scan_directory(dir: &Path) -> AppResult<Vec<PathBuf>> {
 
 /// Sort image paths alphabetically (case-insensitive)
 pub fn sort_alphabetically(paths: &mut [PathBuf]) {
-    paths.sort_by(|a, b| {
-        a.to_string_lossy()
-            .to_lowercase()
-            .cmp(&b.to_string_lossy().to_lowercase())
-    });
+    paths.sort_by_cached_key(|p| p.to_string_lossy().to_lowercase());
 }
 
 /// Process a dropped file or directory and return a list of images with the index to display

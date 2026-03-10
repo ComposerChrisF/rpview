@@ -1,19 +1,54 @@
 use gpui::*;
 
-/// Get the modifier key name for the current platform
-/// Returns "Cmd" on macOS, "Ctrl" on Windows/Linux
+/// Get the platform modifier key glyph/name.
+/// Returns "⌘" on macOS, "Ctrl" on Windows/Linux.
 pub fn modifier_key() -> &'static str {
     if cfg!(target_os = "macos") {
-        "Cmd"
+        "⌘"
     } else {
         "Ctrl"
     }
 }
 
-/// Format a keyboard shortcut for the current platform
-/// Example: format_shortcut("O") returns "Cmd+O" on macOS, "Ctrl+O" on Windows/Linux
-pub fn format_shortcut(key: &str) -> String {
-    format!("{}+{}", modifier_key(), key)
+/// Shift modifier prefix for compound shortcuts.
+/// Returns "⇧" on macOS, "Shift+" on Windows/Linux.
+pub fn shift_prefix() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "⇧"
+    } else {
+        "Shift+"
+    }
+}
+
+/// Format a keyboard shortcut for the current platform.
+/// On macOS uses ⌥⇧⌘ glyphs without separators.
+/// On Windows/Linux uses Ctrl+Shift+Alt+ with "+" separators.
+/// The Cmd/Ctrl modifier is always included.
+pub fn format_shortcut(key: &str, shift: bool, option: bool) -> String {
+    if cfg!(target_os = "macos") {
+        // macOS standard order: ⌃⌥⇧⌘
+        let mut s = String::new();
+        if option {
+            s.push('⌥');
+        }
+        if shift {
+            s.push('⇧');
+        }
+        s.push('⌘');
+        s.push_str(key);
+        s
+    } else {
+        let mut parts = Vec::new();
+        parts.push("Ctrl");
+        if shift {
+            parts.push("Shift");
+        }
+        if option {
+            parts.push("Alt");
+        }
+        parts.push(key);
+        parts.join("+")
+    }
 }
 
 /// Common color palette

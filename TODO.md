@@ -508,6 +508,20 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
   - Consistent mutex poison handling with let-else
   - sort_by_cached_key for alphabetical/date sorts, eliminated double GIF decode
   - Deduplicated cli.rs with file_scanner, delegated Render::render() to render_view()
+- [x] Code review round 2 (v0.7.8): 11 items — bug fixes, deduplication, module split, macOS glyphs
+  - Fixed drag sentinel value bug at (0,0) using nested Option<Option<T>> pattern
+  - Fixed format_shortcut("Cmd") producing "Cmd+Cmd" on macOS
+  - Fixed mutex unwrap panic in macos_open_handler with let-else pattern
+  - Simplified From<io::Error> to preserve io::Error context instead of empty PathBuf
+  - Gated animation eprintln with #[cfg(debug_assertions)] to avoid render-loop log spam
+  - Changed sort_alphabetically to sort_by_cached_key for performance
+  - Changed &PathBuf to &Path in function signatures
+  - Fixed initial window title to use settings.appearance.window_title_format
+  - Window title now updates immediately when settings change
+  - Deduplicated pan (12→do_pan helper), zoom (10→do_zoom), filter (6→adjust_filter), file import handlers
+  - Split main.rs (2,834→446 lines) into app_handlers.rs, app_render.rs, app_keybindings.rs
+  - macOS keyboard shortcuts now use native glyphs (⌘⇧⌥) without separators; Windows/Linux unchanged
+  - Suppressed focus ring on image viewer and app root div
 
 ## Phase 15: Documentation & Release
 
