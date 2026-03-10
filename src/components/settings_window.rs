@@ -997,15 +997,20 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<T, U> {
         let icon_size = px(15.0);
+        let fixed_w = px(16.0);
         if is_default {
             div()
                 .id(id.into())
+                .w(fixed_w)
+                .flex_shrink_0()
                 .text_size(icon_size)
                 .text_color(rgb(0x555555))
                 .child("↺")
         } else {
             div()
                 .id(id.into())
+                .w(fixed_w)
+                .flex_shrink_0()
                 .text_size(icon_size)
                 .text_color(rgb(0xaaaaaa))
                 .cursor_pointer()
