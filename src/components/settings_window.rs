@@ -1072,8 +1072,8 @@ impl SettingsWindow {
                     .flex_row()
                     .items_start()
                     .gap(Spacing::sm())
-                    .child(self.render_label(label, description))
-                    .child(reset_button),
+                    .child(reset_button)
+                    .child(self.render_label(label, description)),
             )
             .child(
                 div()
@@ -1099,8 +1099,8 @@ impl SettingsWindow {
                     .flex_row()
                     .items_center()
                     .gap(Spacing::sm())
-                    .child(toggle.clone())
-                    .child(reset_button),
+                    .child(reset_button)
+                    .child(toggle.clone()),
             )
             .when_some(description, |el, desc| {
                 el.child(
@@ -1179,11 +1179,11 @@ impl SettingsWindow {
                             .flex_row()
                             .items_start()
                             .gap(Spacing::sm())
+                            .child(zoom_mode_reset)
                             .child(self.render_label(
                                 "Default Zoom Mode".to_string(),
                                 Some("How images are initially displayed".to_string()),
-                            ))
-                            .child(zoom_mode_reset),
+                            )),
                     )
                     .child(self.zoom_mode_control.clone()),
             )
@@ -1370,11 +1370,11 @@ impl SettingsWindow {
                             .flex_row()
                             .items_start()
                             .gap(Spacing::sm())
+                            .child(pan_dir_reset)
                             .child(self.render_label(
                                 "Pan Direction Mode".to_string(),
                                 Some("\"Move Image\" moves the image on screen in the key direction; \"Move Viewport\" scrolls the view".to_string()),
-                            ))
-                            .child(pan_dir_reset),
+                            )),
                     )
                     .child(self.pan_direction_mode_control.clone()),
             )
@@ -1507,11 +1507,11 @@ impl SettingsWindow {
                             .flex_row()
                             .items_start()
                             .gap(Spacing::sm())
+                            .child(save_dir_reset)
                             .child(self.render_label(
                                 "Default save directory".to_string(),
                                 Some("Where filtered images are saved by default".to_string()),
-                            ))
-                            .child(save_dir_reset),
+                            )),
                     )
                     // Save location mode selector
                     .child(
@@ -1540,11 +1540,11 @@ impl SettingsWindow {
                             .flex_row()
                             .items_start()
                             .gap(Spacing::sm())
+                            .child(save_format_reset)
                             .child(self.render_label(
                                 "Default save format".to_string(),
                                 Some("Format for saving filtered images".to_string()),
-                            ))
-                            .child(save_format_reset),
+                            )),
                     )
                     .child(self.save_format_control.clone()),
             )
@@ -1641,8 +1641,8 @@ impl SettingsWindow {
                             .flex_row()
                             .items_start()
                             .gap(Spacing::sm())
-                            .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string())))
-                            .child(bg_dark_reset),
+                            .child(bg_dark_reset)
+                            .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string()))),
                     )
                     .child(self.bg_color_dark_swatch.clone())
             )
@@ -1657,8 +1657,8 @@ impl SettingsWindow {
                             .flex_row()
                             .items_start()
                             .gap(Spacing::sm())
-                            .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string())))
-                            .child(bg_light_reset),
+                            .child(bg_light_reset)
+                            .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string()))),
                     )
                     .child(self.bg_color_light_swatch.clone())
             )
@@ -1685,8 +1685,8 @@ impl SettingsWindow {
                             .flex_row()
                             .items_start()
                             .gap(Spacing::sm())
-                            .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
-                            .child(title_reset),
+                            .child(title_reset)
+                            .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string()))),
                     )
                     .child(self.window_title_input.clone())
             )
@@ -1856,11 +1856,11 @@ impl SettingsWindow {
                             .flex_row()
                             .items_start()
                             .gap(Spacing::sm())
+                            .child(sort_mode_reset)
                             .child(self.render_label(
                                 "Default sort mode".to_string(),
                                 Some("How images are sorted on startup".to_string()),
-                            ))
-                            .child(sort_mode_reset),
+                            )),
                     )
                     .child(self.sort_mode_control.clone()),
             )
