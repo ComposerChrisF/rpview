@@ -996,16 +996,17 @@ impl SettingsWindow {
         on_click: U,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<T, U> {
+        let icon_size = px(15.0);
         if is_default {
             div()
                 .id(id.into())
-                .text_size(TextSize::sm())
+                .text_size(icon_size)
                 .text_color(rgb(0x555555))
                 .child("↺")
         } else {
             div()
                 .id(id.into())
-                .text_size(TextSize::sm())
+                .text_size(icon_size)
                 .text_color(rgb(0xaaaaaa))
                 .cursor_pointer()
                 .hover(|s| s.text_color(Colors::info()))
@@ -1069,7 +1070,7 @@ impl SettingsWindow {
                 div()
                     .flex()
                     .flex_row()
-                    .items_center()
+                    .items_start()
                     .gap(Spacing::sm())
                     .child(self.render_label(label, description))
                     .child(reset_button),
@@ -1176,7 +1177,7 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .items_center()
+                            .items_start()
                             .gap(Spacing::sm())
                             .child(self.render_label(
                                 "Default Zoom Mode".to_string(),
@@ -1367,7 +1368,7 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .items_center()
+                            .items_start()
                             .gap(Spacing::sm())
                             .child(self.render_label(
                                 "Pan Direction Mode".to_string(),
@@ -1504,7 +1505,7 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .items_center()
+                            .items_start()
                             .gap(Spacing::sm())
                             .child(self.render_label(
                                 "Default save directory".to_string(),
@@ -1537,7 +1538,7 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .items_center()
+                            .items_start()
                             .gap(Spacing::sm())
                             .child(self.render_label(
                                 "Default save format".to_string(),
@@ -1638,7 +1639,7 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .items_center()
+                            .items_start()
                             .gap(Spacing::sm())
                             .child(self.render_label("Dark Background".to_string(), Some("Background color when in dark mode (default)".to_string())))
                             .child(bg_dark_reset),
@@ -1654,7 +1655,7 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .items_center()
+                            .items_start()
                             .gap(Spacing::sm())
                             .child(self.render_label("Light Background".to_string(), Some("Background color when in light mode (toggle with B key)".to_string())))
                             .child(bg_light_reset),
@@ -1682,7 +1683,7 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .items_center()
+                            .items_start()
                             .gap(Spacing::sm())
                             .child(self.render_label("Window title format".to_string(), Some("Template: {filename}, {index}, {total}".to_string())))
                             .child(title_reset),
@@ -1853,7 +1854,7 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_row()
-                            .items_center()
+                            .items_start()
                             .gap(Spacing::sm())
                             .child(self.render_label(
                                 "Default sort mode".to_string(),

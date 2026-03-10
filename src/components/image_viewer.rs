@@ -1141,9 +1141,10 @@ impl ImageViewer {
         if self.is_loading {
             // Show loading indicator
             use crate::components::loading_indicator::LoadingIndicator;
+            let text_color = Colors::text_for_background(background_color);
             div()
                 .size_full()
-                .child(cx.new(|_cx| LoadingIndicator::new("Loading image...")))
+                .child(cx.new(|_cx| LoadingIndicator::new("Loading image...").with_text_color(text_color)))
                 .into_any_element()
         } else if let Some((ref path, width, height, max_dim)) = self.oversized_image {
             // Show oversized image warning with Load Anyway button
@@ -1239,6 +1240,7 @@ impl ImageViewer {
         } else if let Some(ref path) = self.no_images_path {
             // Show friendly notice when directory has no images (not an error)
             let display_path = path.display().to_string();
+            let text_color = Colors::text_for_background(background_color);
             div()
                 .size_full()
                 .flex()
@@ -1249,14 +1251,14 @@ impl ImageViewer {
                 .child(
                     div()
                         .text_size(TextSize::xl())
-                        .text_color(Colors::text())
+                        .text_color(text_color)
                         .text_align(gpui::TextAlign::Center)
                         .child("The current directory does not contain any images."),
                 )
                 .child(
                     div()
                         .text_size(TextSize::xl())
-                        .text_color(Colors::text())
+                        .text_color(text_color)
                         .text_align(gpui::TextAlign::Center)
                         .child(display_path),
                 )
@@ -1290,9 +1292,10 @@ impl ImageViewer {
                 error.clone()
             };
 
+            let text_color = Colors::text_for_background(background_color);
             div()
                 .size_full()
-                .child(cx.new(|_cx| ErrorDisplay::new(full_message)))
+                .child(cx.new(|_cx| ErrorDisplay::new(full_message).with_text_color(text_color)))
                 .into_any_element()
         } else if let Some(ref loaded) = self.current_image {
             self.render_image(

@@ -4,13 +4,21 @@ use gpui::*;
 /// Component for displaying error messages
 pub struct ErrorDisplay {
     message: SharedString,
+    text_color: Hsla,
 }
 
 impl ErrorDisplay {
     pub fn new(message: impl Into<SharedString>) -> Self {
         Self {
             message: message.into(),
+            text_color: Colors::text(),
         }
+    }
+
+    /// Set custom text color (for contrast with light backgrounds)
+    pub fn with_text_color(mut self, color: Hsla) -> Self {
+        self.text_color = color;
+        self
     }
 }
 
@@ -32,7 +40,7 @@ impl Render for ErrorDisplay {
             .child(
                 div()
                     .text_size(TextSize::md())
-                    .text_color(Colors::text())
+                    .text_color(self.text_color)
                     .child(self.message.clone()),
             )
     }

@@ -6,13 +6,21 @@ use gpui::*;
 #[derive(Clone)]
 pub struct LoadingIndicator {
     pub message: String,
+    text_color: Hsla,
 }
 
 impl LoadingIndicator {
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            text_color: Colors::text(),
         }
+    }
+
+    /// Set custom text color (for contrast with light backgrounds)
+    pub fn with_text_color(mut self, color: Hsla) -> Self {
+        self.text_color = color;
+        self
     }
 }
 
@@ -34,7 +42,7 @@ impl Render for LoadingIndicator {
             .child(
                 div()
                     .text_size(TextSize::lg())
-                    .text_color(Colors::text())
+                    .text_color(self.text_color)
                     .child(self.message.clone()),
             )
     }
