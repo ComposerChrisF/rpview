@@ -1,4 +1,6 @@
-use crate::utils::style::{Colors, Spacing, format_shortcut, modifier_key, scaled_text_size, shift_prefix};
+use crate::utils::style::{
+    Colors, Spacing, format_shortcut, modifier_key, scaled_text_size, shift_prefix,
+};
 use ccf_gpui_widgets::prelude::scrollable_vertical;
 use gpui::prelude::*;
 use gpui::*;
@@ -103,12 +105,21 @@ impl HelpOverlay {
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}{} +/−", mod_key, if cfg!(target_os = "macos") { "" } else { " " }),
+                format!(
+                    "{}{} +/−",
+                    mod_key,
+                    if cfg!(target_os = "macos") { "" } else { " " }
+                ),
                 "Slow zoom (1.05x steps)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}{}{} +/−", shift, mod_key, if cfg!(target_os = "macos") { "" } else { " " }),
+                format!(
+                    "{}{}{} +/−",
+                    shift,
+                    mod_key,
+                    if cfg!(target_os = "macos") { "" } else { " " }
+                ),
                 "Incremental zoom (1% steps)".to_string(),
             )
             .into_any_element(),
@@ -149,8 +160,11 @@ impl HelpOverlay {
             // Window section
             self.render_section_header("Window".to_string())
                 .into_any_element(),
-            self.render_shortcut(format_shortcut("W", false, false), "Close window".to_string())
-                .into_any_element(),
+            self.render_shortcut(
+                format_shortcut("W", false, false),
+                "Close window".to_string(),
+            )
+            .into_any_element(),
             self.render_shortcut(
                 format_shortcut("Q", false, false),
                 "Quit application".to_string(),
@@ -169,10 +183,16 @@ impl HelpOverlay {
                 "Toggle filter controls".to_string(),
             )
             .into_any_element(),
-            self.render_shortcut(format_shortcut("1", false, false), "Disable filters".to_string())
-                .into_any_element(),
-            self.render_shortcut(format_shortcut("2", false, false), "Enable filters".to_string())
-                .into_any_element(),
+            self.render_shortcut(
+                format_shortcut("1", false, false),
+                "Disable filters".to_string(),
+            )
+            .into_any_element(),
+            self.render_shortcut(
+                format_shortcut("2", false, false),
+                "Enable filters".to_string(),
+            )
+            .into_any_element(),
             self.render_shortcut(
                 format_shortcut("R", true, false),
                 "Reset all filters".to_string(),

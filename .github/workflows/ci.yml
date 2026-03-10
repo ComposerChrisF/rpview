@@ -17,9 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Metal Toolchain
-        run: xcodebuild -downloadComponent MetalToolchain
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -50,10 +47,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev \
             libvulkan-dev libwayland-dev
-
-      - name: Install Metal Toolchain
-        if: runner.os == 'macOS'
-        run: xcodebuild -downloadComponent MetalToolchain
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

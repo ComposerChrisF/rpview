@@ -8,9 +8,9 @@ use std::ffi::CStr;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use objc2::ffi::{objc_getClass, class_addMethod};
-use objc2::runtime::{AnyObject, Imp, Sel};
+use objc2::ffi::{class_addMethod, objc_getClass};
 use objc2::msg_send;
+use objc2::runtime::{AnyObject, Imp, Sel};
 
 /// Global storage for file paths received via "Open With"
 static OPEN_FILES_PATHS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
@@ -25,7 +25,10 @@ pub fn take_pending_paths() -> Vec<PathBuf> {
 
 /// Check if there are pending file paths
 pub fn has_pending_paths() -> bool {
-    OPEN_FILES_PATHS.lock().map(|p| !p.is_empty()).unwrap_or(false)
+    OPEN_FILES_PATHS
+        .lock()
+        .map(|p| !p.is_empty())
+        .unwrap_or(false)
 }
 
 /// Store file paths for later processing
@@ -102,11 +105,6 @@ pub fn register_open_files_handler() {
             Imp,
         >(handle_open_files);
 
-        let _success = class_addMethod(
-            cls as *mut _,
-            sel,
-            imp,
-            types.as_ptr(),
-        );
+        let _success = class_addMethod(cls as *mut _, sel, imp, types.as_ptr());
     }
 }

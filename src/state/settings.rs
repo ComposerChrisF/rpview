@@ -227,7 +227,7 @@ impl Default for Appearance {
             background_color_dark: Self::default_background_color_dark(),
             background_color_light: Self::default_background_color_light(),
             use_light_background: false,
-            overlay_transparency: 204,            // ~80% opacity
+            overlay_transparency: 204, // ~80% opacity
             font_size_scale: 1.0,
             window_title_format: "{filename} ({index}/{total})".to_string(),
         }
@@ -522,10 +522,7 @@ mod tests {
         assert_eq!(appearance.background_color_dark, [0x1e, 0x1e, 0x1e]);
         assert_eq!(appearance.background_color_light, [0xe0, 0xe0, 0xe0]);
         assert!(!appearance.use_light_background);
-        assert_eq!(
-            appearance.active_background_color(),
-            [0x1e, 0x1e, 0x1e]
-        );
+        assert_eq!(appearance.active_background_color(), [0x1e, 0x1e, 0x1e]);
         assert_eq!(
             appearance.overlay_transparency,
             DEFAULT_OVERLAY_TRANSPARENCY

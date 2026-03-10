@@ -5,7 +5,7 @@
 //!
 //! On macOS, native menus are used instead (via cx.set_menus()).
 
-use crate::utils::style::{format_shortcut, Colors, Spacing};
+use crate::utils::style::{Colors, Spacing, format_shortcut};
 use gpui::prelude::*;
 use gpui::*;
 
@@ -77,8 +77,16 @@ impl MenuBar {
             MenuDef {
                 name: "File".to_string(),
                 items: vec![
-                    MenuItemDef::action("Open File...", Some(&format_shortcut("O", false, false)), OpenFile),
-                    MenuItemDef::action("Save File...", Some(&format_shortcut("S", false, false)), SaveFile),
+                    MenuItemDef::action(
+                        "Open File...",
+                        Some(&format_shortcut("O", false, false)),
+                        OpenFile,
+                    ),
+                    MenuItemDef::action(
+                        "Save File...",
+                        Some(&format_shortcut("S", false, false)),
+                        SaveFile,
+                    ),
                     MenuItemDef::action(
                         "Save to Downloads...",
                         Some(&format_shortcut("S", false, true)),
@@ -106,7 +114,11 @@ impl MenuBar {
                         OpenInExternalEditor,
                     ),
                     MenuItemDef::separator(),
-                    MenuItemDef::action("Close Window", Some(&format_shortcut("W", false, false)), CloseWindow),
+                    MenuItemDef::action(
+                        "Close Window",
+                        Some(&format_shortcut("W", false, false)),
+                        CloseWindow,
+                    ),
                     MenuItemDef::action("Quit", Some(&format_shortcut("Q", false, false)), Quit),
                 ],
             },

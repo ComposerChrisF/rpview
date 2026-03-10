@@ -212,11 +212,9 @@ impl Render for App {
 
         // Calculate background color once
         let active_bg = self.settings.appearance.active_background_color();
-        let bg_color = rgb(
-            ((active_bg[0] as u32) << 16)
-                | ((active_bg[1] as u32) << 8)
-                | (active_bg[2] as u32),
-        );
+        let bg_color = rgb(((active_bg[0] as u32) << 16)
+            | ((active_bg[1] as u32) << 8)
+            | (active_bg[2] as u32));
 
         // Main content area (takes remaining space after menu bar)
         // Only enable ImageViewer key context when no modal is open
@@ -320,7 +318,9 @@ impl Render for App {
 
                 // Handle Z-drag zoom (only if mouse button is down and we have valid drag data)
                 if this.mouse_button_down && button_actually_pressed {
-                    if let Some(Some((last_x, last_y, center_x, center_y))) = this.viewer.z_drag_state {
+                    if let Some(Some((last_x, last_y, center_x, center_y))) =
+                        this.viewer.z_drag_state
+                    {
                         let current_y: f32 = event.position.y.into();
                         let current_x: f32 = event.position.x.into();
 
@@ -509,10 +509,7 @@ impl Render for App {
                                         .on_mouse_down(
                                             MouseButton::Left,
                                             cx.listener(
-                                                |this,
-                                                 _event: &MouseDownEvent,
-                                                 window,
-                                                 cx| {
+                                                |this, _event: &MouseDownEvent, window, cx| {
                                                     this.handle_confirm_delete(window, cx);
                                                 },
                                             ),
@@ -825,11 +822,9 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &RequestDelete, window, cx| {
                 this.handle_request_delete(window, cx);
             }))
-            .on_action(
-                cx.listener(|this, _: &RequestPermanentDelete, window, cx| {
-                    this.handle_request_permanent_delete(window, cx);
-                }),
-            )
+            .on_action(cx.listener(|this, _: &RequestPermanentDelete, window, cx| {
+                this.handle_request_permanent_delete(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &ConfirmDelete, window, cx| {
                 this.handle_confirm_delete(window, cx);
             }))

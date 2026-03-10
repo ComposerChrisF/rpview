@@ -102,15 +102,13 @@ pub fn load_image_async(
         // Rasterize SVGs to temp PNGs (2x for Retina) and keep parsed tree for re-rendering
         let (rasterized_path, svg_tree) = if crate::utils::file_scanner::is_svg(&path) {
             match crate::utils::svg::parse_svg(&path) {
-                Ok(tree) => {
-                    match crate::utils::svg::rerasterize_svg_full(&tree, 2.0) {
-                        Ok(temp_path) => (Some(temp_path), Some(Arc::new(tree))),
-                        Err(e) => {
-                            let _ = tx.send(LoaderMessage::Error(path, e));
-                            return;
-                        }
+                Ok(tree) => match crate::utils::svg::rerasterize_svg_full(&tree, 2.0) {
+                    Ok(temp_path) => (Some(temp_path), Some(Arc::new(tree))),
+                    Err(e) => {
+                        let _ = tx.send(LoaderMessage::Error(path, e));
+                        return;
                     }
-                }
+                },
                 Err(e) => {
                     let _ = tx.send(LoaderMessage::Error(path, e.to_string()));
                     return;
