@@ -995,7 +995,9 @@ impl App {
     fn process_pending_open_paths(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Take ownership of pending paths from the global storage
         let mut pending_paths: Vec<PathBuf> = {
-            let mut pending = PENDING_OPEN_PATHS.lock().unwrap();
+            let Ok(mut pending) = PENDING_OPEN_PATHS.lock() else {
+                return;
+            };
             std::mem::take(&mut *pending)
         };
 
@@ -1442,7 +1444,7 @@ impl App {
             // Load the image asynchronously (non-blocking)
             let max_dim = Some(self.settings.performance.max_image_dimension);
             self.viewer
-                .load_image_async(path.clone(), max_dim, force_load);
+                .load_image_async(path, max_dim, force_load);
 
             // State will be loaded when async load completes (in render loop)
         } else {

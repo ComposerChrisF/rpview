@@ -207,19 +207,14 @@ impl AppState {
     fn sort_images(&mut self) {
         match self.sort_mode {
             SortMode::Alphabetical => {
-                self.image_paths.sort_by(|a, b| {
-                    a.to_string_lossy()
-                        .to_lowercase()
-                        .cmp(&b.to_string_lossy().to_lowercase())
-                });
+                self.image_paths
+                    .sort_by_cached_key(|p| p.to_string_lossy().to_lowercase());
             }
             SortMode::ModifiedDate => {
-                self.image_paths.sort_by(|a, b| {
-                    let a_modified = std::fs::metadata(a).and_then(|m| m.modified()).ok();
-                    let b_modified = std::fs::metadata(b).and_then(|m| m.modified()).ok();
-
-                    // Newest first, so reverse the comparison
-                    b_modified.cmp(&a_modified)
+                use std::cmp::Reverse;
+                // sort_by_cached_key computes the key once per element
+                self.image_paths.sort_by_cached_key(|p| {
+                    Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok())
                 });
             }
         }

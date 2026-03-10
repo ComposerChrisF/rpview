@@ -75,9 +75,10 @@ impl Default for Performance {
 }
 
 /// Pan direction mode — what the direction keys (WASD/IJKL) move
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum PanDirectionMode {
     /// Direction keys move the image on screen (W moves image up)
+    #[default]
     MoveImage,
     /// Direction keys move the viewport/camera (W moves viewport up, image appears to move down)
     MoveViewport,
@@ -101,12 +102,6 @@ pub struct KeyboardMouse {
     pub z_drag_sensitivity: f32,
     /// Whether spacebar+drag panning uses acceleration
     pub spacebar_pan_accelerated: bool,
-}
-
-impl Default for PanDirectionMode {
-    fn default() -> Self {
-        PanDirectionMode::MoveImage
-    }
 }
 
 impl Default for KeyboardMouse {
@@ -161,6 +156,7 @@ pub enum SaveFormat {
 
 impl SaveFormat {
     /// Get display name for the save format
+    #[cfg(test)]
     pub fn display_name(&self) -> &'static str {
         match self {
             SaveFormat::SameAsLoaded => "Same as loaded image",
@@ -173,6 +169,7 @@ impl SaveFormat {
     }
 
     /// Get all save format options
+    #[cfg(test)]
     pub fn all() -> Vec<Self> {
         vec![
             Self::SameAsLoaded,

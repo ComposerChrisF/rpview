@@ -502,6 +502,12 @@ This document outlines the development roadmap for rpview-gpui, organized by imp
 - [x] Replace redundant closures with method references
 - [x] Use idiomatic patterns (`.clamp()`, `.iter_mut().enumerate()`)
 - [x] Add module-level `#![allow(...)]` for intentional nested if-let patterns
+- [x] Code review fixes (v0.7.7): 18 issues across clippy, dead code, performance, error handling, deduplication, and idiomatic patterns
+  - Type alias for complex receiver type, derivable Default, cfg(test) gating, dead field/method removal
+  - let-else patterns, redundant guard removal, delegated constructors, removed unnecessary clones
+  - Consistent mutex poison handling with let-else
+  - sort_by_cached_key for alphabetical/date sorts, eliminated double GIF decode
+  - Deduplicated cli.rs with file_scanner, delegated Render::render() to render_view()
 
 ## Phase 15: Documentation & Release
 
