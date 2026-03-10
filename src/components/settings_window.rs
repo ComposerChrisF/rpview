@@ -951,10 +951,24 @@ impl SettingsWindow {
             .pb(Spacing::md())
             .border_b_1()
             .border_color(rgb(0x444444))
-            .text_size(TextSize::xxl())
-            .text_color(Colors::text())
-            .font_weight(FontWeight::BOLD)
-            .child("Settings")
+            .flex()
+            .flex_row()
+            .items_end()
+            .gap(Spacing::sm())
+            .child(
+                div()
+                    .text_size(TextSize::xxl())
+                    .text_color(Colors::text())
+                    .font_weight(FontWeight::BOLD)
+                    .child("Settings"),
+            )
+            .child(
+                div()
+                    .text_size(TextSize::sm())
+                    .text_color(rgb(0x888888))
+                    .pb(px(4.0))
+                    .child(format!("v{}", env!("CARGO_PKG_VERSION"))),
+            )
     }
 
     /// Render a section header within the content area
@@ -1097,10 +1111,10 @@ impl SettingsWindow {
         div()
             .flex()
             .flex_row()
-            .items_center()
+            .items_start()
             .gap(Spacing::sm())
             .mb(Spacing::md())
-            .child(reset_button)
+            .child(div().pt(px(3.0)).child(reset_button))
             .child(
                 div()
                     .flex()
