@@ -362,7 +362,7 @@ fn main() {
 
                     // Create menu bar for Windows/Linux
                     #[cfg(not(target_os = "macos"))]
-                    let menu_bar = cx.new(|cx| components::MenuBar::new(cx));
+                    let menu_bar = inner_cx.new(|cx| components::MenuBar::new(cx));
 
                     App {
                         app_state,

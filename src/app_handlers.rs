@@ -11,7 +11,7 @@ impl App {
         // Close menu bar if open (Windows/Linux)
         #[cfg(not(target_os = "macos"))]
         {
-            let menu_open = self.menu_bar.read_with(&cx, |mb, _| mb.is_menu_open());
+            let menu_open = self.menu_bar.read_with(cx, |mb, _| mb.is_menu_open());
             if menu_open {
                 self.menu_bar.update(cx, |mb, cx| mb.close_menu(cx));
                 return;
@@ -835,6 +835,7 @@ impl App {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        #[allow(unused_mut)]
         let mut pending_paths: Vec<PathBuf> = {
             let Ok(mut pending) = PENDING_OPEN_PATHS.lock() else {
                 return;
