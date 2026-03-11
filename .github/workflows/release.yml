@@ -77,7 +77,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [build, macos-universal]
     runs-on: ubuntu-latest
     permissions:
       contents: write
