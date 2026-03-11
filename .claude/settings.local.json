@@ -79,7 +79,8 @@
       "Bash(cargo search:*)",
       "Bash(cargo publish:*)",
       "Bash(cargo package:*)",
-      "Bash(xcodebuild:*)"
+      "Bash(xcodebuild:*)",
+      "Bash(gh run:*)"
     ]
   }
 }

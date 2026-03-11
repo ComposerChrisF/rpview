@@ -73,7 +73,7 @@ use state::{AppSettings, AppState};
 use utils::settings_io;
 
 // Import all actions from lib.rs (they're defined there to avoid duplication)
-use rpview_gpui::{
+use rpview::{
     BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ConfirmDelete, ContrastDown,
     ContrastUp, DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp, NextFrame,
     NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit,
@@ -195,7 +195,7 @@ fn main() {
     );
 
     // Print startup info
-    println!("rpview-gpui starting...");
+    println!("rpview starting...");
     println!("Loaded {} image(s)", app_state.image_paths.len());
     if let Some(first_image) = app_state.current_image() {
         println!("Current image: {}", first_image.display());
@@ -320,7 +320,7 @@ fn main() {
                         };
                         window.set_window_title(&title);
                     } else {
-                        window.set_window_title("rpview-gpui");
+                        window.set_window_title("rpview");
                     }
 
                     // Create filter controls

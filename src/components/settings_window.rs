@@ -1,4 +1,4 @@
-//! Settings window component for rpview-gpui
+//! Settings window component for rpview
 //!
 //! Provides a full-screen overlay with a settings panel allowing users to
 //! view and edit application settings interactively.

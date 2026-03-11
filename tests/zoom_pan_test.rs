@@ -1,4 +1,4 @@
-use rpview_gpui::utils::zoom::*;
+use rpview::utils::zoom::*;
 
 #[test]
 fn test_zoom_constants() {

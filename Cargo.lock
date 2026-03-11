@@ -4567,7 +4567,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rpview-gpui"
+name = "rpview"
 version = "0.7.8"
 dependencies = [
  "block2",

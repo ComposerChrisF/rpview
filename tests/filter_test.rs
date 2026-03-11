@@ -1,5 +1,5 @@
 use image::{DynamicImage, ImageBuffer, Rgba};
-use rpview_gpui::utils::filters::*;
+use rpview::utils::filters::*;
 
 fn create_test_image(r: u8, g: u8, b: u8) -> DynamicImage {
     DynamicImage::ImageRgba8(ImageBuffer::from_pixel(10, 10, Rgba([r, g, b, 255])))

@@ -1290,7 +1290,7 @@ For large images (photos), individual textures are used.
 
 ## Implementation Roadmap for rpviews
 
-Based on current project structure at `/Users/chris/Chris/App/Rust/rpviews/rpview-gpui`:
+Based on current project structure at `/Users/chris/Chris/App/Rust/rpviews/rpview`:
 
 ### Current State (Phase 2)
 

@@ -1173,7 +1173,7 @@ impl App {
 
             window.set_window_title(&title);
         } else {
-            window.set_window_title("rpview-gpui");
+            window.set_window_title("rpview");
         }
     }
 }

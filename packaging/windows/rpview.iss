@@ -4,7 +4,7 @@
 #define MyAppName "RPView"
 #define MyAppVersion "0.1.0"
 #define MyAppPublisher "RPView Contributors"
-#define MyAppURL "https://github.com/yourusername/rpview-gpui"
+#define MyAppURL "https://github.com/ComposerChrisF/rpview"
 #define MyAppExeName "rpview.exe"
 
 [Setup]

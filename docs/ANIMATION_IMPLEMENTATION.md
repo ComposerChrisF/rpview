@@ -1,6 +1,6 @@
 # Animation Implementation in GPUI
 
-This document describes the lessons learned while implementing automatic animation playback for GIF and WEBP files in rpview-gpui using the GPUI framework.
+This document describes the lessons learned while implementing automatic animation playback for GIF and WEBP files in rpview using the GPUI framework.
 
 ## Overview
 

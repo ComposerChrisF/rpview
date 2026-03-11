@@ -1,4 +1,4 @@
-//! Settings module for rpview-gpui
+//! Settings module for rpview
 //!
 //! This module defines all user-configurable settings for the application.
 //! Settings are serialized to JSON and saved in the platform-appropriate config directory.

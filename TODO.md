@@ -1,6 +1,6 @@
 # TODO
 
-This document outlines the development roadmap for rpview-gpui, organized by implementation phases.
+This document outlines the development roadmap for rpview, organized by implementation phases.
 
 ## Progress Overview
 
@@ -972,7 +972,7 @@ div()
 ---
 
 ### Phase 1 Summary
-Phase 1 of rpview-gpui has been successfully completed! This phase established the foundation and basic structure for the image viewer application.
+Phase 1 of rpview has been successfully completed! This phase established the foundation and basic structure for the image viewer application.
 
 **What Was Implemented:**
 

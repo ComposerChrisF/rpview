@@ -1,6 +1,6 @@
-# Contributing to rpview-gpui
+# Contributing to rpview
 
-Thank you for your interest in contributing to rpview-gpui! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to rpview! This document provides guidelines and information for contributors.
 
 ## Table of Contents
 
@@ -28,8 +28,8 @@ This project adheres to a code of conduct that all contributors are expected to 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/rpview-gpui.git
-   cd rpview-gpui
+   git clone https://github.com/YOUR_USERNAME/rpview.git
+   cd rpview
    ```
 3. **Add the upstream repository**:
    ```bash
@@ -68,7 +68,7 @@ cargo run -- image1.png image2.jpg
 ## Project Structure
 
 ```
-rpview-gpui/
+rpview/
 ├── src/
 │   ├── main.rs           # Application entry point
 │   ├── error.rs          # Error types and handling
@@ -249,8 +249,8 @@ The project is being developed in phases as outlined in [TODO.md](TODO.md). When
 
 ## License
 
-By contributing to rpview-gpui, you agree that your contributions will be dual-licensed under the MIT and Apache-2.0 licenses.
+By contributing to rpview, you agree that your contributions will be dual-licensed under the MIT and Apache-2.0 licenses.
 
 ---
 
-Thank you for contributing to rpview-gpui!
+Thank you for contributing to rpview!
