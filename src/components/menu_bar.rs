@@ -10,12 +10,22 @@ use gpui::prelude::*;
 use gpui::*;
 
 /// Menu item definition
-#[derive(Clone)]
 pub struct MenuItemDef {
     pub label: String,
     pub shortcut: Option<String>,
     pub action: Option<Box<dyn Action>>,
     pub is_separator: bool,
+}
+
+impl Clone for MenuItemDef {
+    fn clone(&self) -> Self {
+        Self {
+            label: self.label.clone(),
+            shortcut: self.shortcut.clone(),
+            action: self.action.as_ref().map(|a| a.boxed_clone()),
+            is_separator: self.is_separator,
+        }
+    }
 }
 
 impl MenuItemDef {
@@ -268,7 +278,7 @@ impl MenuBar {
                 .bg(rgb(0x444444));
         }
 
-        let action = item.action.clone();
+        let action = item.action.as_ref().map(|a| a.boxed_clone());
         let label = item.label.clone();
         let shortcut = item.shortcut.clone();
 
@@ -284,7 +294,7 @@ impl MenuBar {
             .text_color(Colors::text())
             .cursor_pointer()
             .hover(|el| el.bg(rgb(0x3d3d3d)))
-            .when_some(action.clone(), |el, action| {
+            .when_some(action, |el, action| {
                 el.on_click(cx.listener(move |this, _event, window, cx| {
                     // Close the menu
                     this.open_menu = None;

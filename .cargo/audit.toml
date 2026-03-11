@@ -1,0 +1,6 @@
+# Ignore advisories for transitive dependencies from GPUI that we can't control
+[advisories]
+ignore = [
+    "RUSTSEC-2026-0007", # bytes - via gpui -> zed-reqwest
+    "RUSTSEC-2026-0037", # quinn-proto - via gpui -> zed-reqwest
+]
