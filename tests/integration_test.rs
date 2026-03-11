@@ -1,4 +1,4 @@
-//! Integration tests for rpview-gpui
+//! Integration tests for rpview
 //!
 //! These tests verify end-to-end workflows including:
 //! - CLI argument parsing workflows
@@ -6,10 +6,10 @@
 //! - Navigation workflows
 //! - Zoom/pan workflows
 
-use rpview_gpui::state::app_state::{AppState, SortMode};
-use rpview_gpui::state::image_state::{FilterSettings, ImageState};
-use rpview_gpui::utils::file_scanner::{process_dropped_path, scan_directory};
-use rpview_gpui::utils::zoom::*;
+use rpview::state::app_state::{AppState, SortMode};
+use rpview::state::image_state::{FilterSettings, ImageState};
+use rpview::utils::file_scanner::{process_dropped_path, scan_directory};
+use rpview::utils::zoom::*;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -111,7 +111,7 @@ fn test_file_loading_workflow_sequential() {
     let mut images = scan_directory(dir_path).unwrap();
 
     // Sort alphabetically for predictable order
-    use rpview_gpui::utils::file_scanner::sort_alphabetically;
+    use rpview::utils::file_scanner::sort_alphabetically;
     sort_alphabetically(&mut images);
 
     let mut state = AppState::new(images);
@@ -243,7 +243,7 @@ fn test_navigation_workflow_with_sort_mode_change() {
     let mut images = scan_directory(dir_path).unwrap();
 
     // Sort alphabetically for predictable initial state
-    use rpview_gpui::utils::file_scanner::sort_alphabetically;
+    use rpview::utils::file_scanner::sort_alphabetically;
     sort_alphabetically(&mut images);
 
     let mut state = AppState::new(images);

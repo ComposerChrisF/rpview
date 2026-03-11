@@ -1,6 +1,6 @@
 # Settings System Design
 
-This document outlines the design and implementation plan for a comprehensive settings system in rpview-gpui.
+This document outlines the design and implementation plan for a comprehensive settings system in rpview.
 
 ## Table of Contents
 

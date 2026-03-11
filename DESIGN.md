@@ -1,4 +1,4 @@
-# rpview-gpui Design Specification
+# rpview Design Specification
 
 A modern, cross-platform image viewer built with Rust and GPUI.
 

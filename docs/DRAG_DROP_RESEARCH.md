@@ -96,11 +96,11 @@ This example shows:
   - Can get help with implementation details
   - Link available from https://zed.dev/
 
-## Implementation Strategy for rpview-gpui
+## Implementation Strategy for rpview
 
 ### Current Architecture Advantages
 
-The rpview-gpui codebase already has most of the necessary infrastructure:
+The rpview codebase already has most of the necessary infrastructure:
 
 1. **Directory Scanning**: `cli.rs` has logic to scan directories for images
 2. **File Loading**: `handle_open_file()` demonstrates file list replacement

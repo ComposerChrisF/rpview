@@ -1,4 +1,4 @@
-use rpview_gpui::utils::file_scanner::{
+use rpview::utils::file_scanner::{
     is_supported_image, process_dropped_path, scan_directory, sort_alphabetically,
 };
 use std::fs;

@@ -3,7 +3,7 @@ use crate::utils::file_scanner;
 use clap::Parser;
 use std::path::PathBuf;
 
-/// rpview-gpui - A fast, keyboard-driven image viewer built with GPUI
+/// rpview - A fast, keyboard-driven image viewer built with GPUI
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {

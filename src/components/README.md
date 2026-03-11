@@ -1,6 +1,6 @@
 # Components Structure
 
-This directory contains the UI components for rpview-gpui.
+This directory contains the UI components for rpview.
 
 ## Planned Components
 

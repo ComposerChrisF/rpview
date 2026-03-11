@@ -1,5 +1,5 @@
-use rpview_gpui::state::app_state::{AppState, SortMode};
-use rpview_gpui::state::image_state::{FilterSettings, ImageState};
+use rpview::state::app_state::{AppState, SortMode};
+use rpview::state::image_state::{FilterSettings, ImageState};
 use std::path::PathBuf;
 
 #[test]

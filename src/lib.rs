@@ -1,4 +1,4 @@
-// Library modules for rpview-gpui
+// Library modules for rpview
 
 pub mod cli;
 pub mod components;

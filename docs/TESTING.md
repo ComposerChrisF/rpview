@@ -1,10 +1,10 @@
 # Testing Documentation
 
-This document describes the test infrastructure for rpview-gpui.
+This document describes the test infrastructure for rpview.
 
 ## Overview
 
-rpview-gpui has comprehensive test coverage with **129 tests** covering all critical functionality:
+rpview has comprehensive test coverage with **129 tests** covering all critical functionality:
 - **93 unit tests** for core modules
 - **36 integration tests** for end-to-end workflows
 

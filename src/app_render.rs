@@ -762,7 +762,7 @@ impl Render for App {
                 }),
             )
             .on_action(cx.listener(
-                |this, _: &rpview_gpui::LoadOversizedImageAnyway, window, cx| {
+                |this, _: &rpview::LoadOversizedImageAnyway, window, cx| {
                     this.handle_load_oversized_image_anyway(window, cx);
                 },
             ))
