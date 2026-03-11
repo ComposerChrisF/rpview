@@ -214,7 +214,12 @@ impl MenuBar {
         self.open_menu.is_some()
     }
 
-    fn render_menu_button(&self, index: usize, menu: &MenuDef, cx: &mut Context<Self>) -> Div {
+    fn render_menu_button(
+        &self,
+        index: usize,
+        menu: &MenuDef,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let is_open = self.open_menu == Some(index);
         let menu_name = menu.name.clone();
 
@@ -269,9 +274,15 @@ impl MenuBar {
             .children(items)
     }
 
-    fn render_menu_item(&self, index: usize, item: &MenuItemDef, cx: &mut Context<Self>) -> Div {
+    fn render_menu_item(
+        &self,
+        index: usize,
+        item: &MenuItemDef,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         if item.is_separator {
             return div()
+                .id(SharedString::from(format!("menu-sep-{}", index)))
                 .h(px(1.0))
                 .mx(Spacing::sm())
                 .my(px(4.0))
