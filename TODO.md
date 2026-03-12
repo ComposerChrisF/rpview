@@ -1504,7 +1504,7 @@ Phase 12 has been successfully completed! The application now has comprehensive 
   - Registry entries for all supported image formats
   - "Open With" context menu integration
   - Optional file association during installation
-  - Windows subsystem configuration (no console window)
+  - Windows subsystem configuration (no console window) — scoped to bins only (`rustc-link-arg-bins`) so test binaries retain console output
   
 - **Linux**: Created .desktop file (packaging/linux/rpview.desktop)
   - Freedesktop.org standard compliant

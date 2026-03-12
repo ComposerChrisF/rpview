@@ -14,9 +14,9 @@ fn main() {
         "windows" => {
             println!("cargo:rustc-env=TARGET_PLATFORM=Windows");
             // Future: Add Windows-specific resources, icons, manifest
-            // Set Windows subsystem to avoid console window
-            println!("cargo:rustc-link-arg=/SUBSYSTEM:WINDOWS");
-            println!("cargo:rustc-link-arg=/ENTRY:mainCRTStartup");
+            // Set Windows subsystem to avoid console window (bins only, not tests)
+            println!("cargo:rustc-link-arg-bins=/SUBSYSTEM:WINDOWS");
+            println!("cargo:rustc-link-arg-bins=/ENTRY:mainCRTStartup");
         }
         "linux" => {
             println!("cargo:rustc-env=TARGET_PLATFORM=Linux");
