@@ -217,14 +217,10 @@ impl Render for App {
             | (active_bg[2] as u32));
 
         // Main content area (takes remaining space after menu bar)
-        // Only enable ImageViewer key context when no modal is open
         let content = div()
             .flex_1()
             .min_h_0() // Allow shrinking below content size
             .bg(bg_color)
-            .when(!self.show_settings && !self.show_filters, |div| {
-                div.key_context("ImageViewer")
-            })
             .when(self.drag_over, |div| {
                 // Show highlighted border when dragging files over the window
                 div.border_4().border_color(gpui::rgb(0x50fa7b)) // Green highlight
@@ -576,6 +572,10 @@ impl Render for App {
         div()
             .track_focus(&self.focus_handle)
             .focus(|s| s)
+            // Enable ImageViewer key context (for arrow key navigation) only when no modal is open
+            .when(!self.show_settings && !self.show_filters, |div| {
+                div.key_context("ImageViewer")
+            })
             .size_full()
             .flex()
             .flex_col()
