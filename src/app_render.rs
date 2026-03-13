@@ -761,11 +761,11 @@ impl Render for App {
                     this.handle_reset_settings_to_defaults(window, cx);
                 }),
             )
-            .on_action(cx.listener(
-                |this, _: &rpview::LoadOversizedImageAnyway, window, cx| {
+            .on_action(
+                cx.listener(|this, _: &rpview::LoadOversizedImageAnyway, window, cx| {
                     this.handle_load_oversized_image_anyway(window, cx);
-                },
-            ))
+                }),
+            )
             .on_action(cx.listener(|this, _: &ToggleFilters, window, cx| {
                 this.handle_toggle_filters(window, cx);
             }))
