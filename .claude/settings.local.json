@@ -81,7 +81,19 @@
       "Bash(cargo package:*)",
       "Bash(xcodebuild:*)",
       "Bash(gh run:*)",
-      "Bash(ssh win:*)"
+      "Bash(ssh win:*)",
+      "WebFetch(domain:imagemagick.org)",
+      "WebFetch(domain:www.cvedetails.com)",
+      "WebFetch(domain:nvd.nist.gov)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:imagetragick.com)",
+      "WebFetch(domain:formulae.brew.sh)",
+      "WebFetch(domain:www.cve.org)",
+      "WebFetch(domain:www.opencve.io)",
+      "WebFetch(domain:app.opencve.io)",
+      "Bash(brew deps:*)",
+      "Bash(brew info:*)",
+      "WebFetch(domain:cve.mitre.org)"
     ]
   }
 }

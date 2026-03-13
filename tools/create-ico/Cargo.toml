@@ -1,0 +1,9 @@
+[package]
+name = "create-ico"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ico = "0.5"
+image = "0.25"
+png = "0.17"

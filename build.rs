@@ -8,22 +8,43 @@ fn main() {
     match target_os.as_str() {
         "macos" => {
             println!("cargo:rustc-env=TARGET_PLATFORM=macOS");
-            // Future: Add macOS-specific resources, icons, plist files
-            // println!("cargo:rustc-link-arg=-mmacosx-version-min=10.15");
         }
         "windows" => {
             println!("cargo:rustc-env=TARGET_PLATFORM=Windows");
-            // Future: Add Windows-specific resources, icons, manifest
             // Set Windows subsystem to avoid console window (bins only, not tests)
             println!("cargo:rustc-link-arg-bins=/SUBSYSTEM:WINDOWS");
             println!("cargo:rustc-link-arg-bins=/ENTRY:mainCRTStartup");
+
+            // Embed icon and version resource into the executable
+            println!("cargo:rerun-if-changed=packaging/windows/rpview.ico");
+            embed_windows_resource();
         }
         "linux" => {
             println!("cargo:rustc-env=TARGET_PLATFORM=Linux");
-            // Future: Add Linux-specific resources, .desktop files
         }
         _ => {
             println!("cargo:rustc-env=TARGET_PLATFORM=Unknown");
         }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn embed_windows_resource() {
+    let ico_path = "packaging/windows/rpview.ico";
+    if !std::path::Path::new(ico_path).exists() {
+        println!("cargo:warning=Icon file not found at {ico_path}, skipping resource embedding");
+        return;
+    }
+
+    let mut res = winresource::WindowsResource::new();
+    res.set_icon(ico_path);
+    res.set("ProductName", "rpview");
+    res.set("FileDescription", "A fast, cross-platform image viewer");
+    res.set("LegalCopyright", "Copyright (c) rpview contributors");
+    res.compile().expect("Failed to compile Windows resource");
+}
+
+#[cfg(not(target_os = "windows"))]
+fn embed_windows_resource() {
+    // No-op on non-Windows platforms
 }

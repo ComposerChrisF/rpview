@@ -49,33 +49,19 @@ iconutil -c icns rpview.iconset
 - 256x256
 
 **Creation:**
+Generated using the `tools/create-ico/` Rust tool (uses the `ico` crate):
 ```bash
-# Use ImageMagick to create ICO file
-convert icon.png -define icon:auto-resize=256,128,64,48,32,16 rpview.ico
-
-# Or use online tools like:
-# - https://icoconvert.com/
-# - https://convertio.co/png-ico/
+cd tools/create-ico && cargo run
 ```
 
 **Embedding in Binary:**
-Add to `build.rs`:
-```rust
-#[cfg(target_os = "windows")]
-{
-    use std::path::Path;
-    if Path::new("packaging/windows/rpview.ico").exists() {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("packaging/windows/rpview.ico");
-        res.compile().unwrap();
-    }
-}
-```
+The `build.rs` script uses the `winresource` crate (maintained fork of `winres`) to embed
+the icon and version metadata into `rpview.exe` at build time. This is automatic on Windows builds.
 
-Add dependency to `Cargo.toml`:
+Build dependency in `Cargo.toml`:
 ```toml
 [target.'cfg(target_os = "windows")'.build-dependencies]
-winres = "0.1"
+winresource = "0.1"
 ```
 
 ## Linux
