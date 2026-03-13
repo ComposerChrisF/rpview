@@ -252,7 +252,7 @@ impl MenuBar {
             .child(menu_name)
     }
 
-    fn render_dropdown(&self, menu: &MenuDef, cx: &mut Context<Self>) -> Div {
+    fn render_dropdown(&self, menu: &MenuDef, cx: &mut Context<Self>) -> Deferred {
         let items: Vec<_> = menu
             .items
             .iter()
@@ -260,18 +260,20 @@ impl MenuBar {
             .map(|(i, item)| self.render_menu_item(i, item, cx))
             .collect();
 
-        div()
-            .absolute()
-            .top(px(24.0))
-            .left_0()
-            .min_w(px(220.0))
-            .bg(rgb(0x2d2d2d))
-            .border_1()
-            .border_color(rgb(0x3d3d3d))
-            .rounded_b(px(4.0))
-            .shadow_lg()
-            .py(px(4.0))
-            .children(items)
+        deferred(
+            anchored().snap_to_window().child(
+                div()
+                    .min_w(px(220.0))
+                    .bg(rgb(0x2d2d2d))
+                    .border_1()
+                    .border_color(rgb(0x3d3d3d))
+                    .rounded_b(px(4.0))
+                    .shadow_lg()
+                    .py(px(4.0))
+                    .children(items),
+            ),
+        )
+        .with_priority(1)
     }
 
     fn render_menu_item(
@@ -306,13 +308,15 @@ impl MenuBar {
             .cursor_pointer()
             .hover(|el| el.bg(rgb(0x3d3d3d)))
             .when_some(action, |el, action| {
-                el.on_click(cx.listener(move |this, _event, window, cx| {
-                    // Close the menu
-                    this.open_menu = None;
-                    cx.notify();
-                    // Dispatch the action
-                    window.dispatch_action(action.boxed_clone(), cx);
-                }))
+                el.on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _event, window, cx| {
+                        // Dispatch the action before closing the menu
+                        window.dispatch_action(action.boxed_clone(), cx);
+                        this.open_menu = None;
+                        cx.notify();
+                    }),
+                )
             })
             .child(div().flex_1().child(label))
             .when_some(shortcut, |el, shortcut| {

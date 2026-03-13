@@ -1608,10 +1608,11 @@ pub fn modifier_key() -> &'static str {
 **Testing Results:**
 - ✅ Keyboard shortcuts verified on macOS (Cmd key)
 - ✅ Menu integration tested on macOS (menu bar appears)
+- ✅ Menu dropdowns tested on Windows (deferred/anchored rendering for z-order)
 - ✅ High-DPI tested on Retina display (2x scaling works)
 - ✅ File dialogs work cross-platform (rfd crate)
 - ✅ Drag-and-drop verified on macOS
-- ⏳ Windows testing ready (installer configured)
+- ✅ Arrow key navigation verified on Windows (key context on focused element)
 - ⏳ Linux testing ready (install script prepared)
 
 **Platform Support Summary:**
@@ -1622,7 +1623,7 @@ pub fn modifier_key() -> &'static str {
 | Native Menus | ✅ Menu Bar | ✅ Window | ✅ DE-specific | Complete |
 | File Associations | ✅ Info.plist | ✅ Registry | ✅ .desktop | Complete |
 | High-DPI | ✅ Retina | ✅ Scaling | ✅ HiDPI | Complete |
-| Drag & Drop | ✅ Tested | ⏳ Ready | ⏳ Ready | Partial |
+| Drag & Drop | ✅ Tested | ✅ Tested | ⏳ Ready | Partial |
 | File Dialogs | ✅ Native | ✅ Native | ✅ Native | Complete |
 | GPU Acceleration | ✅ Metal | ✅ DirectX | ✅ Vulkan/GL | Complete |
 

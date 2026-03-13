@@ -80,7 +80,8 @@
       "Bash(cargo publish:*)",
       "Bash(cargo package:*)",
       "Bash(xcodebuild:*)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Bash(ssh win:*)"
     ]
   }
 }
