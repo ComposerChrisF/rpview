@@ -2635,7 +2635,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.56.0",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -4568,7 +4568,7 @@ dependencies = [
 
 [[package]]
 name = "rpview"
-version = "0.7.10"
+version = "0.7.11"
 dependencies = [
  "block2",
  "ccf-gpui-widgets",
@@ -4585,6 +4585,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "trash",
+ "winresource",
 ]
 
 [[package]]
@@ -6936,6 +6937,16 @@ checksum = "cb5a765337c50e9ec252c2069be9bf91c7df47afb103b642ba3a53bf8101be97"
 dependencies = [
  "cfg-if",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "winresource"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e287ced0f21cd11f4035fe946fd3af145f068d1acb708afd248100f89ec7432d"
+dependencies = [
+ "toml 0.9.10+spec-1.1.0",
+ "version_check",
 ]
 
 [[package]]

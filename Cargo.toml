@@ -1,6 +1,6 @@
 [package]
 name = "rpview"
-version = "0.7.11"
+version = "0.8.0"
 edition = "2024"
 authors = ["rpview contributors"]
 description = "A fast, cross-platform image viewer built with GPUI"
@@ -37,6 +37,9 @@ objc2-app-kit = "0.3"
 block2 = "0.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+winresource = "0.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 

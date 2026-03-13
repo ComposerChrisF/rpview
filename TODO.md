@@ -1685,7 +1685,7 @@ pub fn modifier_key() -> &'static str {
 5. **Documentation First**: Comprehensive docs created before asset creation
 
 **Future Enhancements:**
-- Create actual icon assets (.icns, .ico, multi-size PNGs)
+- ~~Create actual icon assets (.icns, .ico, multi-size PNGs)~~ — Windows .ico created and embedded via `winresource` crate in `build.rs`
 - macOS app bundle creation with automated build script
 - Windows code signing for installer
 - Linux packaging (.deb, .rpm, AppImage, Flatpak)
