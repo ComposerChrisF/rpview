@@ -72,73 +72,104 @@ pub struct LoadedImage {
 /// Component for viewing images
 pub struct ImageViewer {
     /// Currently loaded image
-    pub current_image: Option<LoadedImage>,
+    pub(crate) current_image: Option<LoadedImage>,
     /// Error message if image failed to load
-    pub error_message: Option<String>,
+    pub(crate) error_message: Option<String>,
     /// Path of the image that failed to load (for full path display)
-    pub error_path: Option<PathBuf>,
+    pub(crate) error_path: Option<PathBuf>,
     /// Path to directory with no images (for friendly notice, not an error)
-    pub no_images_path: Option<PathBuf>,
+    pub(crate) no_images_path: Option<PathBuf>,
     /// Oversized image warning: (path, width, height, max_dimension)
-    pub oversized_image: Option<(PathBuf, u32, u32, u32)>,
+    pub(crate) oversized_image: Option<(PathBuf, u32, u32, u32)>,
     /// Focus handle for keyboard events
-    pub focus_handle: FocusHandle,
+    pub(crate) focus_handle: FocusHandle,
     /// Current image state (zoom, pan, etc.)
-    pub image_state: ImageState,
+    pub(crate) image_state: ImageState,
     /// Last known viewport size (for fit-to-window calculations)
-    pub viewport_size: Option<Size<Pixels>>,
+    pub(crate) viewport_size: Option<Size<Pixels>>,
+    // These fields are accessed from the binary crate (app_render.rs) but the lib crate
+    // can't see that usage, so the compiler warns about dead code.
     /// Z key drag zoom state: outer Option = Z key held, inner Option = actively dragging
     /// Inner tuple: (last_mouse_x, last_mouse_y, zoom_center_x, zoom_center_y)
-    pub z_drag_state: Option<Option<(f32, f32, f32, f32)>>,
+    #[allow(dead_code)]
+    pub(crate) z_drag_state: Option<Option<(f32, f32, f32, f32)>>,
     /// Spacebar drag pan state: outer Option = spacebar held, inner Option = actively dragging
     /// Inner tuple: (last_mouse_x, last_mouse_y) for 1:1 pixel movement panning
-    pub spacebar_drag_state: Option<Option<(f32, f32)>>,
+    #[allow(dead_code)]
+    pub(crate) spacebar_drag_state: Option<Option<(f32, f32)>>,
     /// Paths to preload into GPU (for smooth navigation)
     /// These images are rendered invisibly to prime the GPU texture cache
-    pub preload_paths: Vec<PathBuf>,
+    pub(crate) preload_paths: Vec<PathBuf>,
     /// Active async loading operation
-    pub loading_handle: Option<image_loader::LoaderHandle>,
+    pub(crate) loading_handle: Option<image_loader::LoaderHandle>,
     /// Loading state indicator
-    pub is_loading: bool,
+    pub(crate) is_loading: bool,
     /// Filter processing state
-    pub is_processing_filters: bool,
+    pub(crate) is_processing_filters: bool,
     /// Handle for async filter processing
-    pub filter_processing_handle: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
+    pub(crate) filter_processing_handle: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
     /// Pending filtered image path (ready to be applied after GPU preload)
-    pub pending_filtered_path: Option<PathBuf>,
+    pub(crate) pending_filtered_path: Option<PathBuf>,
     /// Number of frames the pending filtered path has been preloaded (for GPU cache)
-    pub pending_filter_preload_frames: u32,
+    pub(crate) pending_filter_preload_frames: u32,
 
     // --- SVG dynamic re-rasterization state ---
     /// Active sharp re-raster path (replaces blurry base raster when zoomed in)
-    pub svg_reraster_path: Option<PathBuf>,
+    pub(crate) svg_reraster_path: Option<PathBuf>,
     /// Region info if this is a viewport-only re-raster (None = full render)
-    pub svg_reraster_region: Option<SvgRerasterRegion>,
+    pub(crate) svg_reraster_region: Option<SvgRerasterRegion>,
     /// Zoom level the active re-raster was rendered at
-    pub svg_reraster_scale: Option<f32>,
+    pub(crate) svg_reraster_scale: Option<f32>,
 
     /// Pending re-raster path (GPU preloading before swap)
-    pub pending_svg_reraster_path: Option<PathBuf>,
+    pub(crate) pending_svg_reraster_path: Option<PathBuf>,
     /// Pending region info
-    pub pending_svg_reraster_region: Option<SvgRerasterRegion>,
+    pub(crate) pending_svg_reraster_region: Option<SvgRerasterRegion>,
     /// GPU preload frame counter for pending re-raster
-    pub pending_svg_reraster_preload_frames: u32,
+    pub(crate) pending_svg_reraster_preload_frames: u32,
 
     /// Channel receiving completed re-raster results from background thread
-    pub svg_reraster_handle: Option<mpsc::Receiver<SvgRerasterResult>>,
+    pub(crate) svg_reraster_handle: Option<mpsc::Receiver<SvgRerasterResult>>,
     /// Whether a re-raster is currently in progress on a background thread
-    pub is_svg_rerastering: bool,
+    pub(crate) is_svg_rerastering: bool,
     /// Cancel flag for in-flight re-raster
-    pub svg_reraster_cancel: Option<Arc<Mutex<bool>>>,
+    pub(crate) svg_reraster_cancel: Option<Arc<Mutex<bool>>>,
 
     /// Timestamp of last zoom/pan change (for debouncing re-raster triggers)
-    pub last_zoom_pan_change: Option<Instant>,
+    pub(crate) last_zoom_pan_change: Option<Instant>,
 }
 
 impl ImageViewer {
-    /// Set paths to preload into GPU for smooth navigation
-    pub fn set_preload_paths(&mut self, paths: Vec<PathBuf>) {
-        self.preload_paths = paths;
+    pub fn new(focus_handle: FocusHandle) -> Self {
+        Self {
+            current_image: None,
+            error_message: None,
+            error_path: None,
+            no_images_path: None,
+            oversized_image: None,
+            focus_handle,
+            image_state: ImageState::new(),
+            viewport_size: None,
+            z_drag_state: None,
+            spacebar_drag_state: None,
+            preload_paths: Vec::new(),
+            loading_handle: None,
+            is_loading: false,
+            is_processing_filters: false,
+            filter_processing_handle: None,
+            pending_filtered_path: None,
+            pending_filter_preload_frames: 0,
+            svg_reraster_path: None,
+            svg_reraster_region: None,
+            svg_reraster_scale: None,
+            pending_svg_reraster_path: None,
+            pending_svg_reraster_region: None,
+            pending_svg_reraster_preload_frames: 0,
+            svg_reraster_handle: None,
+            is_svg_rerastering: false,
+            svg_reraster_cancel: None,
+            last_zoom_pan_change: None,
+        }
     }
 
     /// Set the image state

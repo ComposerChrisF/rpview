@@ -29,6 +29,10 @@ impl DebugOverlay {
         Self { config }
     }
 
+    pub fn update_config(&mut self, config: DebugOverlayConfig) {
+        self.config = config;
+    }
+
     /// Render a debug info line
     fn render_info_line(&self, label: &str, value: String) -> impl IntoElement {
         div()

@@ -522,6 +522,14 @@ This document outlines the development roadmap for rpview, organized by implemen
   - Split main.rs (2,834→446 lines) into app_handlers.rs, app_render.rs, app_keybindings.rs
   - macOS keyboard shortcuts now use native glyphs (⌘⇧⌥) without separators; Windows/Linux unchanged
   - Suppressed focus ring on image viewer and app root div
+- [x] Code review round 3 (v0.8.1): 6 items — idiom improvements, allocation reduction, deduplication
+  - Deduplicated file extension list in file dialog with SUPPORTED_EXTENSIONS constant
+  - Added AtomicU64 counter to SVG temp filenames for uniqueness
+  - Added ImageViewer::new() constructor, replaced inline struct literal, changed fields to pub(crate)
+  - Reuse preload_paths Vec per frame (clear+push) instead of allocating a new Vec each render
+  - Replaced .when()+.unwrap() with .when_some() for delete confirmation and toast notification
+  - Stored DebugOverlay as persistent Entity field, update config per-frame instead of creating new entity
+  - Suppressed false-positive dead_code warnings on drag state fields used only from binary crate
 
 ## Phase 15: Documentation & Release
 

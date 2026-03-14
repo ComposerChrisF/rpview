@@ -1,4 +1,5 @@
 use super::*;
+use crate::utils::file_scanner::SUPPORTED_EXTENSIONS;
 
 impl App {
     /// Check if modal overlays (settings, delete confirmation) are blocking main window interactions
@@ -274,12 +275,7 @@ impl App {
         }
         // Open native file dialog for image selection (single file)
         let mut file_dialog = rfd::FileDialog::new()
-            .add_filter(
-                "Images",
-                &[
-                    "png", "jpg", "jpeg", "bmp", "gif", "tiff", "tif", "ico", "webp", "svg",
-                ],
-            )
+            .add_filter("Images", SUPPORTED_EXTENSIONS)
             .set_title("Open Image");
 
         // Set default directory to current image's parent directory if available,
