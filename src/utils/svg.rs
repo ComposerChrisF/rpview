@@ -1,6 +1,9 @@
 use crate::error::{AppError, AppResult};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
+
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Cached font database loaded once and reused for all SVG operations.
 /// System font discovery is slow (~50-100ms), so we only do it once.
@@ -58,10 +61,11 @@ fn svg_temp_path(prefix: &str) -> Result<PathBuf, String> {
         .map_err(|e| format!("Failed to resolve temp dir: {}", e))?;
 
     Ok(temp_dir.join(format!(
-        "rpview_{}_{}_{}.png",
+        "rpview_{}_{}_{}_{}.png",
         prefix,
         std::process::id(),
-        timestamp
+        timestamp,
+        TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
     )))
 }
 

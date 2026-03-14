@@ -94,6 +94,7 @@ enum DeleteMode {
 }
 
 /// State for a toast notification
+#[derive(Clone)]
 struct ToastState {
     message: String,
     detail: Option<String>,
@@ -129,6 +130,8 @@ struct App {
     settings_window: Entity<SettingsWindow>,
     /// Help overlay component
     help_overlay: Entity<HelpOverlay>,
+    /// Debug overlay component
+    debug_overlay: Entity<DebugOverlay>,
     /// Menu bar component (Windows/Linux only)
     #[cfg(not(target_os = "macos"))]
     menu_bar: Entity<components::MenuBar>,
@@ -259,35 +262,7 @@ fn main() {
                     focus_handle.focus(window);
 
                     // Create the viewer and load the first image if available
-                    let mut viewer = ImageViewer {
-                        current_image: None,
-                        error_message: None,
-                        error_path: None,
-                        no_images_path: None,
-                        oversized_image: None,
-                        focus_handle: inner_cx.focus_handle(),
-                        image_state: state::ImageState::new(),
-                        viewport_size: None,
-                        z_drag_state: None,
-                        spacebar_drag_state: None,
-                        preload_paths: Vec::new(),
-                        loading_handle: None,
-                        is_loading: false,
-                        is_processing_filters: false,
-                        filter_processing_handle: None,
-                        pending_filtered_path: None,
-                        pending_filter_preload_frames: 0,
-                        svg_reraster_path: None,
-                        svg_reraster_region: None,
-                        svg_reraster_scale: None,
-                        pending_svg_reraster_path: None,
-                        pending_svg_reraster_region: None,
-                        pending_svg_reraster_preload_frames: 0,
-                        svg_reraster_handle: None,
-                        is_svg_rerastering: false,
-                        svg_reraster_cancel: None,
-                        last_zoom_pan_change: None,
-                    };
+                    let mut viewer = ImageViewer::new(inner_cx.focus_handle());
 
                     if let Some(ref path) = first_image_path {
                         let max_dim = Some(settings.performance.max_image_dimension);
@@ -360,6 +335,20 @@ fn main() {
                         )
                     });
 
+                    // Create debug overlay
+                    let debug_overlay = inner_cx.new(|_cx| {
+                        DebugOverlay::new(DebugOverlayConfig {
+                            current_path: None,
+                            current_index: 0,
+                            total_images: 0,
+                            image_state: state::ImageState::new(),
+                            image_dimensions: None,
+                            viewport_size: None,
+                            overlay_transparency: settings.appearance.overlay_transparency,
+                            font_size_scale: settings.appearance.font_size_scale,
+                        })
+                    });
+
                     // Create menu bar for Windows/Linux
                     #[cfg(not(target_os = "macos"))]
                     let menu_bar = inner_cx.new(|cx| components::MenuBar::new(cx));
@@ -380,6 +369,7 @@ fn main() {
                         filter_controls,
                         settings_window,
                         help_overlay,
+                        debug_overlay,
                         #[cfg(not(target_os = "macos"))]
                         menu_bar,
                         last_frame_update: Instant::now(),

@@ -137,14 +137,13 @@ impl Render for App {
         // Set preload paths for next/previous images to prime GPU cache
         // This must happen in render() so images are preloaded BEFORE navigation occurs
         // This eliminates black flashing by ensuring textures are already in GPU memory
-        let mut preload_paths = Vec::with_capacity(2);
+        self.viewer.preload_paths.clear();
         if let Some(next_path) = self.app_state.next_image_path() {
-            preload_paths.push(next_path.clone());
+            self.viewer.preload_paths.push(next_path.clone());
         }
         if let Some(prev_path) = self.app_state.previous_image_path() {
-            preload_paths.push(prev_path.clone());
+            self.viewer.preload_paths.push(prev_path.clone());
         }
-        self.viewer.set_preload_paths(preload_paths);
 
         // Update animation frame if playing (GPUI's suggested pattern)
         let should_update_animation = self
@@ -409,8 +408,8 @@ impl Render for App {
                     .current_image
                     .as_ref()
                     .map(|img| (img.width, img.height));
-                el.child(cx.new(|_cx| {
-                    DebugOverlay::new(DebugOverlayConfig {
+                self.debug_overlay.update(cx, |overlay, _cx| {
+                    overlay.update_config(DebugOverlayConfig {
                         current_path: self.app_state.current_image().cloned(),
                         current_index: self.app_state.current_index,
                         total_images: self.app_state.image_paths.len(),
@@ -419,8 +418,9 @@ impl Render for App {
                         viewport_size: self.viewer.viewport_size,
                         overlay_transparency: self.settings.appearance.overlay_transparency,
                         font_size_scale: self.settings.appearance.font_size_scale,
-                    })
-                }))
+                    });
+                });
+                el.child(self.debug_overlay.clone())
             })
             .when(self.show_settings, |el| {
                 el.child(self.settings_window.clone())
@@ -429,8 +429,7 @@ impl Render for App {
                 el.child(self.filter_controls.clone())
             })
             // Delete confirmation card at bottom-center
-            .when(self.pending_delete.is_some(), |el| {
-                let mode = self.pending_delete.unwrap();
+            .when_some(self.pending_delete, |el, mode| {
                 let current_path = self.app_state.current_image().cloned();
                 let filename = current_path
                     .as_ref()
@@ -522,8 +521,7 @@ impl Render for App {
                 )
             })
             // Toast notification at bottom-center (near delete card position)
-            .when(self.toast.is_some(), |el| {
-                let toast = self.toast.as_ref().unwrap();
+            .when_some(self.toast.clone(), |el, toast| {
                 let border_color = if toast.is_error {
                     rgba(0xff5555ff)
                 } else {
@@ -543,9 +541,9 @@ impl Render for App {
                             .text_color(rgb(0xffffff))
                             .text_size(px(13.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(toast.message.clone()),
+                            .child(toast.message),
                     );
-                if let Some(ref detail) = toast.detail {
+                if let Some(detail) = toast.detail {
                     toast_el = toast_el.child(
                         div()
                             .text_color(rgb(0xaaaaaa))
@@ -553,7 +551,7 @@ impl Render for App {
                             .mt(px(2.0))
                             .overflow_x_hidden()
                             .text_ellipsis()
-                            .child(detail.clone()),
+                            .child(detail),
                     );
                 }
                 el.child(
