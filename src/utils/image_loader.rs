@@ -1,5 +1,6 @@
 #![allow(clippy::collapsible_if)]
 
+use super::debug_eprintln;
 use crate::error::{AppError, AppResult};
 use crate::utils::animation::AnimationData;
 use image::DynamicImage;
@@ -144,7 +145,7 @@ pub fn load_image_async(
                 );
 
                 let initial_cache_count = std::cmp::min(3, anim_data.frames.len());
-                eprintln!(
+                debug_eprintln!(
                     "[ASYNC LOAD] Caching first {} frames...",
                     initial_cache_count
                 );
@@ -158,11 +159,11 @@ pub fn load_image_async(
                     let temp_path = temp_dir.join(format!("{}_{}.png", base_name, i));
                     match anim_data.frames[i].image.save(&temp_path) {
                         Ok(_) => {
-                            eprintln!("[ASYNC LOAD] Cached frame {}", i);
+                            debug_eprintln!("[ASYNC LOAD] Cached frame {}", i);
                             initial_frame_paths.push(temp_path);
                         }
-                        Err(e) => {
-                            eprintln!("[ASYNC LOAD ERROR] Failed to cache frame {}: {}", i, e);
+                        Err(_e) => {
+                            debug_eprintln!("[ASYNC LOAD ERROR] Failed to cache frame {}: {}", i, _e);
                             initial_frame_paths.push(PathBuf::new());
                         }
                     }

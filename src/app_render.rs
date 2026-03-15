@@ -1,4 +1,5 @@
 use super::*;
+use crate::utils::debug_eprintln;
 
 impl Render for App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -181,8 +182,7 @@ impl Render for App {
                 // Advance to next frame when duration has elapsed
                 if elapsed >= frame_duration {
                     let next_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
-                    #[cfg(debug_assertions)]
-                    eprintln!(
+                    debug_eprintln!(
                         "[ANIMATION] Advancing from frame {} to frame {}",
                         anim_state.current_frame, next_frame
                     );

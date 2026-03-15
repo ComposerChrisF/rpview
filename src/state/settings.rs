@@ -274,7 +274,7 @@ pub struct FilterPreset {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SortNavigation {
     /// Default sort mode on startup
-    pub default_sort_mode: SortModeWrapper,
+    pub default_sort_mode: SortMode,
     /// Whether navigation wraps around (last -> first)
     pub wrap_navigation: bool,
     /// Whether to show image counter in window title
@@ -284,34 +284,9 @@ pub struct SortNavigation {
 impl Default for SortNavigation {
     fn default() -> Self {
         Self {
-            default_sort_mode: SortModeWrapper::Alphabetical,
+            default_sort_mode: SortMode::Alphabetical,
             wrap_navigation: true,
             show_image_counter: true,
-        }
-    }
-}
-
-/// Wrapper for SortMode to add Serialize/Deserialize
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum SortModeWrapper {
-    Alphabetical,
-    ModifiedDate,
-}
-
-impl From<SortModeWrapper> for SortMode {
-    fn from(wrapper: SortModeWrapper) -> Self {
-        match wrapper {
-            SortModeWrapper::Alphabetical => SortMode::Alphabetical,
-            SortModeWrapper::ModifiedDate => SortMode::ModifiedDate,
-        }
-    }
-}
-
-impl From<SortMode> for SortModeWrapper {
-    fn from(mode: SortMode) -> Self {
-        match mode {
-            SortMode::Alphabetical => SortModeWrapper::Alphabetical,
-            SortMode::ModifiedDate => SortModeWrapper::ModifiedDate,
         }
     }
 }
@@ -553,7 +528,7 @@ mod tests {
         let sort_nav = SortNavigation::default();
 
         // Assert
-        assert_eq!(sort_nav.default_sort_mode, SortModeWrapper::Alphabetical);
+        assert_eq!(sort_nav.default_sort_mode, SortMode::Alphabetical);
         assert!(sort_nav.wrap_navigation);
         assert!(sort_nav.show_image_counter);
     }
@@ -569,47 +544,6 @@ mod tests {
         // Platform-specific: should have at least one viewer on macOS/Windows/Linux
         #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
         assert!(!tools.external_viewers.is_empty());
-    }
-
-    #[test]
-    fn test_sort_mode_wrapper_to_sort_mode() {
-        // Arrange & Act & Assert
-        assert_eq!(
-            SortMode::from(SortModeWrapper::Alphabetical),
-            SortMode::Alphabetical
-        );
-        assert_eq!(
-            SortMode::from(SortModeWrapper::ModifiedDate),
-            SortMode::ModifiedDate
-        );
-    }
-
-    #[test]
-    fn test_sort_mode_to_wrapper() {
-        // Arrange & Act & Assert
-        assert_eq!(
-            SortModeWrapper::from(SortMode::Alphabetical),
-            SortModeWrapper::Alphabetical
-        );
-        assert_eq!(
-            SortModeWrapper::from(SortMode::ModifiedDate),
-            SortModeWrapper::ModifiedDate
-        );
-    }
-
-    #[test]
-    fn test_sort_mode_wrapper_roundtrip() {
-        // Arrange
-        let original_alpha = SortModeWrapper::Alphabetical;
-        let original_date = SortModeWrapper::ModifiedDate;
-
-        // Act - convert to SortMode and back
-        let roundtrip_alpha: SortModeWrapper = SortMode::from(original_alpha).into();
-        let roundtrip_date: SortModeWrapper = SortMode::from(original_date).into();
-
-        // Assert
-        assert_eq!(roundtrip_alpha, original_alpha);
-        assert_eq!(roundtrip_date, original_date);
     }
 
     #[test]

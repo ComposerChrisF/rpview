@@ -42,8 +42,8 @@ pub fn scan_directory(dir: &Path) -> AppResult<Vec<PathBuf>> {
         let entry = entry?;
         let path = entry.path();
 
-        // Only process files (not subdirectories)
-        if path.is_file() && is_supported_image(&path) {
+        // Only process files (not subdirectories) — use cached DirEntry metadata
+        if entry.file_type()?.is_file() && is_supported_image(&path) {
             images.push(path);
         }
     }

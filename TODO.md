@@ -531,6 +531,17 @@ This document outlines the development roadmap for rpview, organized by implemen
   - Replaced .when()+.unwrap() with .when_some() for delete confirmation and toast notification
   - Stored DebugOverlay as persistent Entity field, update config per-frame instead of creating new entity
   - Suppressed false-positive dead_code warnings on drag state fields used only from binary crate
+- [x] Code review round 4 (v0.9.4): 10 items — correctness bug, performance, deduplication, debug gating, boilerplate reduction
+  - Fixed LRU cache bug: `get_current_state()` now updates `last_accessed`; eviction only on new key insert
+  - Filter pixel loop: replaced `enumerate_pixels()`/`put_pixel()` with direct slice `chunks_exact(4)` iteration
+  - Filter `to_rgba8()`: use `as_rgba8()` reference when input is already RGBA8, avoiding full copy
+  - Directory scan: use `entry.file_type()?.is_file()` instead of `path.is_file()` to avoid extra syscall
+  - Extracted `format_window_title()` to eliminate title formatting duplication between `main.rs` and `app_handlers.rs`
+  - Eliminated `SortModeWrapper`: added `Serialize`/`Deserialize` directly to `SortMode`, deleted wrapper and From impls
+  - Defined `debug_eprintln!` macro; converted ~50 diagnostic/trace prints across 7 files, release builds now silent
+  - Defined `create_stepper!`/`create_toggle!` macros in settings_window.rs, replacing 13+10 boilerplate instances (~250 lines)
+  - Removed extra `ImageState::clone()` in `load_current_image_state` by extracting Copy fields before move
+  - Extracted shared `collect_animation_frames()` to deduplicate GIF/WEBP animation frame processing
 
 ## Phase 15: Documentation & Release
 
@@ -2016,7 +2027,7 @@ Phase 16.1 (Settings Foundation) has been successfully completed! The applicatio
 - **Crash-resistant design**: Settings saved immediately on first load, not just on quit
 - **Corrupt file recovery**: Automatically backs up corrupt settings to `.json.backup` and creates fresh defaults
 - **Platform abstraction**: Uses dirs crate for cross-platform config directory locations
-- **Type safety**: SortModeWrapper enum bridges non-serializable SortMode from app_state
+- **Type safety**: SortMode now derives Serialize/Deserialize directly (SortModeWrapper eliminated in v0.9.4)
 - **Default external viewers**: Platform-specific defaults (Preview on macOS, Photos on Windows, eog/feh on Linux)
 - **Extensible structure**: Easy to add new settings categories in the future
 

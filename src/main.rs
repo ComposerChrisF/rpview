@@ -65,6 +65,7 @@ mod state;
 mod utils;
 
 use cli::Cli;
+use utils::debug_eprintln;
 use components::{
     DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, HelpOverlay,
     ImageViewer, SettingsWindow,
@@ -155,7 +156,7 @@ struct App {
 fn main() {
     // Load settings from disk (or use defaults if file doesn't exist)
     let settings = settings_io::load_settings();
-    println!(
+    debug_eprintln!(
         "Settings loaded from: {}",
         settings_io::get_settings_path().display()
     );
@@ -193,15 +194,15 @@ fn main() {
     let app_state = AppState::new_with_settings(
         image_paths,
         start_path,
-        settings.sort_navigation.default_sort_mode.into(),
+        settings.sort_navigation.default_sort_mode,
         settings.viewer_behavior.state_cache_size,
     );
 
     // Print startup info
-    println!("rpview starting...");
-    println!("Loaded {} image(s)", app_state.image_paths.len());
-    if let Some(first_image) = app_state.current_image() {
-        println!("Current image: {}", first_image.display());
+    debug_eprintln!("rpview starting...");
+    debug_eprintln!("Loaded {} image(s)", app_state.image_paths.len());
+    if let Some(_first_image) = app_state.current_image() {
+        debug_eprintln!("Current image: {}", _first_image.display());
     }
 
     // Get the first image path to load (or None if no images)
@@ -276,29 +277,14 @@ fn main() {
                     }
 
                     // Set initial window title using the user's format setting
-                    if let Some(path) = app_state.current_image() {
-                        let filename = path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("Unknown");
-                        let position = app_state.current_index + 1;
-                        let total = app_state.image_paths.len();
-                        let title = if settings.sort_navigation.show_image_counter {
-                            settings
-                                .appearance
-                                .window_title_format
-                                .replace("{filename}", filename)
-                                .replace("{index}", &position.to_string())
-                                .replace("{total}", &total.to_string())
-                                .replace("{sortmode}", app_state.sort_mode.long_label())
-                                .replace("{sm}", app_state.sort_mode.short_label())
-                        } else {
-                            filename.to_string()
-                        };
-                        window.set_window_title(&title);
-                    } else {
-                        window.set_window_title("rpview");
-                    }
+                    let title = app_handlers::format_window_title(
+                        app_state.current_image().map(|p| p.as_path()),
+                        app_state.current_index,
+                        app_state.image_paths.len(),
+                        app_state.sort_mode,
+                        &settings,
+                    );
+                    window.set_window_title(&title);
 
                     // Create filter controls
                     let filter_controls = inner_cx.new(|cx| {
