@@ -229,7 +229,7 @@ impl Default for Appearance {
             use_light_background: false,
             overlay_transparency: 204, // ~80% opacity
             font_size_scale: 1.0,
-            window_title_format: "{filename} ({sm}{index}/{total})".to_string(),
+            window_title_format: "{filename} ({sm}, {index}/{total})".to_string(),
         }
     }
 }
@@ -530,7 +530,7 @@ mod tests {
         assert_eq!(appearance.font_size_scale, DEFAULT_FONT_SIZE_SCALE);
         assert_eq!(
             appearance.window_title_format,
-            "{filename} ({sm}{index}/{total})"
+            "{filename} ({sm}, {index}/{total})"
         );
     }
 

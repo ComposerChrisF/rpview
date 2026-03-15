@@ -2233,7 +2233,7 @@ Phase 16.4 (Apply Settings Throughout App) has been successfully completed! Sett
   - Supports {filename}, {index}, {total}, {sm}, {sortmode} placeholders
   - {sm} = short sort mode label ("A" or "M"), {sortmode} = long label ("alphabetical" or "modified")
   - Respects show_image_counter setting
-  - Default: "{filename} ({sm}{index}/{total})"
+  - Default: "{filename} ({sm}, {index}/{total})"
 - **Background color** - Uses Colors::background() constant (not yet configurable)
 - **Overlay transparency** - Uses default overlay background (deferred to Phase 16.5)
 - **Font size scale** - Uses TextSize constants (deferred to Phase 16.5)
