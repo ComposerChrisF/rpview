@@ -1,9 +1,10 @@
 use super::image_state::{FilterSettings, ImageState};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Instant;
 
 /// Sort mode for image list
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum SortMode {
     /// Alphabetical (case-insensitive)
     #[default]
@@ -172,23 +173,28 @@ impl AppState {
     /// Get the state for the current image, creating a default if it doesn't exist
     pub fn get_current_state(&mut self, default_filters: FilterSettings) -> ImageState {
         if let Some(path) = self.current_image() {
-            self.image_states
+            let state = self
+                .image_states
                 .entry(path.clone())
-                .or_insert_with(|| ImageState::new_with_filter_defaults(default_filters))
-                .clone()
+                .or_insert_with(|| ImageState::new_with_filter_defaults(default_filters));
+            state.last_accessed = Instant::now();
+            state.clone()
         } else {
             ImageState::new_with_filter_defaults(default_filters)
         }
     }
 
     /// Save the state for the current image
-    pub fn save_current_state(&mut self, state: ImageState) {
+    pub fn save_current_state(&mut self, mut state: ImageState) {
         if let Some(path) = self.current_image().cloned() {
-            // Evict old entries if cache is too large
-            if self.image_states.len() >= self.max_cache_size {
+            // Only evict when inserting a *new* key and cache is full
+            if !self.image_states.contains_key(&path)
+                && self.image_states.len() >= self.max_cache_size
+            {
                 self.evict_oldest_state();
             }
 
+            state.last_accessed = Instant::now();
             self.image_states.insert(path, state);
         }
     }
@@ -580,6 +586,70 @@ mod tests {
         // Assert - should return default state with provided filters
         assert_eq!(image_state.filters.brightness, 5.0);
         assert_eq!(image_state.zoom, 1.0);
+    }
+
+    #[test]
+    fn test_lru_eviction_preserves_recently_accessed() {
+        // Arrange — cache size 2, insert states for "a" and "b"
+        let paths = vec![
+            PathBuf::from("a.png"),
+            PathBuf::from("b.png"),
+            PathBuf::from("c.png"),
+        ];
+        let mut state = AppState::new(paths);
+        state.max_cache_size = 2;
+
+        // Insert state for a.png
+        state.current_index = 0;
+        state.save_current_state(ImageState::new());
+
+        // Insert state for b.png (cache now full)
+        state.current_index = 1;
+        state.save_current_state(ImageState::new());
+
+        // Access a.png to refresh its last_accessed time
+        state.current_index = 0;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let _ = state.get_current_state(FilterSettings::default());
+
+        // Insert state for c.png — should evict b.png (least recently accessed), not a.png
+        state.current_index = 2;
+        state.save_current_state(ImageState::new());
+
+        // Assert — a.png was recently accessed so it survives; b.png is evicted
+        assert!(state.image_states.contains_key(&PathBuf::from("a.png")));
+        assert!(!state.image_states.contains_key(&PathBuf::from("b.png")));
+        assert!(state.image_states.contains_key(&PathBuf::from("c.png")));
+    }
+
+    #[test]
+    fn test_save_current_state_update_does_not_evict() {
+        // Arrange — cache size 2, fill it
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut state = AppState::new(paths);
+        state.max_cache_size = 2;
+
+        state.current_index = 0;
+        state.save_current_state(ImageState::new());
+        state.current_index = 1;
+        state.save_current_state(ImageState::new());
+
+        // Act — update a.png (already in cache, should NOT evict)
+        state.current_index = 0;
+        let mut updated = ImageState::new();
+        updated.zoom = 3.0;
+        state.save_current_state(updated);
+
+        // Assert — both entries should still exist
+        assert_eq!(state.image_states.len(), 2);
+        assert_eq!(
+            state
+                .image_states
+                .get(&PathBuf::from("a.png"))
+                .unwrap()
+                .zoom,
+            3.0
+        );
     }
 
     #[test]

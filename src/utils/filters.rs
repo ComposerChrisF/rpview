@@ -169,18 +169,25 @@ pub fn apply_filters(
         *lut_entry = value.clamp(0.0, 255.0) as u8;
     }
 
-    // Apply combined LUT in a single pass
-    let rgba_img = img.to_rgba8();
+    // Apply combined LUT in a single pass using direct slice access
+    let owned;
+    let rgba_img: &image::RgbaImage = match img.as_rgba8() {
+        Some(buf) => buf,
+        None => {
+            owned = img.to_rgba8();
+            &owned
+        }
+    };
     let (width, height) = rgba_img.dimensions();
     let mut output = ImageBuffer::new(width, height);
 
-    for (x, y, pixel) in rgba_img.enumerate_pixels() {
-        let r = lut[pixel[0] as usize];
-        let g = lut[pixel[1] as usize];
-        let b = lut[pixel[2] as usize];
-        let a = pixel[3]; // Alpha preserved
-
-        output.put_pixel(x, y, Rgba([r, g, b, a]));
+    let input_bytes = rgba_img.as_raw();
+    let output_bytes: &mut [u8] = output.as_mut();
+    for (src, dst) in input_bytes.chunks_exact(4).zip(output_bytes.chunks_exact_mut(4)) {
+        dst[0] = lut[src[0] as usize];
+        dst[1] = lut[src[1] as usize];
+        dst[2] = lut[src[2] as usize];
+        dst[3] = src[3];
     }
 
     DynamicImage::ImageRgba8(output)

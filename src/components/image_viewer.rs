@@ -1,5 +1,6 @@
 #![allow(clippy::collapsible_if)]
 
+use crate::utils::debug_eprintln;
 use crate::OpenFile;
 use crate::components::animation_indicator::AnimationIndicator;
 use crate::components::error_display::ErrorDisplay;
@@ -436,7 +437,7 @@ impl ImageViewer {
 
                         // Cache first 3 frames for immediate display (gives UI time to show)
                         let initial_cache_count = std::cmp::min(3, anim_data.frames.len());
-                        eprintln!(
+                        debug_eprintln!(
                             "[LOAD] Caching first {} frames for immediate display...",
                             initial_cache_count
                         );
@@ -444,11 +445,11 @@ impl ImageViewer {
                             let temp_path = temp_dir.join(format!("{}_{}.png", base_name, i));
                             match anim_data.frames[i].image.save(&temp_path) {
                                 Ok(_) => {
-                                    eprintln!("[LOAD] Cached frame {}", i);
+                                    debug_eprintln!("[LOAD] Cached frame {}", i);
                                     frame_cache_paths.push(temp_path);
                                 }
-                                Err(e) => {
-                                    eprintln!("[ERROR] Failed to cache frame {}: {}", i, e);
+                                Err(_e) => {
+                                    debug_eprintln!("[ERROR] Failed to cache frame {}: {}", i, _e);
                                     frame_cache_paths.push(PathBuf::new());
                                 }
                             }
@@ -458,7 +459,7 @@ impl ImageViewer {
                         for _ in initial_cache_count..anim_data.frames.len() {
                             frame_cache_paths.push(PathBuf::new());
                         }
-                        eprintln!(
+                        debug_eprintln!(
                             "[LOAD] Initial caching complete: {}/{} frames ready",
                             initial_cache_count,
                             anim_data.frames.len()
@@ -523,7 +524,7 @@ impl ImageViewer {
         }
 
         // Start new async load
-        eprintln!("[ASYNC] Starting async load for: {}", path.display());
+        debug_eprintln!("[ASYNC] Starting async load for: {}", path.display());
         self.loading_handle = Some(image_loader::load_image_async(
             path,
             max_dimension,
@@ -556,7 +557,7 @@ impl ImageViewer {
 
                 match msg {
                     image_loader::LoaderMessage::Success(mut data) => {
-                        eprintln!("[ASYNC] Load complete: {}", data.path.display());
+                        debug_eprintln!("[ASYNC] Load complete: {}", data.path.display());
 
                         // Prepare frame cache paths
                         let mut frame_cache_paths = std::mem::take(&mut data.initial_frame_paths);
@@ -609,7 +610,7 @@ impl ImageViewer {
                         return true;
                     }
                     image_loader::LoaderMessage::Error(path, msg) => {
-                        eprintln!("[ASYNC] Load failed: {}: {}", path.display(), msg);
+                        debug_eprintln!("[ASYNC] Load failed: {}: {}", path.display(), msg);
                         self.current_image = None;
                         self.error_message = Some(msg);
                         self.error_path = Some(path);
@@ -618,7 +619,7 @@ impl ImageViewer {
                         return true;
                     }
                     image_loader::LoaderMessage::OversizedImage(path, width, height, max_dim) => {
-                        eprintln!(
+                        debug_eprintln!(
                             "[ASYNC] Image oversized: {}×{} exceeds max {}",
                             width, height, max_dim
                         );
@@ -639,7 +640,7 @@ impl ImageViewer {
 
     /// Update filtered image cache if needed (async)
     pub fn update_filtered_cache(&mut self) {
-        eprintln!("[ImageViewer::update_filtered_cache] Called");
+        debug_eprintln!("[ImageViewer::update_filtered_cache] Called");
 
         // Filters not supported for SVG files (image::open can't read SVGs)
         if let Some(ref loaded) = self.current_image {
@@ -651,7 +652,7 @@ impl ImageViewer {
         // Cancel any previous filter processing when starting new one
         // This allows rapid slider changes to cancel old processing
         if self.is_processing_filters {
-            eprintln!("[ImageViewer::update_filtered_cache] Canceling previous processing");
+            debug_eprintln!("[ImageViewer::update_filtered_cache] Canceling previous processing");
             self.filter_processing_handle = None;
             self.is_processing_filters = false;
         }
@@ -660,11 +661,11 @@ impl ImageViewer {
             let filters = &self.image_state.filters;
             let filters_enabled = self.image_state.filters_enabled;
 
-            eprintln!(
+            debug_eprintln!(
                 "[ImageViewer::update_filtered_cache] Current filters: brightness={:.1}, contrast={:.1}, gamma={:.2}, enabled={}",
                 filters.brightness, filters.contrast, filters.gamma, filters_enabled
             );
-            eprintln!(
+            debug_eprintln!(
                 "[ImageViewer::update_filtered_cache] Cached filters: {:?}",
                 loaded.cached_filter_settings
             );
@@ -684,7 +685,7 @@ impl ImageViewer {
                 loaded.cached_filter_settings.as_ref() != Some(filters)
             };
 
-            eprintln!(
+            debug_eprintln!(
                 "[ImageViewer::update_filtered_cache] needs_update={}",
                 needs_update
             );
@@ -718,7 +719,7 @@ impl ImageViewer {
 
                     // Spawn background thread to process filters
                     std::thread::spawn(move || {
-                        eprintln!("[FILTER_THREAD] Starting filter processing");
+                        debug_eprintln!("[FILTER_THREAD] Starting filter processing");
 
                         let result = (|| {
                             // Load image
@@ -745,7 +746,7 @@ impl ImageViewer {
                                 timestamp
                             ));
 
-                            eprintln!("[FILTER_THREAD] Saving filtered image to: {:?}", temp_path);
+                            debug_eprintln!("[FILTER_THREAD] Saving filtered image to: {:?}", temp_path);
                             filtered
                                 .save(&temp_path)
                                 .map_err(|e| format!("Failed to save filtered image: {}", e))?;
@@ -753,7 +754,7 @@ impl ImageViewer {
                             Ok(temp_path)
                         })();
 
-                        eprintln!(
+                        debug_eprintln!(
                             "[FILTER_THREAD] Filter processing complete: {:?}",
                             result.is_ok()
                         );
@@ -770,7 +771,7 @@ impl ImageViewer {
     pub fn check_filter_processing(&mut self) -> bool {
         if let Some(receiver) = &self.filter_processing_handle {
             if let Ok(result) = receiver.try_recv() {
-                eprintln!(
+                debug_eprintln!(
                     "[ImageViewer::check_filter_processing] Received result: {:?}",
                     result.is_ok()
                 );
@@ -780,14 +781,14 @@ impl ImageViewer {
                         // Store the pending filtered path for GPU preloading
                         // Don't update loaded.filtered_path yet to avoid black flash
                         self.pending_filtered_path = Some(new_filtered_path);
-                        eprintln!(
+                        debug_eprintln!(
                             "[ImageViewer::check_filter_processing] Set pending filtered path, will apply after preload"
                         );
                     }
-                    Err(e) => {
-                        eprintln!(
+                    Err(_e) => {
+                        debug_eprintln!(
                             "[ImageViewer::check_filter_processing] Filter processing failed: {}",
-                            e
+                            _e
                         );
                     }
                 }
@@ -804,7 +805,7 @@ impl ImageViewer {
     pub fn apply_pending_filtered_image(&mut self) {
         if let Some(pending_path) = self.pending_filtered_path.take() {
             if let Some(ref mut loaded) = self.current_image {
-                eprintln!(
+                debug_eprintln!(
                     "[ImageViewer::apply_pending_filtered_image] Applying pending filtered path"
                 );
 
@@ -829,14 +830,14 @@ impl ImageViewer {
             // Check if ImageState has a cached filtered path
             if let Some(ref cached_path) = self.image_state.filtered_image_path {
                 if cached_path.exists() {
-                    eprintln!(
+                    debug_eprintln!(
                         "[ImageViewer::restore_filtered_image_from_state] Restoring cached filtered image"
                     );
                     loaded.filtered_path = Some(cached_path.clone());
                     loaded.cached_filter_settings = Some(self.image_state.filters);
                 } else {
                     // File was deleted, clear the cached path
-                    eprintln!(
+                    debug_eprintln!(
                         "[ImageViewer::restore_filtered_image_from_state] Cached file not found, clearing"
                     );
                     self.image_state.filtered_image_path = None;
@@ -1017,10 +1018,10 @@ impl ImageViewer {
                     Ok((path, region)) => {
                         self.pending_svg_reraster_path = Some(path);
                         self.pending_svg_reraster_region = region;
-                        eprintln!("[SVG] Re-raster complete, pending GPU preload");
+                        debug_eprintln!("[SVG] Re-raster complete, pending GPU preload");
                     }
-                    Err(e) => {
-                        eprintln!("[SVG] Re-raster failed: {}", e);
+                    Err(_e) => {
+                        debug_eprintln!("[SVG] Re-raster failed: {}", _e);
                     }
                 }
                 self.is_svg_rerastering = false;
@@ -1045,7 +1046,7 @@ impl ImageViewer {
             self.svg_reraster_scale = Some(self.image_state.zoom);
             self.pending_svg_reraster_preload_frames = 0;
 
-            eprintln!(
+            debug_eprintln!(
                 "[SVG] Applied re-raster at zoom {:.2}",
                 self.image_state.zoom
             );
@@ -1135,15 +1136,15 @@ impl ImageViewer {
                 // Save frame to disk
                 match anim_data.frames[frame_index].image.save(&temp_path) {
                     Ok(_) => {
-                        eprintln!("[CACHE] Cached frame {} on-demand", frame_index);
+                        debug_eprintln!("[CACHE] Cached frame {} on-demand", frame_index);
                         // Update the cache path
                         if frame_index < loaded.frame_cache_paths.len() {
                             loaded.frame_cache_paths[frame_index] = temp_path;
                         }
                         return true;
                     }
-                    Err(e) => {
-                        eprintln!("[ERROR] Failed to cache frame {}: {}", frame_index, e);
+                    Err(_e) => {
+                        debug_eprintln!("[ERROR] Failed to cache frame {}: {}", frame_index, _e);
                     }
                 }
             }

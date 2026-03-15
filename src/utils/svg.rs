@@ -1,3 +1,4 @@
+use super::debug_eprintln;
 use crate::error::{AppError, AppResult};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -14,7 +15,7 @@ fn fontdb() -> Arc<resvg::usvg::fontdb::Database> {
         .get_or_init(|| {
             let mut db = resvg::usvg::fontdb::Database::new();
             db.load_system_fonts();
-            eprintln!("[SVG] Loaded {} font faces from system", db.len());
+            debug_eprintln!("[SVG] Loaded {} font faces from system", db.len());
             Arc::new(db)
         })
         .clone()
@@ -112,7 +113,7 @@ pub fn rerasterize_svg_full(tree: &resvg::usvg::Tree, scale: f32) -> Result<Path
         .save_png(&temp_path)
         .map_err(|e| format!("Failed to save rasterized SVG: {}", e))?;
 
-    eprintln!(
+    debug_eprintln!(
         "[SVG] Full re-raster at {:.1}x -> {} ({}x{})",
         scale,
         temp_path.display(),
@@ -185,7 +186,7 @@ pub fn rerasterize_svg_viewport(
         svg_h: region_h,
     };
 
-    eprintln!(
+    debug_eprintln!(
         "[SVG] Viewport re-raster at {:.1}x, region ({:.0},{:.0} {}x{}) -> {} ({}x{})",
         scale,
         region_x,
@@ -249,18 +250,18 @@ pub fn rasterize_svg(path: &Path, scale_factor: f32) -> AppResult<(PathBuf, u32,
     let temp_path = rerasterize_svg_full(&tree, scale_factor)
         .map_err(|e| AppError::ImageLoadError(path.to_path_buf(), e))?;
 
-    let scaled_w = (size.width() * scale_factor).ceil() as u32;
-    let scaled_h = (size.height() * scale_factor).ceil() as u32;
+    let _scaled_w = (size.width() * scale_factor).ceil() as u32;
+    let _scaled_h = (size.height() * scale_factor).ceil() as u32;
 
-    eprintln!(
+    debug_eprintln!(
         "[SVG] Rasterized {} ({}x{}) at {}x to {} ({}x{})",
         path.display(),
         intrinsic_w,
         intrinsic_h,
         scale_factor,
         temp_path.display(),
-        scaled_w,
-        scaled_h
+        _scaled_w,
+        _scaled_h
     );
 
     Ok((temp_path, intrinsic_w, intrinsic_h))

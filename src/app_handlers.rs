@@ -1,4 +1,5 @@
 use super::*;
+use crate::utils::debug_eprintln;
 use crate::utils::file_scanner::SUPPORTED_EXTENSIONS;
 
 impl App {
@@ -696,7 +697,7 @@ impl App {
 
             match result {
                 Ok(_) => {
-                    eprintln!("Opened image with: {}", viewer_config.name);
+                    debug_eprintln!("Opened image with: {}", viewer_config.name);
                     return Ok(());
                 }
                 Err(e) => {
@@ -707,7 +708,7 @@ impl App {
         }
 
         // All configured viewers failed, try platform defaults as fallback
-        eprintln!("All configured viewers failed, trying platform defaults...");
+        debug_eprintln!("All configured viewers failed, trying platform defaults...");
 
         #[cfg(target_os = "macos")]
         {
@@ -766,7 +767,7 @@ impl App {
                 .spawn()
                 .map_err(|e| format!("Failed to launch {}: {}", editor_config.name, e))?;
 
-            eprintln!("Opened image in external editor: {}", editor_config.name);
+            debug_eprintln!("Opened image in external editor: {}", editor_config.name);
             Ok(())
         } else {
             Err("No external editor configured. Please set one in Settings (Cmd+,)".to_string())
@@ -1105,22 +1106,25 @@ impl App {
             gamma: self.settings.filters.default_gamma,
         };
         let state = self.app_state.get_current_state(default_filters);
-        self.viewer.set_image_state(state.clone());
+        let filters = state.filters;
+        let filters_enabled = state.filters_enabled;
+        let has_cached = state.filtered_image_path.is_some();
+        self.viewer.set_image_state(state); // move, no clone
 
         // Update filter controls UI to reflect the loaded filter values
         self.filter_controls.update(cx, |controls, cx| {
-            controls.update_from_filters(state.filters, cx);
+            controls.update_from_filters(filters, cx);
         });
 
         // Restore cached filtered image if it exists (AFTER state is loaded)
         self.viewer.restore_filtered_image_from_state();
 
         // Only trigger filter processing if filters are applied AND we don't have a cached filtered image
-        if state.filters_enabled
-            && (state.filters.brightness.abs() >= 0.001
-                || state.filters.contrast.abs() >= 0.001
-                || (state.filters.gamma - 1.0).abs() >= 0.001)
-            && state.filtered_image_path.is_none()
+        if filters_enabled
+            && (filters.brightness.abs() >= 0.001
+                || filters.contrast.abs() >= 0.001
+                || (filters.gamma - 1.0).abs() >= 0.001)
+            && !has_cached
         {
             self.viewer.update_filtered_cache();
         }
@@ -1151,32 +1155,46 @@ impl App {
     }
 
     pub(crate) fn update_window_title(&mut self, window: &mut Window) {
-        if let Some(path) = self.app_state.current_image() {
-            let filename = path
+        let title = format_window_title(
+            self.app_state.current_image().map(|p| p.as_path()),
+            self.app_state.current_index,
+            self.app_state.image_paths.len(),
+            self.app_state.sort_mode,
+            &self.settings,
+        );
+        window.set_window_title(&title);
+    }
+}
+
+/// Format the window title for the given image state.
+/// Returns `"rpview"` when `path` is `None`.
+pub(crate) fn format_window_title(
+    path: Option<&std::path::Path>,
+    index: usize,
+    total: usize,
+    sort_mode: state::app_state::SortMode,
+    settings: &AppSettings,
+) -> String {
+    match path {
+        Some(p) => {
+            let filename = p
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("Unknown");
-
-            let position = self.app_state.current_index + 1;
-            let total = self.app_state.image_paths.len();
-
-            // Apply window title format from settings
-            let title = if self.settings.sort_navigation.show_image_counter {
-                self.settings
+            let position = index + 1;
+            if settings.sort_navigation.show_image_counter {
+                settings
                     .appearance
                     .window_title_format
                     .replace("{filename}", filename)
                     .replace("{index}", &position.to_string())
                     .replace("{total}", &total.to_string())
-                    .replace("{sortmode}", self.app_state.sort_mode.long_label())
-                    .replace("{sm}", self.app_state.sort_mode.short_label())
+                    .replace("{sortmode}", sort_mode.long_label())
+                    .replace("{sm}", sort_mode.short_label())
             } else {
                 filename.to_string()
-            };
-
-            window.set_window_title(&title);
-        } else {
-            window.set_window_title("rpview");
+            }
         }
+        None => "rpview".to_string(),
     }
 }

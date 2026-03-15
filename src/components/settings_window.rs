@@ -39,6 +39,7 @@
 //! The component maintains settings in `working_settings` which are immediately
 //! visible in the UI and saved to disk when the settings window is closed.
 
+use crate::state::app_state::SortMode;
 use crate::state::settings::*;
 use crate::utils::settings_io;
 use crate::utils::style::{Colors, Spacing, TextSize};
@@ -114,6 +115,80 @@ impl SelectionItem for SettingsSection {
     }
 }
 
+/// Helper macro to create a `NumberStepper` entity, subscribe to its change event,
+/// and return the entity handle.  Accepts an optional `step_small` parameter.
+macro_rules! create_stepper {
+    ($cx:expr, $theme:expr, $init:expr, $min:expr, $max:expr, $step:expr, $precision:expr, $assign:expr) => {{
+        let stepper = $cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value($init)
+                .min($min)
+                .max($max)
+                .step($step)
+                .display_precision($precision)
+                .theme($theme)
+        });
+        $cx.subscribe(
+            &stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                #[allow(clippy::redundant_closure_call)]
+                ($assign)(this, *value);
+                cx.notify();
+            },
+        )
+        .detach();
+        stepper
+    }};
+    ($cx:expr, $theme:expr, $init:expr, $min:expr, $max:expr, $step:expr, $step_small:expr, $precision:expr, $assign:expr) => {{
+        let stepper = $cx.new(|cx| {
+            NumberStepper::new(cx)
+                .with_value($init)
+                .min($min)
+                .max($max)
+                .step($step)
+                .step_small($step_small)
+                .display_precision($precision)
+                .theme($theme)
+        });
+        $cx.subscribe(
+            &stepper,
+            |this, _stepper, event: &NumberStepperEvent, cx| {
+                let NumberStepperEvent::Change(value) = event;
+                #[allow(clippy::redundant_closure_call)]
+                ($assign)(this, *value);
+                cx.notify();
+            },
+        )
+        .detach();
+        stepper
+    }};
+}
+
+/// Helper macro to create a `ToggleSwitch` entity with label, subscribe to its toggle event,
+/// and return the entity handle.
+macro_rules! create_toggle {
+    ($cx:expr, $theme:expr, $init:expr, $label:expr, $assign:expr) => {{
+        let toggle = $cx.new(|cx| {
+            ToggleSwitch::new(cx)
+                .with_on($init)
+                .label($label)
+                .theme($theme)
+        });
+        $cx.subscribe(
+            &toggle,
+            |this, _toggle, event: &ToggleSwitchEvent, cx| {
+                let ToggleSwitchEvent::Toggle(on) = event;
+                #[allow(clippy::redundant_closure_call)]
+                ($assign)(this, *on);
+                cx.notify();
+            },
+        )
+        .detach();
+        toggle
+    }};
+}
+
 /// Settings window component
 pub struct SettingsWindow {
     /// Working copy of settings (being edited)
@@ -183,122 +258,36 @@ impl SettingsWindow {
 
         // Create number steppers for each numeric setting
         // step_small is set to give "lesser of 1 or normal step" behavior
-        let state_cache_size_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.viewer_behavior.state_cache_size as f64)
-                .min(10.0)
-                .max(10000.0)
-                .step(100.0)
-                .step_small(0.01) // Alt+click steps by 1
-                .display_precision(0)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &state_cache_size_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.viewer_behavior.state_cache_size = *value as usize;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let filter_processing_threads_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.performance.filter_processing_threads as f64)
-                .min(1.0)
-                .max(32.0)
-                .step(1.0)
-                .display_precision(0)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &filter_processing_threads_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.performance.filter_processing_threads = *value as usize;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let max_image_dimension_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.performance.max_image_dimension as f64)
-                .min(1000.0)
-                .max(100000.0)
-                .step(1000.0)
-                .step_small(0.001) // Alt+click steps by 1
-                .display_precision(0)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &max_image_dimension_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.performance.max_image_dimension = *value as u32;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let pan_speed_normal_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.keyboard_mouse.pan_speed_normal.into())
-                .min(1.0)
-                .max(100.0)
-                .step(1.0)
-                .display_precision(1)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &pan_speed_normal_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.keyboard_mouse.pan_speed_normal = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let pan_speed_fast_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.keyboard_mouse.pan_speed_fast.into())
-                .min(1.0)
-                .max(200.0)
-                .step(5.0)
-                .step_small(0.2) // Alt+click steps by 1
-                .display_precision(1)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &pan_speed_fast_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.keyboard_mouse.pan_speed_fast = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let pan_speed_slow_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.keyboard_mouse.pan_speed_slow.into())
-                .min(0.5)
-                .max(50.0)
-                .step(0.5)
-                .display_precision(1)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &pan_speed_slow_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.keyboard_mouse.pan_speed_slow = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
+        let state_cache_size_stepper = create_stepper!(cx, app_theme,
+            settings.viewer_behavior.state_cache_size as f64,
+            10.0, 10000.0, 100.0, 0.01, 0,
+            |this: &mut Self, v: f64| this.working_settings.viewer_behavior.state_cache_size = v as usize
+        );
+        let filter_processing_threads_stepper = create_stepper!(cx, app_theme,
+            settings.performance.filter_processing_threads as f64,
+            1.0, 32.0, 1.0, 0,
+            |this: &mut Self, v: f64| this.working_settings.performance.filter_processing_threads = v as usize
+        );
+        let max_image_dimension_stepper = create_stepper!(cx, app_theme,
+            settings.performance.max_image_dimension as f64,
+            1000.0, 100000.0, 1000.0, 0.001, 0,
+            |this: &mut Self, v: f64| this.working_settings.performance.max_image_dimension = v as u32
+        );
+        let pan_speed_normal_stepper = create_stepper!(cx, app_theme,
+            settings.keyboard_mouse.pan_speed_normal.into(),
+            1.0, 100.0, 1.0, 1,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_normal = v as f32
+        );
+        let pan_speed_fast_stepper = create_stepper!(cx, app_theme,
+            settings.keyboard_mouse.pan_speed_fast.into(),
+            1.0, 200.0, 5.0, 0.2, 1,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_fast = v as f32
+        );
+        let pan_speed_slow_stepper = create_stepper!(cx, app_theme,
+            settings.keyboard_mouse.pan_speed_slow.into(),
+            0.5, 50.0, 0.5, 1,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_slow = v as f32
+        );
 
         // Segmented control for pan direction mode
         let initial_pan_direction = match settings.keyboard_mouse.pan_direction_mode {
@@ -326,143 +315,41 @@ impl SettingsWindow {
         )
         .detach();
 
-        let scroll_wheel_sensitivity_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.keyboard_mouse.scroll_wheel_sensitivity.into())
-                .min(1.01)
-                .max(2.0)
-                .step(0.05)
-                .display_precision(2)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &scroll_wheel_sensitivity_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings
-                    .keyboard_mouse
-                    .scroll_wheel_sensitivity = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let z_drag_sensitivity_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.keyboard_mouse.z_drag_sensitivity.into())
-                .min(0.001)
-                .max(0.1)
-                .step(0.001)
-                .display_precision(3)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &z_drag_sensitivity_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.keyboard_mouse.z_drag_sensitivity = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let overlay_transparency_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.appearance.overlay_transparency as f64)
-                .min(0.0)
-                .max(255.0)
-                .step(10.0)
-                .step_small(0.1) // Alt+click steps by 1
-                .display_precision(0)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &overlay_transparency_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.appearance.overlay_transparency = *value as u8;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let font_size_scale_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.appearance.font_size_scale.into())
-                .min(0.5)
-                .max(8.0)
-                .step(0.1)
-                .display_precision(1)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &font_size_scale_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.appearance.font_size_scale = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let default_brightness_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.filters.default_brightness.into())
-                .min(-100.0)
-                .max(100.0)
-                .step(5.0)
-                .step_small(0.2) // Alt+click steps by 1
-                .display_precision(0)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &default_brightness_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.filters.default_brightness = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let default_contrast_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.filters.default_contrast.into())
-                .min(-100.0)
-                .max(100.0)
-                .step(5.0)
-                .step_small(0.2) // Alt+click steps by 1
-                .display_precision(0)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &default_contrast_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.filters.default_contrast = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let default_gamma_stepper = cx.new(|cx| {
-            NumberStepper::new(cx)
-                .with_value(settings.filters.default_gamma.into())
-                .min(0.1)
-                .max(10.0)
-                .step(0.1)
-                .display_precision(2)
-                .theme(app_theme)
-        });
-        cx.subscribe(
-            &default_gamma_stepper,
-            |this, _stepper, event: &NumberStepperEvent, cx| {
-                let NumberStepperEvent::Change(value) = event;
-                this.working_settings.filters.default_gamma = *value as f32;
-                cx.notify();
-            },
-        )
-        .detach();
+        let scroll_wheel_sensitivity_stepper = create_stepper!(cx, app_theme,
+            settings.keyboard_mouse.scroll_wheel_sensitivity.into(),
+            1.01, 2.0, 0.05, 2,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.scroll_wheel_sensitivity = v as f32
+        );
+        let z_drag_sensitivity_stepper = create_stepper!(cx, app_theme,
+            settings.keyboard_mouse.z_drag_sensitivity.into(),
+            0.001, 0.1, 0.001, 3,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.z_drag_sensitivity = v as f32
+        );
+        let overlay_transparency_stepper = create_stepper!(cx, app_theme,
+            settings.appearance.overlay_transparency as f64,
+            0.0, 255.0, 10.0, 0.1, 0,
+            |this: &mut Self, v: f64| this.working_settings.appearance.overlay_transparency = v as u8
+        );
+        let font_size_scale_stepper = create_stepper!(cx, app_theme,
+            settings.appearance.font_size_scale.into(),
+            0.5, 8.0, 0.1, 1,
+            |this: &mut Self, v: f64| this.working_settings.appearance.font_size_scale = v as f32
+        );
+        let default_brightness_stepper = create_stepper!(cx, app_theme,
+            settings.filters.default_brightness.into(),
+            -100.0, 100.0, 5.0, 0.2, 0,
+            |this: &mut Self, v: f64| this.working_settings.filters.default_brightness = v as f32
+        );
+        let default_contrast_stepper = create_stepper!(cx, app_theme,
+            settings.filters.default_contrast.into(),
+            -100.0, 100.0, 5.0, 0.2, 0,
+            |this: &mut Self, v: f64| this.working_settings.filters.default_contrast = v as f32
+        );
+        let default_gamma_stepper = create_stepper!(cx, app_theme,
+            settings.filters.default_gamma.into(),
+            0.1, 10.0, 0.1, 2,
+            |this: &mut Self, v: f64| this.working_settings.filters.default_gamma = v as f32
+        );
 
         // Segmented control for zoom mode
         let initial_zoom = match settings.viewer_behavior.default_zoom_mode {
@@ -495,8 +382,8 @@ impl SettingsWindow {
 
         // Segmented control for sort mode
         let initial_sort = match settings.sort_navigation.default_sort_mode {
-            SortModeWrapper::Alphabetical => "alpha",
-            SortModeWrapper::ModifiedDate => "date",
+            SortMode::Alphabetical => "alpha",
+            SortMode::ModifiedDate => "date",
         };
         let sort_mode_control = cx.new(|cx| {
             SegmentedControl::new(cx)
@@ -510,9 +397,9 @@ impl SettingsWindow {
                 let SegmentedControlEvent::Change(option) = event;
                 this.working_settings.sort_navigation.default_sort_mode =
                     match option.value.as_str() {
-                        "alpha" => SortModeWrapper::Alphabetical,
-                        "date" => SortModeWrapper::ModifiedDate,
-                        _ => SortModeWrapper::Alphabetical,
+                        "alpha" => SortMode::Alphabetical,
+                        "date" => SortMode::ModifiedDate,
+                        _ => SortMode::Alphabetical,
                     };
                 cx.notify();
             },
@@ -612,175 +499,46 @@ impl SettingsWindow {
         .detach();
 
         // Create toggle switch entities for boolean settings
-        let remember_per_image_state_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.viewer_behavior.remember_per_image_state)
-                .label("Remember per-image state")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &remember_per_image_state_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings
-                    .viewer_behavior
-                    .remember_per_image_state = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let animation_auto_play_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.viewer_behavior.animation_auto_play)
-                .label("Auto-play animations")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &animation_auto_play_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings.viewer_behavior.animation_auto_play = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let preload_adjacent_images_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.performance.preload_adjacent_images)
-                .label("Preload adjacent images")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &preload_adjacent_images_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings.performance.preload_adjacent_images = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let spacebar_pan_accelerated_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.keyboard_mouse.spacebar_pan_accelerated)
-                .label("Spacebar pan acceleration")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &spacebar_pan_accelerated_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings
-                    .keyboard_mouse
-                    .spacebar_pan_accelerated = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let auto_save_filtered_cache_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.file_operations.auto_save_filtered_cache)
-                .label("Auto-save filtered cache")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &auto_save_filtered_cache_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings
-                    .file_operations
-                    .auto_save_filtered_cache = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let remember_last_directory_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.file_operations.remember_last_directory)
-                .label("Remember last directory")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &remember_last_directory_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings
-                    .file_operations
-                    .remember_last_directory = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let remember_filter_state_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.filters.remember_filter_state)
-                .label("Remember filter state per-image")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &remember_filter_state_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings.filters.remember_filter_state = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let wrap_navigation_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.sort_navigation.wrap_navigation)
-                .label("Wrap navigation")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &wrap_navigation_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings.sort_navigation.wrap_navigation = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let show_image_counter_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.sort_navigation.show_image_counter)
-                .label("Show image counter")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &show_image_counter_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings.sort_navigation.show_image_counter = *on;
-                cx.notify();
-            },
-        )
-        .detach();
-
-        let file_manager_integration_toggle = cx.new(|cx| {
-            ToggleSwitch::new(cx)
-                .with_on(settings.external_tools.enable_file_manager_integration)
-                .label("File manager integration")
-                .theme(toggle_theme)
-        });
-        cx.subscribe(
-            &file_manager_integration_toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                this.working_settings
-                    .external_tools
-                    .enable_file_manager_integration = *on;
-                cx.notify();
-            },
-        )
-        .detach();
+        let remember_per_image_state_toggle = create_toggle!(cx, toggle_theme,
+            settings.viewer_behavior.remember_per_image_state, "Remember per-image state",
+            |this: &mut Self, on: bool| this.working_settings.viewer_behavior.remember_per_image_state = on
+        );
+        let animation_auto_play_toggle = create_toggle!(cx, toggle_theme,
+            settings.viewer_behavior.animation_auto_play, "Auto-play animations",
+            |this: &mut Self, on: bool| this.working_settings.viewer_behavior.animation_auto_play = on
+        );
+        let preload_adjacent_images_toggle = create_toggle!(cx, toggle_theme,
+            settings.performance.preload_adjacent_images, "Preload adjacent images",
+            |this: &mut Self, on: bool| this.working_settings.performance.preload_adjacent_images = on
+        );
+        let spacebar_pan_accelerated_toggle = create_toggle!(cx, toggle_theme,
+            settings.keyboard_mouse.spacebar_pan_accelerated, "Spacebar pan acceleration",
+            |this: &mut Self, on: bool| this.working_settings.keyboard_mouse.spacebar_pan_accelerated = on
+        );
+        let auto_save_filtered_cache_toggle = create_toggle!(cx, toggle_theme,
+            settings.file_operations.auto_save_filtered_cache, "Auto-save filtered cache",
+            |this: &mut Self, on: bool| this.working_settings.file_operations.auto_save_filtered_cache = on
+        );
+        let remember_last_directory_toggle = create_toggle!(cx, toggle_theme,
+            settings.file_operations.remember_last_directory, "Remember last directory",
+            |this: &mut Self, on: bool| this.working_settings.file_operations.remember_last_directory = on
+        );
+        let remember_filter_state_toggle = create_toggle!(cx, toggle_theme,
+            settings.filters.remember_filter_state, "Remember filter state per-image",
+            |this: &mut Self, on: bool| this.working_settings.filters.remember_filter_state = on
+        );
+        let wrap_navigation_toggle = create_toggle!(cx, toggle_theme,
+            settings.sort_navigation.wrap_navigation, "Wrap navigation",
+            |this: &mut Self, on: bool| this.working_settings.sort_navigation.wrap_navigation = on
+        );
+        let show_image_counter_toggle = create_toggle!(cx, toggle_theme,
+            settings.sort_navigation.show_image_counter, "Show image counter",
+            |this: &mut Self, on: bool| this.working_settings.sort_navigation.show_image_counter = on
+        );
+        let file_manager_integration_toggle = create_toggle!(cx, toggle_theme,
+            settings.external_tools.enable_file_manager_integration, "File manager integration",
+            |this: &mut Self, on: bool| this.working_settings.external_tools.enable_file_manager_integration = on
+        );
 
         // Create color swatches for dark and light background colors
         let bg_dark = &settings.appearance.background_color_dark;
@@ -1013,8 +771,8 @@ impl SettingsWindow {
         });
 
         let sort_value = match defaults.sort_navigation.default_sort_mode {
-            SortModeWrapper::Alphabetical => "alpha",
-            SortModeWrapper::ModifiedDate => "date",
+            SortMode::Alphabetical => "alpha",
+            SortMode::ModifiedDate => "date",
         };
         self.sort_mode_control.update(cx, |control, cx| {
             control.set_selected_value(sort_value, cx);
@@ -1944,8 +1702,8 @@ impl SettingsWindow {
                 let d = AppSettings::default().sort_navigation.default_sort_mode;
                 this.working_settings.sort_navigation.default_sort_mode = d;
                 let v = match d {
-                    SortModeWrapper::Alphabetical => "alpha",
-                    SortModeWrapper::ModifiedDate => "date",
+                    SortMode::Alphabetical => "alpha",
+                    SortMode::ModifiedDate => "date",
                 };
                 this.sort_mode_control
                     .update(cx, |c, cx| c.set_selected_value(v, cx));
