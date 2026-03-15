@@ -1,5 +1,5 @@
 use crate::utils::style::{
-    Colors, Spacing, format_shortcut, modifier_key, scaled_text_size, shift_prefix,
+    Colors, Spacing, format_shortcut, modifier_key, option_prefix, scaled_text_size, shift_prefix,
 };
 use ccf_gpui_widgets::prelude::scrollable_vertical;
 use gpui::prelude::*;
@@ -100,13 +100,13 @@ impl HelpOverlay {
             self.render_shortcut("0".to_string(), "Toggle fit-to-window / 100%".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                "Shift + / -".to_string(),
+                format!("{}+ / {}−", shift, shift),
                 "Fast zoom (1.5x steps)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
                 format!(
-                    "{}{} +/−",
+                    "{}{}+/−",
                     mod_key,
                     if cfg!(target_os = "macos") { "" } else { " " }
                 ),
@@ -115,7 +115,7 @@ impl HelpOverlay {
             .into_any_element(),
             self.render_shortcut(
                 format!(
-                    "{}{}{} +/−",
+                    "{}{}{}+/−",
                     shift,
                     mod_key,
                     if cfg!(target_os = "macos") { "" } else { " " }
@@ -136,12 +136,12 @@ impl HelpOverlay {
             self.render_shortcut("W A S D / I J K L".to_string(), "Pan image".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                "Shift + WASD/IJKL".to_string(),
+                format!("{}WASD / {}IJKL", shift, shift),
                 "Fast pan (3x speed)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                "Alt + WASD/IJKL".to_string(),
+                format!("{}WASD / {}IJKL", option_prefix(), option_prefix()),
                 "Slow pan (0.3x speed)".to_string(),
             )
             .into_any_element(),

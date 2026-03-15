@@ -20,6 +20,16 @@ pub fn shift_prefix() -> &'static str {
     }
 }
 
+/// Option/Alt modifier prefix for compound shortcuts.
+/// Returns "⌥" on macOS, "Alt+" on Windows/Linux.
+pub fn option_prefix() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "⌥"
+    } else {
+        "Alt+"
+    }
+}
+
 /// Format a keyboard shortcut for the current platform.
 /// On macOS uses ⌥⇧⌘ glyphs without separators.
 /// On Windows/Linux uses Ctrl+Shift+Alt+ with "+" separators.
