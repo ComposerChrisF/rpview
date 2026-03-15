@@ -56,21 +56,20 @@ impl AppState {
     }
 
     /// Create a new AppState with settings
+    ///
+    /// `start_path` optionally specifies which image to show first (e.g. when
+    /// the user launched with a specific file).  The list is sorted according to
+    /// `default_sort_mode` and then `current_index` is set to that path's
+    /// position in the sorted list (or 0 if not found / not provided).
     pub fn new_with_settings(
         image_paths: Vec<PathBuf>,
-        start_index: usize,
+        start_path: Option<PathBuf>,
         default_sort_mode: SortMode,
         cache_size: usize,
     ) -> Self {
-        let current_index = if start_index < image_paths.len() {
-            start_index
-        } else {
-            0
-        };
-
         let mut state = Self {
             image_paths,
-            current_index,
+            current_index: 0,
             sort_mode: default_sort_mode,
             image_states: HashMap::new(),
             max_cache_size: cache_size,
@@ -78,6 +77,13 @@ impl AppState {
 
         // Sort images according to the default sort mode
         state.sort_images();
+
+        // Find the requested start image in the now-sorted list
+        if let Some(path) = start_path {
+            if let Some(idx) = state.image_paths.iter().position(|p| p == &path) {
+                state.current_index = idx;
+            }
+        }
 
         state
     }
@@ -303,7 +309,7 @@ mod tests {
         let paths = vec![PathBuf::from("zebra.png"), PathBuf::from("apple.jpg")];
 
         // Act
-        let state = AppState::new_with_settings(paths, 0, SortMode::Alphabetical, 500);
+        let state = AppState::new_with_settings(paths, None, SortMode::Alphabetical, 500);
 
         // Assert
         assert_eq!(state.max_cache_size, 500);
@@ -322,7 +328,7 @@ mod tests {
 
         // Act
         let state =
-            AppState::new_with_settings(paths, 0, SortMode::ModifiedDate, DEFAULT_CACHE_SIZE);
+            AppState::new_with_settings(paths, None, SortMode::ModifiedDate, DEFAULT_CACHE_SIZE);
 
         // Assert
         assert_eq!(state.sort_mode, SortMode::ModifiedDate);
