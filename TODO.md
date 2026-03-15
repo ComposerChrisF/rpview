@@ -262,6 +262,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 - [x] Show current zoom level and pan position
 - [x] Show image dimensions
 - [x] Show viewport dimensions
+- [x] Show current sort mode (A/M)
 - [x] Implement F12 toggle
 - [x] Format debug info clearly
 

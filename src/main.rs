@@ -344,6 +344,7 @@ fn main() {
                             image_state: state::ImageState::new(),
                             image_dimensions: None,
                             viewport_size: None,
+                            sort_mode: app_state.sort_mode,
                             overlay_transparency: settings.appearance.overlay_transparency,
                             font_size_scale: settings.appearance.font_size_scale,
                         })
