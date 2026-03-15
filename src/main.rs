@@ -290,6 +290,8 @@ fn main() {
                                 .replace("{filename}", filename)
                                 .replace("{index}", &position.to_string())
                                 .replace("{total}", &total.to_string())
+                                .replace("{sortmode}", app_state.sort_mode.long_label())
+                                .replace("{sm}", app_state.sort_mode.short_label())
                         } else {
                             filename.to_string()
                         };

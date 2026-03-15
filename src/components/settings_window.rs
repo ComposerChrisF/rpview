@@ -840,7 +840,7 @@ impl SettingsWindow {
         let window_title_input = cx.new(|cx| {
             TextInput::new(cx)
                 .with_value(&settings.appearance.window_title_format)
-                .placeholder("e.g., {filename} - rpview ({index}/{total})")
+                .placeholder("e.g., {filename} - rpview ({sm}{index}/{total})")
                 .theme(app_theme)
         });
         cx.subscribe(
@@ -1920,7 +1920,7 @@ impl SettingsWindow {
                             .flex_col()
                             .child(self.render_label(
                                 "Window title format".to_string(),
-                                Some("Template: {filename}, {index}, {total}".to_string()),
+                                Some("Template: {filename}, {index}, {total}, {sm}, {sortmode}".to_string()),
                             ))
                             .child(self.window_title_input.clone()),
                     ),

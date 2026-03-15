@@ -13,6 +13,24 @@ pub enum SortMode {
     ModifiedDate,
 }
 
+impl SortMode {
+    /// Short label for window title template `{sm}` — e.g. "A" or "M"
+    pub fn short_label(self) -> &'static str {
+        match self {
+            SortMode::Alphabetical => "A",
+            SortMode::ModifiedDate => "M",
+        }
+    }
+
+    /// Long label for window title template `{sortmode}` — e.g. "alphabetical" or "modified"
+    pub fn long_label(self) -> &'static str {
+        match self {
+            SortMode::Alphabetical => "alphabetical",
+            SortMode::ModifiedDate => "modified",
+        }
+    }
+}
+
 /// Application-wide state
 #[derive(Debug, Clone)]
 pub struct AppState {

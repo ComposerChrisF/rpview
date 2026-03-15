@@ -2230,9 +2230,10 @@ Phase 16.4 (Apply Settings Throughout App) has been successfully completed! Sett
 
 **3. Appearance Settings ✅**
 - **Window title format** (src/main.rs:907-917) - Template-based title generation
-  - Supports {filename}, {index}, {total} placeholders
+  - Supports {filename}, {index}, {total}, {sm}, {sortmode} placeholders
+  - {sm} = short sort mode label ("A" or "M"), {sortmode} = long label ("alphabetical" or "modified")
   - Respects show_image_counter setting
-  - Default: "{filename} ({index}/{total})"
+  - Default: "{filename} ({sm}{index}/{total})"
 - **Background color** - Uses Colors::background() constant (not yet configurable)
 - **Overlay transparency** - Uses default overlay background (deferred to Phase 16.5)
 - **Font size scale** - Uses TextSize constants (deferred to Phase 16.5)
