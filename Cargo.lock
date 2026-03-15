@@ -4568,12 +4568,13 @@ dependencies = [
 
 [[package]]
 name = "rpview"
-version = "0.8.3"
+version = "0.8.6"
 dependencies = [
  "block2",
  "ccf-gpui-widgets",
  "clap",
  "dirs 5.0.1",
+ "filetime",
  "gpui",
  "image",
  "objc2",

@@ -1430,7 +1430,7 @@ Phase 11.5 has been successfully completed! The application now supports drag-an
 
 Key implementation details:
 - File scanner module (src/utils/file_scanner.rs) provides process_dropped_path(), scan_directory(), and is_supported_image()
-- Drag-drop handler (src/main.rs:383) processes multiple paths, deduplicates, and sorts alphabetically
+- Drag-drop handler processes multiple paths, deduplicates, and re-sorts according to active sort mode
 - Visual feedback using .when() conditional styling and border_color(rgb(0x50fa7b))
 - GPUI's ExternalPaths event provides paths from OS file manager (Finder, Explorer, etc.)
 - Smart index calculation: finds dropped file in sorted list or uses 0 for directories
@@ -1439,7 +1439,7 @@ Key implementation details:
 **Architecture Decisions**:
 - Reused existing directory scanning logic from CLI for consistency
 - Drag-drop replaces entire image list (same behavior as Cmd+O file dialog)
-- Alphabetical sorting applied to dropped files for predictable navigation
+- Sort mode applied to dropped/opened files (respects current sort mode setting)
 - Green border chosen for visual feedback (matches app's success/info color scheme)
 - Error logging to console via eprintln (future: could show toast notifications)
 - State preservation ensures zoom/pan/filters persist across drag-drop operations
