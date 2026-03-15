@@ -160,8 +160,8 @@ fn main() {
         settings_io::get_settings_path().display()
     );
 
-    // Parse command-line arguments to get image paths and starting index
-    let (image_paths, start_index) = match Cli::parse_image_paths() {
+    // Parse command-line arguments to get image paths and optional start path
+    let (image_paths, start_path) = match Cli::parse_image_paths() {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -189,10 +189,10 @@ fn main() {
         std::path::PathBuf::new()
     };
 
-    // Initialize application state with the starting index and settings
+    // Initialize application state with the starting path and settings
     let app_state = AppState::new_with_settings(
         image_paths,
-        start_index,
+        start_path,
         settings.sort_navigation.default_sort_mode.into(),
         settings.viewer_behavior.state_cache_size,
     );

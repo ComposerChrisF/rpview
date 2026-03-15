@@ -20,13 +20,15 @@ pub struct Cli {
 }
 
 impl Cli {
-    /// Parse command-line arguments and return a list of image paths and the starting index
-    pub fn parse_image_paths() -> AppResult<(Vec<PathBuf>, usize)> {
+    /// Parse command-line arguments and return a list of image paths and an
+    /// optional starting path (when the user specified a single file).
+    /// The returned list is unsorted — sorting is handled by AppState.
+    pub fn parse_image_paths() -> AppResult<(Vec<PathBuf>, Option<PathBuf>)> {
         let cli = Cli::parse();
 
         let paths = if cli.paths.is_empty() {
             // No arguments: default to current directory
-            return Ok((Self::collect_image_paths(&[std::env::current_dir()?])?, 0));
+            return Ok((Self::collect_image_paths(&[std::env::current_dir()?])?, None));
         } else {
             cli.paths
         };
@@ -46,31 +48,22 @@ impl Cli {
             // Get the parent directory
             if let Some(parent_dir) = specified_file.parent() {
                 // Scan the directory for all images
-                let mut all_images = file_scanner::scan_directory(parent_dir)?;
+                let all_images = file_scanner::scan_directory(parent_dir)?;
 
                 // Even if empty, return the result - the app will display a message
                 if all_images.is_empty() {
-                    return Ok((vec![], 0));
+                    return Ok((vec![], None));
                 }
 
-                // Sort alphabetically (case-insensitive)
-                file_scanner::sort_alphabetically(&mut all_images);
-
-                // Find the index of the specified file
-                let start_index = all_images
-                    .iter()
-                    .position(|p| p == &specified_file)
-                    .unwrap_or(0);
-
-                return Ok((all_images, start_index));
+                return Ok((all_images, Some(specified_file)));
             } else {
                 // File has no parent (shouldn't happen, but handle gracefully)
-                return Ok((vec![specified_file], 0));
+                return Ok((vec![specified_file.clone()], Some(specified_file)));
             }
         }
 
         // Multiple files or directories: use the existing logic
-        Ok((Self::collect_image_paths(&paths)?, 0))
+        Ok((Self::collect_image_paths(&paths)?, None))
     }
 
     /// Collect all image paths from the given list of files/directories
@@ -98,9 +91,6 @@ impl Cli {
                 image_paths.extend(dir_images);
             }
         }
-
-        // Sort alphabetically by default (case-insensitive)
-        file_scanner::sort_alphabetically(&mut image_paths);
 
         // Return empty list if no images found - app will display a message
         Ok(image_paths)
