@@ -416,6 +416,7 @@ impl Render for App {
                         image_state: self.viewer.image_state.clone(),
                         image_dimensions,
                         viewport_size: self.viewer.viewport_size,
+                        sort_mode: self.app_state.sort_mode,
                         overlay_transparency: self.settings.appearance.overlay_transparency,
                         font_size_scale: self.settings.appearance.font_size_scale,
                     });

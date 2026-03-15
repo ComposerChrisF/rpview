@@ -1,4 +1,5 @@
 use crate::state::ImageState;
+use crate::state::app_state::SortMode;
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
 use gpui::*;
 use std::path::PathBuf;
@@ -12,6 +13,7 @@ pub struct DebugOverlayConfig {
     pub image_state: ImageState,
     pub image_dimensions: Option<(u32, u32)>,
     pub viewport_size: Option<Size<Pixels>>,
+    pub sort_mode: SortMode,
     /// Overlay transparency (0-255)
     pub overlay_transparency: u8,
     /// Font size scale multiplier
@@ -179,6 +181,14 @@ impl Render for DebugOverlay {
                     .child(self.render_info_line_wrapping("Image Folder", folder_str))
                     .child(self.render_info_line("Image Index", index_str))
                     .child(self.render_info_line("Image Size", image_dims_str))
+                    .child(self.render_info_line(
+                        "Sort Mode",
+                        match self.config.sort_mode {
+                            SortMode::Alphabetical => "A (Alphabetical)",
+                            SortMode::ModifiedDate => "M (Modified Date)",
+                        }
+                        .to_string(),
+                    ))
                     // Zoom & Pan info
                     .child(
                         div()

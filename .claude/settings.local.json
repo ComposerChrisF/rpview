@@ -93,7 +93,15 @@
       "WebFetch(domain:app.opencve.io)",
       "Bash(brew deps:*)",
       "Bash(brew info:*)",
-      "WebFetch(domain:cve.mitre.org)"
+      "WebFetch(domain:cve.mitre.org)",
+      "WebFetch(domain:ubuntu.com)",
+      "WebFetch(domain:google.github.io)",
+      "WebFetch(domain:bugs.chromium.org)",
+      "WebFetch(domain:security-tracker.debian.org)",
+      "WebFetch(domain:googleprojectzero.blogspot.com)",
+      "WebFetch(domain:security.googleblog.com)",
+      "Bash(for file:*)",
+      "Bash(ffmpeg:*)"
     ]
   }
 }
