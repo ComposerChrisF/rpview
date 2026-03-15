@@ -23,6 +23,7 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-=", ZoomInFast, None),
         KeyBinding::new("shift-+", ZoomInFast, None),
         KeyBinding::new("shift--", ZoomOutFast, None),
+        KeyBinding::new("_", ZoomOutFast, None), // Shift+- produces _ on US keyboard
         // Zoom controls - slow (with Cmd/Ctrl)
         KeyBinding::new("cmd-=", ZoomInSlow, None),
         KeyBinding::new("cmd-+", ZoomInSlow, None),
@@ -31,6 +32,7 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-cmd-=", ZoomInIncremental, None),
         KeyBinding::new("shift-cmd-+", ZoomInIncremental, None),
         KeyBinding::new("shift-cmd--", ZoomOutIncremental, None),
+        KeyBinding::new("cmd-_", ZoomOutIncremental, None), // Shift+Cmd+- produces Cmd+_ on US keyboard
         // Pan controls with WASD (base speed: 10px)
         KeyBinding::new("w", PanUp, None),
         KeyBinding::new("a", PanLeft, None),
@@ -111,6 +113,8 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-ctrl-+", ZoomInIncremental, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("shift-ctrl--", ZoomOutIncremental, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-_", ZoomOutIncremental, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-,", ToggleSettings, None),
         #[cfg(not(target_os = "macos"))]
