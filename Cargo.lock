@@ -4568,7 +4568,7 @@ dependencies = [
 
 [[package]]
 name = "rpview"
-version = "0.8.5"
+version = "0.9.0"
 dependencies = [
  "block2",
  "ccf-gpui-widgets",

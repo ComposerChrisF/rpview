@@ -840,7 +840,7 @@ impl SettingsWindow {
         let window_title_input = cx.new(|cx| {
             TextInput::new(cx)
                 .with_value(&settings.appearance.window_title_format)
-                .placeholder("e.g., {filename} - rpview ({sm}{index}/{total})")
+                .placeholder("e.g., {filename} - rpview ({sm}, {index}/{total})")
                 .theme(app_theme)
         });
         cx.subscribe(
