@@ -174,7 +174,7 @@ impl Render for DebugOverlay {
                             .pb(Spacing::xs())
                             .border_b_1()
                             .border_color(rgb(0x444444))
-                            .child("Debug Information"),
+                            .child(format!("Debug Information — v{}", env!("CARGO_PKG_VERSION"))),
                     )
                     // Image info
                     .child(self.render_info_line_wrapping("Image Filename", filename_str))

@@ -211,7 +211,7 @@ impl AppState {
 
     /// Sort the image list according to the current sort mode,
     /// preserving the currently-viewed image across the reorder.
-    fn sort_images(&mut self) {
+    pub(crate) fn sort_images(&mut self) {
         let current_path = self.image_paths.get(self.current_index).cloned();
 
         match self.sort_mode {
@@ -221,7 +221,6 @@ impl AppState {
             }
             SortMode::ModifiedDate => {
                 use std::cmp::Reverse;
-                // sort_by_cached_key computes the key once per element
                 self.image_paths.sort_by_cached_key(|p| {
                     Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok())
                 });
@@ -332,6 +331,82 @@ mod tests {
 
         // Assert
         assert_eq!(state.sort_mode, SortMode::ModifiedDate);
+    }
+
+    #[test]
+    fn test_sort_modified_date_with_real_files() {
+        use std::fs;
+        use std::time::{Duration, SystemTime};
+
+        // Arrange — create real temp files with distinct modification times
+        let dir = tempfile::tempdir().unwrap();
+
+        // Create files in alphabetical order but with reverse mtime order:
+        //   alpha.txt  — oldest
+        //   beta.txt   — middle
+        //   gamma.txt  — newest
+        let alpha = dir.path().join("alpha.txt");
+        let beta = dir.path().join("beta.txt");
+        let gamma = dir.path().join("gamma.txt");
+
+        fs::write(&alpha, "a").unwrap();
+        fs::write(&beta, "b").unwrap();
+        fs::write(&gamma, "c").unwrap();
+
+        // Set explicit modification times so the test is deterministic
+        let now = SystemTime::now();
+        filetime::set_file_mtime(&alpha, filetime::FileTime::from_system_time(now - Duration::from_secs(200))).unwrap();
+        filetime::set_file_mtime(&beta, filetime::FileTime::from_system_time(now - Duration::from_secs(100))).unwrap();
+        filetime::set_file_mtime(&gamma, filetime::FileTime::from_system_time(now)).unwrap();
+
+        // Feed paths in alphabetical order
+        let paths = vec![alpha.clone(), beta.clone(), gamma.clone()];
+
+        // Act — sort by ModifiedDate (newest first)
+        let state = AppState::new_with_settings(
+            paths,
+            None,
+            SortMode::ModifiedDate,
+            DEFAULT_CACHE_SIZE,
+        );
+
+        // Assert — newest first: gamma, beta, alpha
+        assert_eq!(state.image_paths, vec![gamma, beta, alpha]);
+    }
+
+    #[test]
+    fn test_sort_modified_date_preserves_start_path() {
+        use std::fs;
+        use std::time::{Duration, SystemTime};
+
+        // Arrange
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("a.txt");
+        let b = dir.path().join("b.txt");
+        let c = dir.path().join("c.txt");
+
+        fs::write(&a, "a").unwrap();
+        fs::write(&b, "b").unwrap();
+        fs::write(&c, "c").unwrap();
+
+        let now = SystemTime::now();
+        filetime::set_file_mtime(&a, filetime::FileTime::from_system_time(now - Duration::from_secs(200))).unwrap();
+        filetime::set_file_mtime(&b, filetime::FileTime::from_system_time(now - Duration::from_secs(100))).unwrap();
+        filetime::set_file_mtime(&c, filetime::FileTime::from_system_time(now)).unwrap();
+
+        let paths = vec![a.clone(), b.clone(), c.clone()];
+
+        // Act — sort by ModifiedDate, start on b
+        let state = AppState::new_with_settings(
+            paths,
+            Some(b.clone()),
+            SortMode::ModifiedDate,
+            DEFAULT_CACHE_SIZE,
+        );
+
+        // Assert — sorted newest first: c, b, a — and current_index points to b (index 1)
+        assert_eq!(state.image_paths, vec![c, b, a]);
+        assert_eq!(state.current_index, 1);
     }
 
     #[test]

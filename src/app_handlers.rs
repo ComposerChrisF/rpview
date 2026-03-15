@@ -298,10 +298,8 @@ impl App {
                     self.app_state.image_paths = all_images;
                     self.app_state.current_index = start_index;
 
-                    // Re-apply current sort mode to maintain consistency
-                    let current_sort_mode = self.app_state.sort_mode;
-                    self.app_state.sort_mode = state::app_state::SortMode::Alphabetical; // Reset to force re-sort
-                    self.app_state.set_sort_mode(current_sort_mode);
+                    // Re-sort according to the active sort mode
+                    self.app_state.sort_images();
 
                     // Update viewer with selected image
                     self.update_viewer(window, cx);
@@ -806,8 +804,15 @@ impl App {
         }
 
         if !all_images.is_empty() {
+            // Set the paths and a temporary index pointing at the target file
             self.app_state.image_paths = all_images;
             self.app_state.current_index = target_index;
+
+            // Re-sort according to the active sort mode (process_dropped_path
+            // always sorts alphabetically; this corrects for ModifiedDate mode).
+            // sort_images() preserves current_index by tracking the current path.
+            self.app_state.sort_images();
+
             self.update_viewer(window, cx);
             self.update_window_title(window);
             self.focus_handle.focus(window);
