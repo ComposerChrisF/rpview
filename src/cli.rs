@@ -28,7 +28,10 @@ impl Cli {
 
         let paths = if cli.paths.is_empty() {
             // No arguments: default to current directory
-            return Ok((Self::collect_image_paths(&[std::env::current_dir()?])?, None));
+            return Ok((
+                Self::collect_image_paths(&[std::env::current_dir()?])?,
+                None,
+            ));
         } else {
             cli.paths
         };

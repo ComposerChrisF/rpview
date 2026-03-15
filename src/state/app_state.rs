@@ -373,20 +373,24 @@ mod tests {
 
         // Set explicit modification times so the test is deterministic
         let now = SystemTime::now();
-        filetime::set_file_mtime(&alpha, filetime::FileTime::from_system_time(now - Duration::from_secs(200))).unwrap();
-        filetime::set_file_mtime(&beta, filetime::FileTime::from_system_time(now - Duration::from_secs(100))).unwrap();
+        filetime::set_file_mtime(
+            &alpha,
+            filetime::FileTime::from_system_time(now - Duration::from_secs(200)),
+        )
+        .unwrap();
+        filetime::set_file_mtime(
+            &beta,
+            filetime::FileTime::from_system_time(now - Duration::from_secs(100)),
+        )
+        .unwrap();
         filetime::set_file_mtime(&gamma, filetime::FileTime::from_system_time(now)).unwrap();
 
         // Feed paths in alphabetical order
         let paths = vec![alpha.clone(), beta.clone(), gamma.clone()];
 
         // Act — sort by ModifiedDate (newest first)
-        let state = AppState::new_with_settings(
-            paths,
-            None,
-            SortMode::ModifiedDate,
-            DEFAULT_CACHE_SIZE,
-        );
+        let state =
+            AppState::new_with_settings(paths, None, SortMode::ModifiedDate, DEFAULT_CACHE_SIZE);
 
         // Assert — newest first: gamma, beta, alpha
         assert_eq!(state.image_paths, vec![gamma, beta, alpha]);
@@ -408,8 +412,16 @@ mod tests {
         fs::write(&c, "c").unwrap();
 
         let now = SystemTime::now();
-        filetime::set_file_mtime(&a, filetime::FileTime::from_system_time(now - Duration::from_secs(200))).unwrap();
-        filetime::set_file_mtime(&b, filetime::FileTime::from_system_time(now - Duration::from_secs(100))).unwrap();
+        filetime::set_file_mtime(
+            &a,
+            filetime::FileTime::from_system_time(now - Duration::from_secs(200)),
+        )
+        .unwrap();
+        filetime::set_file_mtime(
+            &b,
+            filetime::FileTime::from_system_time(now - Duration::from_secs(100)),
+        )
+        .unwrap();
         filetime::set_file_mtime(&c, filetime::FileTime::from_system_time(now)).unwrap();
 
         let paths = vec![a.clone(), b.clone(), c.clone()];
