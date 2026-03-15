@@ -174,21 +174,26 @@ impl Render for DebugOverlay {
                             .pb(Spacing::xs())
                             .border_b_1()
                             .border_color(rgb(0x444444))
-                            .child(format!("Debug Information — v{}", env!("CARGO_PKG_VERSION"))),
+                            .child(format!(
+                                "Debug Information — v{}",
+                                env!("CARGO_PKG_VERSION")
+                            )),
                     )
                     // Image info
                     .child(self.render_info_line_wrapping("Image Filename", filename_str))
                     .child(self.render_info_line_wrapping("Image Folder", folder_str))
                     .child(self.render_info_line("Image Index", index_str))
                     .child(self.render_info_line("Image Size", image_dims_str))
-                    .child(self.render_info_line(
-                        "Sort Mode",
-                        match self.config.sort_mode {
-                            SortMode::Alphabetical => "A (Alphabetical)",
-                            SortMode::ModifiedDate => "M (Modified Date)",
-                        }
-                        .to_string(),
-                    ))
+                    .child(
+                        self.render_info_line(
+                            "Sort Mode",
+                            match self.config.sort_mode {
+                                SortMode::Alphabetical => "A (Alphabetical)",
+                                SortMode::ModifiedDate => "M (Modified Date)",
+                            }
+                            .to_string(),
+                        ),
+                    )
                     // Zoom & Pan info
                     .child(
                         div()

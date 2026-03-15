@@ -1918,10 +1918,15 @@ impl SettingsWindow {
                         div()
                             .flex()
                             .flex_col()
-                            .child(self.render_label(
-                                "Window title format".to_string(),
-                                Some("Template: {filename}, {index}, {total}, {sm}, {sortmode}".to_string()),
-                            ))
+                            .child(
+                                self.render_label(
+                                    "Window title format".to_string(),
+                                    Some(
+                                        "Template: {filename}, {index}, {total}, {sm}, {sortmode}"
+                                            .to_string(),
+                                    ),
+                                ),
+                            )
                             .child(self.window_title_input.clone()),
                     ),
             )
