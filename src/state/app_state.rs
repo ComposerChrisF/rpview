@@ -203,8 +203,11 @@ impl AppState {
         }
     }
 
-    /// Sort the image list according to the current sort mode
+    /// Sort the image list according to the current sort mode,
+    /// preserving the currently-viewed image across the reorder.
     fn sort_images(&mut self) {
+        let current_path = self.image_paths.get(self.current_index).cloned();
+
         match self.sort_mode {
             SortMode::Alphabetical => {
                 self.image_paths
@@ -216,6 +219,13 @@ impl AppState {
                 self.image_paths.sort_by_cached_key(|p| {
                     Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok())
                 });
+            }
+        }
+
+        // Restore current_index to point at the same image after reordering
+        if let Some(path) = current_path {
+            if let Some(new_index) = self.image_paths.iter().position(|p| p == &path) {
+                self.current_index = new_index;
             }
         }
     }
