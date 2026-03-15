@@ -136,12 +136,12 @@ impl HelpOverlay {
             self.render_shortcut("W A S D / I J K L".to_string(), "Pan image".to_string())
                 .into_any_element(),
             self.render_shortcut(
-                format!("{}WASD / {}IJKL", shift, shift),
+                format!("{} WASD / IJKL", shift),
                 "Fast pan (3x speed)".to_string(),
             )
             .into_any_element(),
             self.render_shortcut(
-                format!("{}WASD / {}IJKL", option_prefix(), option_prefix()),
+                format!("{} WASD / IJKL", option_prefix()),
                 "Slow pan (0.3x speed)".to_string(),
             )
             .into_any_element(),
