@@ -97,10 +97,10 @@ impl AppState {
         state.sort_images();
 
         // Find the requested start image in the now-sorted list
-        if let Some(path) = start_path {
-            if let Some(idx) = state.image_paths.iter().position(|p| p == &path) {
-                state.current_index = idx;
-            }
+        if let Some(path) = start_path
+            && let Some(idx) = state.image_paths.iter().position(|p| p == &path)
+        {
+            state.current_index = idx;
         }
 
         state
@@ -246,10 +246,10 @@ impl AppState {
         }
 
         // Restore current_index to point at the same image after reordering
-        if let Some(path) = current_path {
-            if let Some(new_index) = self.image_paths.iter().position(|p| p == &path) {
-                self.current_index = new_index;
-            }
+        if let Some(path) = current_path
+            && let Some(new_index) = self.image_paths.iter().position(|p| p == &path)
+        {
+            self.current_index = new_index;
         }
     }
 }
