@@ -13,7 +13,7 @@ categories = ["multimedia::images", "gui"]
 
 [dependencies]
 gpui = "0.2.2"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 image = { version = "0.25", features = ["png", "jpeg", "bmp", "gif", "tiff", "ico", "webp"] }
 ccf-gpui-widgets = { version = "0.1.0", features = ["file-picker"] }
 rfd = "0.15"
