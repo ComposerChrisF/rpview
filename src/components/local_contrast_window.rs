@@ -26,8 +26,12 @@ impl Focusable for LocalContrastWindowView {
 
 impl Render for LocalContrastWindowView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        // Participate in the `ImageViewer` key context so the plain `1` and
+        // `2` keybindings (DisableFilters / EnableFilters, which also toggle
+        // LC) fire while this dialog has focus.
         div()
             .size_full()
+            .key_context("ImageViewer")
             .track_focus(&self.focus_handle)
             .child(self.controls.clone())
     }

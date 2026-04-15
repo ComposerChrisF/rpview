@@ -313,7 +313,7 @@ impl App {
         if self.local_contrast_window.is_some() {
             return;
         }
-        let bounds = gpui::Bounds::centered(None, gpui::size(gpui::px(360.0), gpui::px(260.0)), cx);
+        let bounds = gpui::Bounds::centered(None, gpui::size(gpui::px(380.0), gpui::px(440.0)), cx);
         let controls = self.local_contrast_controls.clone();
         let weak_app = cx.weak_entity();
 
@@ -361,6 +361,9 @@ impl App {
     pub(crate) fn handle_disable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.viewer.image_state.filters_enabled = false;
         self.viewer.update_filtered_cache();
+        // `1` also hides Local Contrast for A/B comparison. We leave the
+        // processed buffer intact so re-enabling via `2` is instant.
+        self.viewer.set_lc_enabled(false);
         self.save_current_image_state();
         cx.notify();
     }
@@ -368,6 +371,7 @@ impl App {
     pub(crate) fn handle_enable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.viewer.image_state.filters_enabled = true;
         self.viewer.update_filtered_cache();
+        self.viewer.set_lc_enabled(true);
         self.save_current_image_state();
         cx.notify();
     }
