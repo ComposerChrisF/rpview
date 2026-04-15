@@ -75,6 +75,17 @@ impl Render for App {
             });
             cx.notify();
         }
+        // While LC is running, keep requesting animation frames so we poll
+        // the channel promptly when the worker finishes — otherwise nothing
+        // re-wakes the render loop after the user stops moving the slider.
+        if self.viewer.is_processing_lc {
+            if let Some(pct) = self.viewer.lc_progress_percent() {
+                self.local_contrast_controls.update(cx, |c, cx| {
+                    c.set_status(format!("Processing… {:.0}%", pct), cx);
+                });
+            }
+            window.request_animation_frame();
+        }
 
         // --- SVG dynamic re-rasterization ---
         let svg_just_finished = self.viewer.check_svg_reraster_processing();

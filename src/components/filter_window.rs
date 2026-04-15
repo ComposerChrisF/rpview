@@ -27,8 +27,11 @@ impl Focusable for FilterWindowView {
 
 impl Render for FilterWindowView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        // Share the `ImageViewer` key context so plain `1` / `2` (filter
+        // disable/enable, plus LC toggle) fire from this dialog too.
         div()
             .size_full()
+            .key_context("ImageViewer")
             .track_focus(&self.focus_handle)
             .child(self.filter_controls.clone())
     }

@@ -128,6 +128,12 @@ pub struct ImageViewer {
         Option<std::sync::mpsc::Receiver<Option<Arc<gpui::RenderImage>>>>,
     /// Cancel flag shared with the LC worker thread.
     pub(crate) lc_cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+    /// Shared progress counter in 1/10000ths (0..=10000), written by the LC
+    /// worker's feedback callback and read by the UI for a percent display.
+    pub(crate) lc_progress_bips: Arc<std::sync::atomic::AtomicU32>,
+    /// Session-wide toggle for the LC output (so the `1`/`2` keys can A/B
+    /// the processed image against the un-processed one).
+    pub(crate) lc_enabled: bool,
 
     // --- SVG dynamic re-rasterization state ---
     /// Active sharp re-raster path (replaces blurry base raster when zoomed in)
@@ -176,6 +182,8 @@ impl ImageViewer {
             is_processing_lc: false,
             lc_processing_handle: None,
             lc_cancel: None,
+            lc_progress_bips: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            lc_enabled: true,
             svg_reraster_path: None,
             svg_reraster_region: None,
             svg_reraster_scale: None,
@@ -814,24 +822,26 @@ impl ImageViewer {
         let cancel_for_thread = cancel.clone();
         self.lc_cancel = Some(cancel);
         self.is_processing_lc = true;
+        self.lc_progress_bips.store(0, Ordering::Relaxed);
+        let progress_for_thread = self.lc_progress_bips.clone();
 
         let (tx, rx) = std::sync::mpsc::channel();
         self.lc_processing_handle = Some(rx);
 
-        // Remember the params we're processing for; stored on LoadedImage when
-        // the result arrives (see below) — kept here via a clone for that hop.
-        let params_for_cache = params.clone();
-        let _ = loaded; // borrow check: release the `loaded` borrow before the thread grabs new locals.
-        let _ = params_for_cache; // placeholder to acknowledge unused until wired in check_lc_processing.
-
         std::thread::spawn(move || {
             use crate::utils::float_map::FloatMap;
             use crate::utils::local_contrast::FeedbackFn;
+            use std::sync::atomic::AtomicU32;
+            let _: &AtomicU32 = &progress_for_thread; // type hint only
             debug_eprintln!("[LC_THREAD] start");
             let fmap = FloatMap::from_rgba8(&source);
             let cancel_watch = cancel_for_thread.clone();
-            let feedback: Box<FeedbackFn> =
-                Box::new(move |_p, _msg| cancel_watch.load(Ordering::Relaxed));
+            let progress_watch = progress_for_thread.clone();
+            let feedback: Box<FeedbackFn> = Box::new(move |p, _msg| {
+                let bips = (p * 10_000.0).clamp(0.0, 10_000.0) as u32;
+                progress_watch.store(bips, Ordering::Relaxed);
+                cancel_watch.load(Ordering::Relaxed)
+            });
             let out = crate::utils::local_contrast::locally_normalize_luminance(
                 &fmap,
                 &params,
@@ -844,9 +854,33 @@ impl ImageViewer {
                     frame, 1,
                 )))
             });
+            progress_for_thread.store(10_000, Ordering::Relaxed);
             debug_eprintln!("[LC_THREAD] done, produced={}", result.is_some());
             let _ = tx.send(result);
         });
+    }
+
+    /// Current LC progress in percent (0.0–100.0) while processing. Returns
+    /// `None` when nothing is in-flight.
+    pub fn lc_progress_percent(&self) -> Option<f32> {
+        if !self.is_processing_lc {
+            return None;
+        }
+        let bips = self
+            .lc_progress_bips
+            .load(std::sync::atomic::Ordering::Relaxed);
+        Some((bips as f32) / 100.0)
+    }
+
+    /// A/B toggle: hide the LC render so the main window shows the
+    /// unprocessed (or filter-processed) image. Does not destroy
+    /// `LoadedImage.lc_render`, so re-enabling is free.
+    pub fn set_lc_enabled(&mut self, enabled: bool) {
+        self.lc_enabled = enabled;
+    }
+    #[allow(dead_code)]
+    pub fn is_lc_enabled(&self) -> bool {
+        self.lc_enabled
     }
 
     /// Check for completed LC processing; if a result arrived, install it on
@@ -1463,9 +1497,16 @@ impl ImageViewer {
 
         // Priority: local-contrast output > B/C/G filtered output > file path.
         // Unique per-result ID ensures GPUI treats each fresh buffer as a new
-        // texture rather than reusing a cached one.
+        // texture rather than reusing a cached one. The `lc_enabled` flag
+        // lets the `1` / `2` keys toggle LC off for A/B comparison without
+        // discarding the processed buffer.
+        let lc_candidate = if self.lc_enabled {
+            loaded.lc_render.as_ref()
+        } else {
+            None
+        };
         let (image_source, image_id): (gpui::ImageSource, ElementId) =
-            if let Some(ref render_image) = loaded.lc_render {
+            if let Some(render_image) = lc_candidate {
                 let id = ElementId::Name(format!("lc-{}", render_image.id.0).into());
                 (gpui::ImageSource::Render(render_image.clone()), id)
             } else if let Some(ref render_image) = loaded.filtered_render {
