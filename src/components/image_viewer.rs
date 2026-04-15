@@ -1,6 +1,5 @@
 #![allow(clippy::collapsible_if)]
 
-use crate::utils::debug_eprintln;
 use crate::OpenFile;
 use crate::components::animation_indicator::AnimationIndicator;
 use crate::components::error_display::ErrorDisplay;
@@ -9,6 +8,7 @@ use crate::components::zoom_indicator::ZoomIndicator;
 use crate::state::ImageState;
 use crate::state::image_state::FilterSettings;
 use crate::utils::animation::AnimationData;
+use crate::utils::debug_eprintln;
 use crate::utils::filters;
 use crate::utils::image_loader;
 use crate::utils::style::{Colors, Spacing, TextSize};
@@ -621,7 +621,9 @@ impl ImageViewer {
                     image_loader::LoaderMessage::OversizedImage(path, width, height, max_dim) => {
                         debug_eprintln!(
                             "[ASYNC] Image oversized: {}×{} exceeds max {}",
-                            width, height, max_dim
+                            width,
+                            height,
+                            max_dim
                         );
                         self.current_image = None;
                         self.error_message = None;
@@ -663,7 +665,10 @@ impl ImageViewer {
 
             debug_eprintln!(
                 "[ImageViewer::update_filtered_cache] Current filters: brightness={:.1}, contrast={:.1}, gamma={:.2}, enabled={}",
-                filters.brightness, filters.contrast, filters.gamma, filters_enabled
+                filters.brightness,
+                filters.contrast,
+                filters.gamma,
+                filters_enabled
             );
             debug_eprintln!(
                 "[ImageViewer::update_filtered_cache] Cached filters: {:?}",
@@ -746,7 +751,10 @@ impl ImageViewer {
                                 timestamp
                             ));
 
-                            debug_eprintln!("[FILTER_THREAD] Saving filtered image to: {:?}", temp_path);
+                            debug_eprintln!(
+                                "[FILTER_THREAD] Saving filtered image to: {:?}",
+                                temp_path
+                            );
                             filtered
                                 .save(&temp_path)
                                 .map_err(|e| format!("Failed to save filtered image: {}", e))?;

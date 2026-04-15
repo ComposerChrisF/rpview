@@ -65,12 +65,12 @@ mod state;
 mod utils;
 
 use cli::Cli;
-use utils::debug_eprintln;
 use components::{
     DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, HelpOverlay,
     ImageViewer, SettingsWindow,
 };
 use state::{AppSettings, AppState};
+use utils::debug_eprintln;
 use utils::settings_io;
 
 // Import all actions from lib.rs (they're defined there to avoid duplication)
@@ -81,10 +81,10 @@ use rpview::{
     PanDown, PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
     PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, RequestDelete,
     RequestPermanentDelete, ResetFilters, ResetSettingsToDefaults, RevealInFinder, SaveFile,
-    SaveFileToDownloads, SortAlphabetical, SortByModified, ToggleAnimationPlayPause,
-    ToggleBackground, ToggleDebug, ToggleFilters, ToggleHelp, ToggleSettings, ToggleZoomIndicator,
-    ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental,
-    ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
+    SaveFileToDownloads, SortAlphabetical, SortByModified, SortByTypeToggle,
+    ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters, ToggleHelp,
+    ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow,
+    ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
 };
 
 /// What kind of delete is pending

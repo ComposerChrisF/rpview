@@ -190,6 +190,8 @@ impl Render for DebugOverlay {
                             match self.config.sort_mode {
                                 SortMode::Alphabetical => "A (Alphabetical)",
                                 SortMode::ModifiedDate => "M (Modified Date)",
+                                SortMode::TypeAlpha => "TA (Type + Alpha)",
+                                SortMode::TypeModified => "TM (Type + Modified)",
                             }
                             .to_string(),
                         ),

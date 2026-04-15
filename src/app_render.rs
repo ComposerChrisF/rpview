@@ -184,7 +184,8 @@ impl Render for App {
                     let next_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
                     debug_eprintln!(
                         "[ANIMATION] Advancing from frame {} to frame {}",
-                        anim_state.current_frame, next_frame
+                        anim_state.current_frame,
+                        next_frame
                     );
                     anim_state.current_frame = next_frame;
                     self.last_frame_update = now;
@@ -670,6 +671,9 @@ impl Render for App {
             }))
             .on_action(cx.listener(|this, _: &SortByModified, window, cx| {
                 this.handle_sort_by_modified(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SortByTypeToggle, window, cx| {
+                this.handle_sort_by_type_toggle(window, cx);
             }))
             .on_action(cx.listener(|this, _: &ZoomIn, window, cx| {
                 this.handle_zoom_in(window, cx);

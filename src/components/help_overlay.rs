@@ -90,6 +90,11 @@ impl HelpOverlay {
                 "Sort by modified date".to_string(),
             )
             .into_any_element(),
+            self.render_shortcut(
+                format_shortcut("T", true, false),
+                "Sort by type (toggles secondary A/M)".to_string(),
+            )
+            .into_any_element(),
             // Zoom section
             self.render_section_header("Zoom".to_string())
                 .into_any_element(),
@@ -183,16 +188,10 @@ impl HelpOverlay {
                 "Toggle filter controls".to_string(),
             )
             .into_any_element(),
-            self.render_shortcut(
-                format_shortcut("1", false, false),
-                "Disable filters".to_string(),
-            )
-            .into_any_element(),
-            self.render_shortcut(
-                format_shortcut("2", false, false),
-                "Enable filters".to_string(),
-            )
-            .into_any_element(),
+            self.render_shortcut("1".to_string(), "Disable filters".to_string())
+                .into_any_element(),
+            self.render_shortcut("2".to_string(), "Enable filters".to_string())
+                .into_any_element(),
             self.render_shortcut(
                 format_shortcut("R", true, false),
                 "Reset all filters".to_string(),

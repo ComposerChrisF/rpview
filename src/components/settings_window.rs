@@ -175,15 +175,12 @@ macro_rules! create_toggle {
                 .label($label)
                 .theme($theme)
         });
-        $cx.subscribe(
-            &toggle,
-            |this, _toggle, event: &ToggleSwitchEvent, cx| {
-                let ToggleSwitchEvent::Toggle(on) = event;
-                #[allow(clippy::redundant_closure_call)]
-                ($assign)(this, *on);
-                cx.notify();
-            },
-        )
+        $cx.subscribe(&toggle, |this, _toggle, event: &ToggleSwitchEvent, cx| {
+            let ToggleSwitchEvent::Toggle(on) = event;
+            #[allow(clippy::redundant_closure_call)]
+            ($assign)(this, *on);
+            cx.notify();
+        })
         .detach();
         toggle
     }};
@@ -258,35 +255,74 @@ impl SettingsWindow {
 
         // Create number steppers for each numeric setting
         // step_small is set to give "lesser of 1 or normal step" behavior
-        let state_cache_size_stepper = create_stepper!(cx, app_theme,
+        let state_cache_size_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.viewer_behavior.state_cache_size as f64,
-            10.0, 10000.0, 100.0, 0.01, 0,
-            |this: &mut Self, v: f64| this.working_settings.viewer_behavior.state_cache_size = v as usize
+            10.0,
+            10000.0,
+            100.0,
+            0.01,
+            0,
+            |this: &mut Self, v: f64| this.working_settings.viewer_behavior.state_cache_size =
+                v as usize
         );
-        let filter_processing_threads_stepper = create_stepper!(cx, app_theme,
+        let filter_processing_threads_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.performance.filter_processing_threads as f64,
-            1.0, 32.0, 1.0, 0,
-            |this: &mut Self, v: f64| this.working_settings.performance.filter_processing_threads = v as usize
+            1.0,
+            32.0,
+            1.0,
+            0,
+            |this: &mut Self, v: f64| this.working_settings.performance.filter_processing_threads =
+                v as usize
         );
-        let max_image_dimension_stepper = create_stepper!(cx, app_theme,
+        let max_image_dimension_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.performance.max_image_dimension as f64,
-            1000.0, 100000.0, 1000.0, 0.001, 0,
-            |this: &mut Self, v: f64| this.working_settings.performance.max_image_dimension = v as u32
+            1000.0,
+            100000.0,
+            1000.0,
+            0.001,
+            0,
+            |this: &mut Self, v: f64| this.working_settings.performance.max_image_dimension =
+                v as u32
         );
-        let pan_speed_normal_stepper = create_stepper!(cx, app_theme,
+        let pan_speed_normal_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.keyboard_mouse.pan_speed_normal.into(),
-            1.0, 100.0, 1.0, 1,
-            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_normal = v as f32
+            1.0,
+            100.0,
+            1.0,
+            1,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_normal =
+                v as f32
         );
-        let pan_speed_fast_stepper = create_stepper!(cx, app_theme,
+        let pan_speed_fast_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.keyboard_mouse.pan_speed_fast.into(),
-            1.0, 200.0, 5.0, 0.2, 1,
-            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_fast = v as f32
+            1.0,
+            200.0,
+            5.0,
+            0.2,
+            1,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_fast =
+                v as f32
         );
-        let pan_speed_slow_stepper = create_stepper!(cx, app_theme,
+        let pan_speed_slow_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.keyboard_mouse.pan_speed_slow.into(),
-            0.5, 50.0, 0.5, 1,
-            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_slow = v as f32
+            0.5,
+            50.0,
+            0.5,
+            1,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.pan_speed_slow =
+                v as f32
         );
 
         // Segmented control for pan direction mode
@@ -315,39 +351,82 @@ impl SettingsWindow {
         )
         .detach();
 
-        let scroll_wheel_sensitivity_stepper = create_stepper!(cx, app_theme,
+        let scroll_wheel_sensitivity_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.keyboard_mouse.scroll_wheel_sensitivity.into(),
-            1.01, 2.0, 0.05, 2,
-            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.scroll_wheel_sensitivity = v as f32
+            1.01,
+            2.0,
+            0.05,
+            2,
+            |this: &mut Self, v: f64| this
+                .working_settings
+                .keyboard_mouse
+                .scroll_wheel_sensitivity = v as f32
         );
-        let z_drag_sensitivity_stepper = create_stepper!(cx, app_theme,
+        let z_drag_sensitivity_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.keyboard_mouse.z_drag_sensitivity.into(),
-            0.001, 0.1, 0.001, 3,
-            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.z_drag_sensitivity = v as f32
+            0.001,
+            0.1,
+            0.001,
+            3,
+            |this: &mut Self, v: f64| this.working_settings.keyboard_mouse.z_drag_sensitivity =
+                v as f32
         );
-        let overlay_transparency_stepper = create_stepper!(cx, app_theme,
+        let overlay_transparency_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.appearance.overlay_transparency as f64,
-            0.0, 255.0, 10.0, 0.1, 0,
-            |this: &mut Self, v: f64| this.working_settings.appearance.overlay_transparency = v as u8
+            0.0,
+            255.0,
+            10.0,
+            0.1,
+            0,
+            |this: &mut Self, v: f64| this.working_settings.appearance.overlay_transparency =
+                v as u8
         );
-        let font_size_scale_stepper = create_stepper!(cx, app_theme,
+        let font_size_scale_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.appearance.font_size_scale.into(),
-            0.5, 8.0, 0.1, 1,
+            0.5,
+            8.0,
+            0.1,
+            1,
             |this: &mut Self, v: f64| this.working_settings.appearance.font_size_scale = v as f32
         );
-        let default_brightness_stepper = create_stepper!(cx, app_theme,
+        let default_brightness_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.filters.default_brightness.into(),
-            -100.0, 100.0, 5.0, 0.2, 0,
+            -100.0,
+            100.0,
+            5.0,
+            0.2,
+            0,
             |this: &mut Self, v: f64| this.working_settings.filters.default_brightness = v as f32
         );
-        let default_contrast_stepper = create_stepper!(cx, app_theme,
+        let default_contrast_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.filters.default_contrast.into(),
-            -100.0, 100.0, 5.0, 0.2, 0,
+            -100.0,
+            100.0,
+            5.0,
+            0.2,
+            0,
             |this: &mut Self, v: f64| this.working_settings.filters.default_contrast = v as f32
         );
-        let default_gamma_stepper = create_stepper!(cx, app_theme,
+        let default_gamma_stepper = create_stepper!(
+            cx,
+            app_theme,
             settings.filters.default_gamma.into(),
-            0.1, 10.0, 0.1, 2,
+            0.1,
+            10.0,
+            0.1,
+            2,
             |this: &mut Self, v: f64| this.working_settings.filters.default_gamma = v as f32
         );
 
@@ -384,10 +463,17 @@ impl SettingsWindow {
         let initial_sort = match settings.sort_navigation.default_sort_mode {
             SortMode::Alphabetical => "alpha",
             SortMode::ModifiedDate => "date",
+            SortMode::TypeAlpha => "type-alpha",
+            SortMode::TypeModified => "type-date",
         };
         let sort_mode_control = cx.new(|cx| {
             SegmentedControl::new(cx)
-                .options(vec![("alpha", "Alphabetical"), ("date", "Modified Date")])
+                .options(vec![
+                    ("alpha", "Alphabetical"),
+                    ("date", "Modified Date"),
+                    ("type-alpha", "Type + Alpha"),
+                    ("type-date", "Type + Modified"),
+                ])
                 .with_selected_value(initial_sort)
                 .theme(app_theme)
         });
@@ -399,6 +485,8 @@ impl SettingsWindow {
                     match option.value.as_str() {
                         "alpha" => SortMode::Alphabetical,
                         "date" => SortMode::ModifiedDate,
+                        "type-alpha" => SortMode::TypeAlpha,
+                        "type-date" => SortMode::TypeModified,
                         _ => SortMode::Alphabetical,
                     };
                 cx.notify();
@@ -499,45 +587,93 @@ impl SettingsWindow {
         .detach();
 
         // Create toggle switch entities for boolean settings
-        let remember_per_image_state_toggle = create_toggle!(cx, toggle_theme,
-            settings.viewer_behavior.remember_per_image_state, "Remember per-image state",
-            |this: &mut Self, on: bool| this.working_settings.viewer_behavior.remember_per_image_state = on
+        let remember_per_image_state_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.viewer_behavior.remember_per_image_state,
+            "Remember per-image state",
+            |this: &mut Self, on: bool| this
+                .working_settings
+                .viewer_behavior
+                .remember_per_image_state = on
         );
-        let animation_auto_play_toggle = create_toggle!(cx, toggle_theme,
-            settings.viewer_behavior.animation_auto_play, "Auto-play animations",
-            |this: &mut Self, on: bool| this.working_settings.viewer_behavior.animation_auto_play = on
+        let animation_auto_play_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.viewer_behavior.animation_auto_play,
+            "Auto-play animations",
+            |this: &mut Self, on: bool| this.working_settings.viewer_behavior.animation_auto_play =
+                on
         );
-        let preload_adjacent_images_toggle = create_toggle!(cx, toggle_theme,
-            settings.performance.preload_adjacent_images, "Preload adjacent images",
-            |this: &mut Self, on: bool| this.working_settings.performance.preload_adjacent_images = on
+        let preload_adjacent_images_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.performance.preload_adjacent_images,
+            "Preload adjacent images",
+            |this: &mut Self, on: bool| this.working_settings.performance.preload_adjacent_images =
+                on
         );
-        let spacebar_pan_accelerated_toggle = create_toggle!(cx, toggle_theme,
-            settings.keyboard_mouse.spacebar_pan_accelerated, "Spacebar pan acceleration",
-            |this: &mut Self, on: bool| this.working_settings.keyboard_mouse.spacebar_pan_accelerated = on
+        let spacebar_pan_accelerated_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.keyboard_mouse.spacebar_pan_accelerated,
+            "Spacebar pan acceleration",
+            |this: &mut Self, on: bool| this
+                .working_settings
+                .keyboard_mouse
+                .spacebar_pan_accelerated = on
         );
-        let auto_save_filtered_cache_toggle = create_toggle!(cx, toggle_theme,
-            settings.file_operations.auto_save_filtered_cache, "Auto-save filtered cache",
-            |this: &mut Self, on: bool| this.working_settings.file_operations.auto_save_filtered_cache = on
+        let auto_save_filtered_cache_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.file_operations.auto_save_filtered_cache,
+            "Auto-save filtered cache",
+            |this: &mut Self, on: bool| this
+                .working_settings
+                .file_operations
+                .auto_save_filtered_cache = on
         );
-        let remember_last_directory_toggle = create_toggle!(cx, toggle_theme,
-            settings.file_operations.remember_last_directory, "Remember last directory",
-            |this: &mut Self, on: bool| this.working_settings.file_operations.remember_last_directory = on
+        let remember_last_directory_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.file_operations.remember_last_directory,
+            "Remember last directory",
+            |this: &mut Self, on: bool| this
+                .working_settings
+                .file_operations
+                .remember_last_directory = on
         );
-        let remember_filter_state_toggle = create_toggle!(cx, toggle_theme,
-            settings.filters.remember_filter_state, "Remember filter state per-image",
+        let remember_filter_state_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.filters.remember_filter_state,
+            "Remember filter state per-image",
             |this: &mut Self, on: bool| this.working_settings.filters.remember_filter_state = on
         );
-        let wrap_navigation_toggle = create_toggle!(cx, toggle_theme,
-            settings.sort_navigation.wrap_navigation, "Wrap navigation",
+        let wrap_navigation_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.sort_navigation.wrap_navigation,
+            "Wrap navigation",
             |this: &mut Self, on: bool| this.working_settings.sort_navigation.wrap_navigation = on
         );
-        let show_image_counter_toggle = create_toggle!(cx, toggle_theme,
-            settings.sort_navigation.show_image_counter, "Show image counter",
-            |this: &mut Self, on: bool| this.working_settings.sort_navigation.show_image_counter = on
+        let show_image_counter_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.sort_navigation.show_image_counter,
+            "Show image counter",
+            |this: &mut Self, on: bool| this.working_settings.sort_navigation.show_image_counter =
+                on
         );
-        let file_manager_integration_toggle = create_toggle!(cx, toggle_theme,
-            settings.external_tools.enable_file_manager_integration, "File manager integration",
-            |this: &mut Self, on: bool| this.working_settings.external_tools.enable_file_manager_integration = on
+        let file_manager_integration_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.external_tools.enable_file_manager_integration,
+            "File manager integration",
+            |this: &mut Self, on: bool| this
+                .working_settings
+                .external_tools
+                .enable_file_manager_integration = on
         );
 
         // Create color swatches for dark and light background colors
@@ -773,6 +909,8 @@ impl SettingsWindow {
         let sort_value = match defaults.sort_navigation.default_sort_mode {
             SortMode::Alphabetical => "alpha",
             SortMode::ModifiedDate => "date",
+            SortMode::TypeAlpha => "type-alpha",
+            SortMode::TypeModified => "type-date",
         };
         self.sort_mode_control.update(cx, |control, cx| {
             control.set_selected_value(sort_value, cx);
@@ -1704,6 +1842,8 @@ impl SettingsWindow {
                 let v = match d {
                     SortMode::Alphabetical => "alpha",
                     SortMode::ModifiedDate => "date",
+                    SortMode::TypeAlpha => "type-alpha",
+                    SortMode::TypeModified => "type-date",
                 };
                 this.sort_mode_control
                     .update(cx, |c, cx| c.set_selected_value(v, cx));

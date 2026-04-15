@@ -942,6 +942,26 @@ impl App {
         cx.notify();
     }
 
+    pub(crate) fn handle_sort_by_type_toggle(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_modal_open() {
+            return;
+        }
+        let next = match self.app_state.sort_mode {
+            state::SortMode::Alphabetical => state::SortMode::TypeAlpha,
+            state::SortMode::ModifiedDate => state::SortMode::TypeModified,
+            state::SortMode::TypeAlpha => state::SortMode::TypeModified,
+            state::SortMode::TypeModified => state::SortMode::TypeAlpha,
+        };
+        self.app_state.set_sort_mode(next);
+        self.update_viewer(window, cx);
+        self.update_window_title(window);
+        cx.notify();
+    }
+
     fn do_zoom(&mut self, zoom_fn: impl FnOnce(&mut ImageViewer), cx: &mut Context<Self>) {
         if self.is_modal_open() {
             return;
@@ -1177,10 +1197,7 @@ pub(crate) fn format_window_title(
 ) -> String {
     match path {
         Some(p) => {
-            let filename = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("Unknown");
+            let filename = p.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown");
             let position = index + 1;
             if settings.sort_navigation.show_image_counter {
                 settings

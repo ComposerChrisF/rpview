@@ -13,6 +13,7 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("[", PreviousFrame, None),
         KeyBinding::new("shift-cmd-a", SortAlphabetical, None),
         KeyBinding::new("shift-cmd-m", SortByModified, None),
+        KeyBinding::new("shift-cmd-t", SortByTypeToggle, None),
         // Zoom controls - base (normal speed)
         KeyBinding::new("=", ZoomIn, None), // = key (same as +)
         KeyBinding::new("+", ZoomIn, None),
@@ -74,8 +75,8 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("cmd-enter", CloseSettings, Some("SettingsWindow")),
         // Filter controls
         KeyBinding::new("cmd-f", ToggleFilters, None),
-        KeyBinding::new("cmd-1", DisableFilters, None),
-        KeyBinding::new("cmd-2", EnableFilters, None),
+        KeyBinding::new("1", DisableFilters, Some("ImageViewer")),
+        KeyBinding::new("2", EnableFilters, Some("ImageViewer")),
         KeyBinding::new("shift-cmd-r", ResetFilters, None),
         // File operations
         KeyBinding::new("cmd-o", OpenFile, None),
@@ -100,6 +101,8 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("shift-ctrl-m", SortByModified, None),
         #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-t", SortByTypeToggle, None),
+        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-0", ZoomResetAndCenter, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-=", ZoomInSlow, None),
@@ -121,10 +124,6 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("ctrl-enter", CloseSettings, Some("SettingsWindow")),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-f", ToggleFilters, None),
-        #[cfg(not(target_os = "macos"))]
-        KeyBinding::new("ctrl-1", DisableFilters, None),
-        #[cfg(not(target_os = "macos"))]
-        KeyBinding::new("ctrl-2", EnableFilters, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("shift-ctrl-r", ResetFilters, None),
         #[cfg(not(target_os = "macos"))]
@@ -212,6 +211,7 @@ pub(crate) fn setup_menus(cx: &mut gpui::App) {
                 MenuItem::separator(),
                 MenuItem::action("Sort Alphabetically", SortAlphabetical),
                 MenuItem::action("Sort by Modified Date", SortByModified),
+                MenuItem::action("Sort by Type (Toggle A/M)", SortByTypeToggle),
             ],
         },
         Menu {

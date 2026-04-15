@@ -22,6 +22,7 @@ actions!(
         PreviousFrame,
         SortAlphabetical,
         SortByModified,
+        SortByTypeToggle,
         ZoomIn,
         ZoomOut,
         ZoomReset,
