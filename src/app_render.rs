@@ -63,34 +63,9 @@ impl Render for App {
             cx.notify();
         }
 
-        // Check if filter processing has completed
-        let just_finished_processing = self.viewer.check_filter_processing();
-        if just_finished_processing {
-            // Filter processing completed - the pending path will be preloaded in this render
-            // Reset preload frame counter
-            self.viewer.pending_filter_preload_frames = 0;
-            window.request_animation_frame();
+        // Check if filter processing has completed; install the in-memory result immediately.
+        if self.viewer.check_filter_processing() {
             cx.notify();
-        }
-
-        // Track preload frames and apply pending filtered image after GPU has loaded texture
-        if self.viewer.pending_filtered_path.is_some() {
-            if !just_finished_processing {
-                self.viewer.pending_filter_preload_frames += 1;
-            }
-
-            // Apply after 3 frames of preloading to ensure GPU has texture loaded
-            // Frame 0: Set pending, start invisible render
-            // Frame 1-2: Continue invisible render (GPU loads texture)
-            // Frame 3: Apply (texture ready, no black flash)
-            if self.viewer.pending_filter_preload_frames >= 3 {
-                self.viewer.apply_pending_filtered_image();
-                self.viewer.pending_filter_preload_frames = 0;
-                cx.notify();
-            } else {
-                // Still preloading, request another frame
-                window.request_animation_frame();
-            }
         }
 
         // --- SVG dynamic re-rasterization ---

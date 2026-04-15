@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::time::Instant;
 
 /// Per-image state that is cached and persisted
@@ -22,9 +21,6 @@ pub struct ImageState {
     /// Whether filters are currently enabled
     pub filters_enabled: bool,
 
-    /// Cached filtered image path (persisted across navigations)
-    pub filtered_image_path: Option<PathBuf>,
-
     /// Animation state (if applicable)
     pub animation: Option<AnimationState>,
 
@@ -47,7 +43,6 @@ impl ImageState {
             last_accessed: Instant::now(),
             filters: default_filters,
             filters_enabled: true,
-            filtered_image_path: None,
             animation: None,
             override_size_limit: false,
         }

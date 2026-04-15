@@ -196,6 +196,88 @@ pub fn apply_filters(
     DynamicImage::ImageRgba8(output)
 }
 
+/// Build the combined brightness/contrast/gamma LUT (256 entries).
+/// Returns `None` if all three values are no-ops, signalling "pass-through."
+fn build_filter_lut(brightness: f32, contrast: f32, gamma: f32) -> Option<[u8; 256]> {
+    let has_brightness = brightness.abs() >= 0.001;
+    let has_contrast = contrast.abs() >= 0.001;
+    let has_gamma = (gamma - 1.0).abs() >= 0.001;
+    if !has_brightness && !has_contrast && !has_gamma {
+        return None;
+    }
+
+    let brightness = brightness.clamp(-100.0, 100.0);
+    let contrast = contrast.clamp(-100.0, 100.0);
+    let gamma = gamma.clamp(0.1, 10.0);
+
+    let contrast_factor = if contrast > 0.0 {
+        1.0 + (contrast / 100.0) * 2.0
+    } else {
+        1.0 + (contrast / 100.0) * 0.9
+    };
+    let brightness_adjustment = brightness * 2.55;
+    let inv_gamma = 1.0 / gamma;
+
+    let mut lut = [0u8; 256];
+    for (i, entry) in lut.iter_mut().enumerate() {
+        let mut v = i as f32;
+        if has_brightness {
+            v = (v + brightness_adjustment).clamp(0.0, 255.0);
+        }
+        if has_contrast {
+            v = (((v / 255.0) - 0.5) * contrast_factor + 0.5) * 255.0;
+            v = v.clamp(0.0, 255.0);
+        }
+        if has_gamma {
+            v = (v / 255.0).powf(inv_gamma) * 255.0;
+        }
+        *entry = v.clamp(0.0, 255.0) as u8;
+    }
+    Some(lut)
+}
+
+/// Apply brightness / contrast / gamma to an RGBA source, writing the result into a
+/// freshly-allocated **BGRA** buffer of identical dimensions. This is the layout GPUI
+/// expects for `RenderImage`, so callers can feed the result directly to `Frame::new`
+/// without a separate channel swap pass.
+///
+/// If all three values are no-ops, returns a plain RGBA→BGRA copy (no LUT applied).
+pub fn apply_filters_to_bgra(
+    src: &image::RgbaImage,
+    brightness: f32,
+    contrast: f32,
+    gamma: f32,
+) -> image::RgbaImage {
+    let (width, height) = src.dimensions();
+    let mut output = image::RgbaImage::new(width, height);
+
+    let src_bytes = src.as_raw();
+    let dst_bytes: &mut [u8] = &mut output;
+
+    match build_filter_lut(brightness, contrast, gamma) {
+        Some(lut) => {
+            for (s, d) in src_bytes.chunks_exact(4).zip(dst_bytes.chunks_exact_mut(4)) {
+                // RGBA source → BGRA dest, with LUT applied to RGB channels.
+                d[0] = lut[s[2] as usize];
+                d[1] = lut[s[1] as usize];
+                d[2] = lut[s[0] as usize];
+                d[3] = s[3];
+            }
+        }
+        None => {
+            // Filters are no-ops; just swap channels.
+            for (s, d) in src_bytes.chunks_exact(4).zip(dst_bytes.chunks_exact_mut(4)) {
+                d[0] = s[2];
+                d[1] = s[1];
+                d[2] = s[0];
+                d[3] = s[3];
+            }
+        }
+    }
+
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -511,6 +593,24 @@ mod tests {
         assert_eq!(pixel[0], 100);
         assert_eq!(pixel[1], 150);
         assert_eq!(pixel[2], 200);
+    }
+
+    #[test]
+    fn test_apply_filters_to_bgra_noop_swaps_channels() {
+        // RGBA (10, 20, 30, 200) → BGRA (30, 20, 10, 200)
+        let img = ImageBuffer::from_pixel(2, 1, Rgba([10u8, 20, 30, 200]));
+        let out = apply_filters_to_bgra(&img, 0.0, 0.0, 1.0);
+        let p = out.get_pixel(0, 0);
+        assert_eq!(p.0, [30, 20, 10, 200]);
+    }
+
+    #[test]
+    fn test_apply_filters_to_bgra_applies_lut_and_swaps() {
+        // With brightness +100 (full range +255 mapped), all RGB clamp to 255 regardless of input.
+        let img = ImageBuffer::from_pixel(1, 1, Rgba([10u8, 20, 30, 77]));
+        let out = apply_filters_to_bgra(&img, 100.0, 0.0, 1.0);
+        let p = out.get_pixel(0, 0);
+        assert_eq!(p.0, [255, 255, 255, 77]);
     }
 
     #[test]

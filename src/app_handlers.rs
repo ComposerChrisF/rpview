@@ -486,27 +486,21 @@ impl App {
             if let Some(save_path) = file_dialog.save_file() {
                 // Determine what to save based on filter state
                 let save_result = if self.viewer.image_state.filters_enabled {
-                    // Save the filtered image if filters are enabled and cached
+                    // Re-apply filters to the original for save. The in-memory filtered
+                    // buffer we hold for display is BGRA; easier to just re-run the LUT
+                    // against the original RGBA source than convert back.
                     if let Some(loaded_image) = &self.viewer.current_image {
-                        if let Some(ref filtered_path) = loaded_image.filtered_path {
-                            // Copy the cached filtered image to the save location
-                            std::fs::copy(filtered_path, &save_path)
-                                .map(|_| ())
-                                .map_err(|e| format!("Failed to copy filtered image: {}", e))
+                        if let Ok(original_img) = image::open(&loaded_image.path) {
+                            let filters = &self.viewer.image_state.filters;
+                            let filtered_img = utils::filters::apply_filters(
+                                &original_img,
+                                filters.brightness,
+                                filters.contrast,
+                                filters.gamma,
+                            );
+                            self.save_dynamic_image_to_path(&filtered_img, &save_path)
                         } else {
-                            // Filters enabled but no cache - load original and apply filters
-                            if let Ok(original_img) = image::open(&loaded_image.path) {
-                                let filters = &self.viewer.image_state.filters;
-                                let filtered_img = utils::filters::apply_filters(
-                                    &original_img,
-                                    filters.brightness,
-                                    filters.contrast,
-                                    filters.gamma,
-                                );
-                                self.save_dynamic_image_to_path(&filtered_img, &save_path)
-                            } else {
-                                Err("Failed to load original image".to_string())
-                            }
+                            Err("Failed to load original image".to_string())
                         }
                     } else {
                         Err("No image loaded".to_string())
@@ -1217,7 +1211,6 @@ impl App {
         let state = self.app_state.get_current_state(default_filters);
         let filters = state.filters;
         let filters_enabled = state.filters_enabled;
-        let has_cached = state.filtered_image_path.is_some();
         self.viewer.set_image_state(state); // move, no clone
 
         // Update filter controls UI to reflect the loaded filter values
@@ -1225,15 +1218,12 @@ impl App {
             controls.update_from_filters(filters, cx);
         });
 
-        // Restore cached filtered image if it exists (AFTER state is loaded)
-        self.viewer.restore_filtered_image_from_state();
-
-        // Only trigger filter processing if filters are applied AND we don't have a cached filtered image
+        // Re-apply filters to the newly-loaded image if they're non-default.
+        // This costs one LUT pass (fast in-memory) — no longer requires disk I/O.
         if filters_enabled
             && (filters.brightness.abs() >= 0.001
                 || filters.contrast.abs() >= 0.001
                 || (filters.gamma - 1.0).abs() >= 0.001)
-            && !has_cached
         {
             self.viewer.update_filtered_cache();
         }

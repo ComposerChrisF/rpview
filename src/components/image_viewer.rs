@@ -53,9 +53,14 @@ pub struct LoadedImage {
     pub path: PathBuf,
     pub width: u32,
     pub height: u32,
-    /// Cached filtered image path (if filters are applied)
-    pub filtered_path: Option<PathBuf>,
-    /// Filter settings used to generate the cached filtered image
+    /// Decoded RGBA source, cached in memory so the filter thread doesn't have to
+    /// reload and re-decode from disk on every slider tick. Populated lazily on
+    /// the first filter application.
+    pub decoded_rgba8: Option<Arc<image::RgbaImage>>,
+    /// In-memory filtered image (most-recent-filtered only). Handed directly to
+    /// GPUI via `ImageSource::Render`, no temp file.
+    pub filtered_render: Option<Arc<gpui::RenderImage>>,
+    /// Filter settings used to produce `filtered_render` (for change detection).
     pub cached_filter_settings: Option<FilterSettings>,
     /// Animation data (if this is an animated image)
     pub animation_data: Option<AnimationData>,
@@ -107,12 +112,9 @@ pub struct ImageViewer {
     pub(crate) is_loading: bool,
     /// Filter processing state
     pub(crate) is_processing_filters: bool,
-    /// Handle for async filter processing
-    pub(crate) filter_processing_handle: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
-    /// Pending filtered image path (ready to be applied after GPU preload)
-    pub(crate) pending_filtered_path: Option<PathBuf>,
-    /// Number of frames the pending filtered path has been preloaded (for GPU cache)
-    pub(crate) pending_filter_preload_frames: u32,
+    /// Handle for async filter processing — returns the filtered image in memory.
+    pub(crate) filter_processing_handle:
+        Option<std::sync::mpsc::Receiver<Result<Arc<gpui::RenderImage>, String>>>,
 
     // --- SVG dynamic re-rasterization state ---
     /// Active sharp re-raster path (replaces blurry base raster when zoomed in)
@@ -158,8 +160,6 @@ impl ImageViewer {
             is_loading: false,
             is_processing_filters: false,
             filter_processing_handle: None,
-            pending_filtered_path: None,
-            pending_filter_preload_frames: 0,
             svg_reraster_path: None,
             svg_reraster_region: None,
             svg_reraster_scale: None,
@@ -488,7 +488,8 @@ impl ImageViewer {
                     path: path.clone(),
                     width,
                     height,
-                    filtered_path: None,
+                    decoded_rgba8: None,
+                    filtered_render: None,
                     cached_filter_settings: None,
                     animation_data,
                     frame_cache_paths,
@@ -538,10 +539,6 @@ impl ImageViewer {
         self.error_path = None;
         self.no_images_path = None;
 
-        // Clear pending filtered image from previous image
-        self.pending_filtered_path = None;
-        self.pending_filter_preload_frames = 0;
-
         // Clear SVG re-raster state from previous image
         self.clear_svg_reraster_state();
     }
@@ -585,13 +582,12 @@ impl ImageViewer {
                             self.image_state.animation = None;
                         }
 
-                        // Don't restore filtered path here - it will be restored when load_current_image_state() is called
-                        // At this point self.image_state still has the OLD image's state
                         self.current_image = Some(LoadedImage {
                             path: data.path,
                             width: data.width,
                             height: data.height,
-                            filtered_path: None,
+                            decoded_rgba8: None,
+                            filtered_render: None,
                             cached_filter_settings: None,
                             animation_data: data.animation_data,
                             frame_cache_paths,
@@ -652,204 +648,114 @@ impl ImageViewer {
         }
 
         // Cancel any previous filter processing when starting new one
-        // This allows rapid slider changes to cancel old processing
         if self.is_processing_filters {
             debug_eprintln!("[ImageViewer::update_filtered_cache] Canceling previous processing");
             self.filter_processing_handle = None;
             self.is_processing_filters = false;
         }
 
-        if let Some(ref mut loaded) = self.current_image {
-            let filters = &self.image_state.filters;
-            let filters_enabled = self.image_state.filters_enabled;
+        let Some(loaded) = self.current_image.as_mut() else {
+            return;
+        };
 
-            debug_eprintln!(
-                "[ImageViewer::update_filtered_cache] Current filters: brightness={:.1}, contrast={:.1}, gamma={:.2}, enabled={}",
+        let filters = self.image_state.filters;
+        let filters_enabled = self.image_state.filters_enabled;
+
+        let is_noop = !filters_enabled
+            || (filters.brightness.abs() < 0.001
+                && filters.contrast.abs() < 0.001
+                && (filters.gamma - 1.0).abs() < 0.001);
+
+        let needs_update = if is_noop {
+            loaded.filtered_render.is_some()
+        } else {
+            loaded.cached_filter_settings.as_ref() != Some(&filters)
+        };
+
+        debug_eprintln!(
+            "[ImageViewer::update_filtered_cache] noop={}, needs_update={}",
+            is_noop,
+            needs_update
+        );
+
+        if !needs_update {
+            self.is_processing_filters = false;
+            return;
+        }
+
+        if is_noop {
+            // Drop the filtered buffer; render will fall back to the original.
+            loaded.filtered_render = None;
+            loaded.cached_filter_settings = None;
+            self.is_processing_filters = false;
+            return;
+        }
+
+        // Lazily decode the source RGBA8 the first time we need to filter this image.
+        // All subsequent slider ticks reuse the same decoded buffer — no disk I/O.
+        if loaded.decoded_rgba8.is_none() {
+            match image_loader::load_image(&loaded.path) {
+                Ok(img) => {
+                    loaded.decoded_rgba8 = Some(Arc::new(img.to_rgba8()));
+                }
+                Err(_e) => {
+                    debug_eprintln!("[ImageViewer::update_filtered_cache] Decode failed: {}", _e);
+                    return;
+                }
+            }
+        }
+        let source = loaded
+            .decoded_rgba8
+            .as_ref()
+            .expect("decoded source just populated")
+            .clone();
+
+        self.is_processing_filters = true;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.filter_processing_handle = Some(receiver);
+
+        std::thread::spawn(move || {
+            debug_eprintln!("[FILTER_THREAD] LUT pass starting");
+            let bgra = filters::apply_filters_to_bgra(
+                &source,
                 filters.brightness,
                 filters.contrast,
                 filters.gamma,
-                filters_enabled
             );
-            debug_eprintln!(
-                "[ImageViewer::update_filtered_cache] Cached filters: {:?}",
-                loaded.cached_filter_settings
-            );
-
-            // Check if we need to regenerate the filtered image
-            let needs_update = if !filters_enabled {
-                // Filters disabled, clear cache
-                loaded.filtered_path.is_some()
-            } else if filters.brightness.abs() < 0.001
-                && filters.contrast.abs() < 0.001
-                && (filters.gamma - 1.0).abs() < 0.001
-            {
-                // No filters applied, clear cache
-                loaded.filtered_path.is_some()
-            } else {
-                // Check if cached filters match current filters
-                loaded.cached_filter_settings.as_ref() != Some(filters)
-            };
-
-            debug_eprintln!(
-                "[ImageViewer::update_filtered_cache] needs_update={}",
-                needs_update
-            );
-
-            if needs_update {
-                if !filters_enabled
-                    || (filters.brightness.abs() < 0.001
-                        && filters.contrast.abs() < 0.001
-                        && (filters.gamma - 1.0).abs() < 0.001)
-                {
-                    // Clear filtered cache (no processing needed)
-                    self.is_processing_filters = false;
-                    if let Some(ref filtered_path) = loaded.filtered_path {
-                        let _ = std::fs::remove_file(filtered_path);
-                    }
-                    loaded.filtered_path = None;
-                    loaded.cached_filter_settings = None;
-                    // Also clear from persisted state
-                    self.image_state.filtered_image_path = None;
-                } else {
-                    // Start async filter processing
-                    self.is_processing_filters = true;
-
-                    let image_path = loaded.path.clone();
-                    let brightness = filters.brightness;
-                    let contrast = filters.contrast;
-                    let gamma = filters.gamma;
-
-                    let (sender, receiver) = std::sync::mpsc::channel();
-                    self.filter_processing_handle = Some(receiver);
-
-                    // Spawn background thread to process filters
-                    std::thread::spawn(move || {
-                        debug_eprintln!("[FILTER_THREAD] Starting filter processing");
-
-                        let result = (|| {
-                            // Load image
-                            let img = image_loader::load_image(&image_path)
-                                .map_err(|e| format!("Failed to load image: {}", e))?;
-
-                            // Apply filters
-                            let filtered =
-                                filters::apply_filters(&img, brightness, contrast, gamma);
-
-                            // Save to temp file
-                            let temp_dir = std::env::temp_dir()
-                                .canonicalize()
-                                .map_err(|e| format!("Failed to get temp dir: {}", e))?;
-
-                            use std::time::{Duration, SystemTime, UNIX_EPOCH};
-                            let timestamp = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap_or(Duration::from_secs(0))
-                                .as_nanos();
-                            let temp_path = temp_dir.join(format!(
-                                "rpview_filtered_{}_{}.png",
-                                std::process::id(),
-                                timestamp
-                            ));
-
-                            debug_eprintln!(
-                                "[FILTER_THREAD] Saving filtered image to: {:?}",
-                                temp_path
-                            );
-                            filtered
-                                .save(&temp_path)
-                                .map_err(|e| format!("Failed to save filtered image: {}", e))?;
-
-                            Ok(temp_path)
-                        })();
-
-                        debug_eprintln!(
-                            "[FILTER_THREAD] Filter processing complete: {:?}",
-                            result.is_ok()
-                        );
-                        let _ = sender.send(result);
-                    });
-                }
-            } else {
-                self.is_processing_filters = false;
-            }
-        }
+            let frame = image::Frame::new(bgra);
+            let render_image = Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
+                frame, 1,
+            )));
+            debug_eprintln!("[FILTER_THREAD] LUT pass complete");
+            let _ = sender.send(Ok(render_image));
+        });
     }
 
-    /// Check for completed filter processing and update the image
+    /// Check for completed filter processing and install the resulting in-memory image.
+    /// Returns true if a new filtered image was applied this tick (caller may want to notify).
     pub fn check_filter_processing(&mut self) -> bool {
-        if let Some(receiver) = &self.filter_processing_handle {
-            if let Ok(result) = receiver.try_recv() {
-                debug_eprintln!(
-                    "[ImageViewer::check_filter_processing] Received result: {:?}",
-                    result.is_ok()
-                );
-
-                match result {
-                    Ok(new_filtered_path) => {
-                        // Store the pending filtered path for GPU preloading
-                        // Don't update loaded.filtered_path yet to avoid black flash
-                        self.pending_filtered_path = Some(new_filtered_path);
-                        debug_eprintln!(
-                            "[ImageViewer::check_filter_processing] Set pending filtered path, will apply after preload"
-                        );
-                    }
-                    Err(_e) => {
-                        debug_eprintln!(
-                            "[ImageViewer::check_filter_processing] Filter processing failed: {}",
-                            _e
-                        );
-                    }
-                }
-
-                self.is_processing_filters = false;
-                self.filter_processing_handle = None;
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Apply pending filtered image (called after GPU preload to avoid black flash)
-    pub fn apply_pending_filtered_image(&mut self) {
-        if let Some(pending_path) = self.pending_filtered_path.take() {
-            if let Some(ref mut loaded) = self.current_image {
-                debug_eprintln!(
-                    "[ImageViewer::apply_pending_filtered_image] Applying pending filtered path"
-                );
-
-                // Clean up old filtered image
-                if let Some(ref old_filtered_path) = loaded.filtered_path {
-                    let _ = std::fs::remove_file(old_filtered_path);
-                }
-
-                // Update to new filtered image (texture already preloaded, no black flash)
-                loaded.filtered_path = Some(pending_path.clone());
-                loaded.cached_filter_settings = Some(self.image_state.filters);
-
-                // Persist the filtered path in ImageState so it survives navigation
-                self.image_state.filtered_image_path = Some(pending_path);
-            }
-        }
-    }
-
-    /// Restore filtered image from ImageState (called after load_current_image_state)
-    pub fn restore_filtered_image_from_state(&mut self) {
-        if let Some(ref mut loaded) = self.current_image {
-            // Check if ImageState has a cached filtered path
-            if let Some(ref cached_path) = self.image_state.filtered_image_path {
-                if cached_path.exists() {
-                    debug_eprintln!(
-                        "[ImageViewer::restore_filtered_image_from_state] Restoring cached filtered image"
-                    );
-                    loaded.filtered_path = Some(cached_path.clone());
+        let Some(receiver) = &self.filter_processing_handle else {
+            return false;
+        };
+        let Ok(result) = receiver.try_recv() else {
+            return false;
+        };
+        self.is_processing_filters = false;
+        self.filter_processing_handle = None;
+        match result {
+            Ok(render_image) => {
+                if let Some(loaded) = self.current_image.as_mut() {
+                    loaded.filtered_render = Some(render_image);
                     loaded.cached_filter_settings = Some(self.image_state.filters);
-                } else {
-                    // File was deleted, clear the cached path
-                    debug_eprintln!(
-                        "[ImageViewer::restore_filtered_image_from_state] Cached file not found, clearing"
-                    );
-                    self.image_state.filtered_image_path = None;
                 }
+                true
+            }
+            Err(_e) => {
+                debug_eprintln!(
+                    "[ImageViewer::check_filter_processing] Filter failed: {}",
+                    _e
+                );
+                false
             }
         }
     }
@@ -1386,15 +1292,13 @@ impl ImageViewer {
                         .into_any_element();
                 }
             } else {
-                // Static image priority: filtered → full SVG re-raster (no region) → rasterized → original
+                // Static image priority: full SVG re-raster (no region) → rasterized → original.
+                // The in-memory filtered image is handled below via `filtered_source`.
                 let full_reraster = self
                     .svg_reraster_path
                     .as_ref()
                     .filter(|_| self.svg_reraster_region.is_none());
-                loaded
-                    .filtered_path
-                    .as_ref()
-                    .or(full_reraster)
+                full_reraster
                     .or(loaded.rasterized_path.as_ref())
                     .unwrap_or(&loaded.path)
                     .clone()
@@ -1411,8 +1315,17 @@ impl ImageViewer {
         let zoom_level = self.image_state.zoom;
         let is_fit = self.image_state.is_fit_to_window;
 
-        // Create a unique ID for the image based on its path to force GPUI to reload when path changes
-        let image_id = ElementId::Name(format!("image-{}", path.display()).into());
+        // If an in-memory filtered buffer is available, hand it to GPUI directly
+        // instead of reading a temp PNG. Unique per-filter ID ensures GPUI treats each
+        // slider tick as a new texture rather than reusing a cached one.
+        let (image_source, image_id): (gpui::ImageSource, ElementId) =
+            if let Some(ref render_image) = loaded.filtered_render {
+                let id = ElementId::Name(format!("filtered-{}", render_image.id.0).into());
+                (gpui::ImageSource::Render(render_image.clone()), id)
+            } else {
+                let id = ElementId::Name(format!("image-{}", path.display()).into());
+                (gpui::ImageSource::from(path.clone()), id)
+            };
 
         let mut container = div()
             .size_full()
@@ -1422,7 +1335,7 @@ impl ImageViewer {
             .overflow_hidden()
             .relative()
             .child(
-                img(path.clone())
+                img(image_source)
                     .id(image_id)
                     .w(px(zoomed_width as f32))
                     .h(px(zoomed_height as f32))
@@ -1469,25 +1382,6 @@ impl ImageViewer {
                             .opacity(0.0),
                     );
                 }
-            }
-        }
-
-        // Preload pending filtered image (if processing just finished)
-        // This preloads the texture into GPU before we switch to it, preventing black flash
-        if let Some(ref pending_path) = self.pending_filtered_path {
-            if pending_path.exists() {
-                let preload_id =
-                    ElementId::Name(format!("pending-filter-{}", pending_path.display()).into());
-                container = container.child(
-                    img(pending_path.clone())
-                        .id(preload_id)
-                        .w(px(zoomed_width as f32))
-                        .h(px(zoomed_height as f32))
-                        .absolute()
-                        .left(px(-10000.0))
-                        .top(px(0.0))
-                        .opacity(0.0),
-                );
             }
         }
 
