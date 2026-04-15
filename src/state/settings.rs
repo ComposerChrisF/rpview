@@ -200,6 +200,39 @@ pub struct Appearance {
     pub font_size_scale: f32,
     /// Window title format template
     pub window_title_format: String,
+    /// Last-known bounds of the floating Filter window (None = use centered default)
+    #[serde(default)]
+    pub filter_window_bounds: Option<PersistedWindowBounds>,
+    /// Whether the Filter window was open when the app last quit
+    #[serde(default)]
+    pub filter_window_open: bool,
+}
+
+/// Serializable window bounds (position + size, in display pixels).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PersistedWindowBounds {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl PersistedWindowBounds {
+    pub fn from_bounds(bounds: gpui::Bounds<gpui::Pixels>) -> Self {
+        Self {
+            x: f32::from(bounds.origin.x),
+            y: f32::from(bounds.origin.y),
+            width: f32::from(bounds.size.width),
+            height: f32::from(bounds.size.height),
+        }
+    }
+
+    pub fn to_bounds(self) -> gpui::Bounds<gpui::Pixels> {
+        gpui::Bounds {
+            origin: gpui::point(gpui::px(self.x), gpui::px(self.y)),
+            size: gpui::size(gpui::px(self.width), gpui::px(self.height)),
+        }
+    }
 }
 
 impl Appearance {
@@ -230,6 +263,8 @@ impl Default for Appearance {
             overlay_transparency: 204, // ~80% opacity
             font_size_scale: 1.0,
             window_title_format: "{filename} ({sm}, {index}/{total})".to_string(),
+            filter_window_bounds: None,
+            filter_window_open: false,
         }
     }
 }
@@ -421,6 +456,26 @@ mod tests {
     const DEFAULT_OVERLAY_TRANSPARENCY: u8 = 204;
     const DEFAULT_FONT_SIZE_SCALE: f32 = 1.0;
     const DEFAULT_MAX_IMAGE_DIMENSION: u32 = 17000;
+
+    #[test]
+    fn test_persisted_window_bounds_round_trip() {
+        let original = PersistedWindowBounds {
+            x: 120.0,
+            y: 200.0,
+            width: 360.0,
+            height: 320.0,
+        };
+        let bounds = original.to_bounds();
+        let round = PersistedWindowBounds::from_bounds(bounds);
+        assert_eq!(original, round);
+    }
+
+    #[test]
+    fn test_appearance_default_filter_window_off() {
+        let a = Appearance::default();
+        assert!(a.filter_window_bounds.is_none());
+        assert!(!a.filter_window_open);
+    }
 
     #[test]
     fn test_app_settings_default() {

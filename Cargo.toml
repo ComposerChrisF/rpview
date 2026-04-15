@@ -1,6 +1,6 @@
 [package]
 name = "rpview"
-version = "0.10.1"
+version = "0.11.0"
 edition = "2024"
 authors = ["rpview contributors"]
 description = "A fast, cross-platform image viewer built with GPUI"
@@ -22,6 +22,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 resvg = "0.47"
 trash = "5.2"
+raw-window-handle = "0.6"
 # smallvec is included here for convenience, it is used by gpui when creating
 # components that can have children. uncomment this line or
 # use `cargo add smallvec` to add it to your project
@@ -38,6 +39,7 @@ objc2-app-kit = "0.3"
 block2 = "0.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
 winresource = "0.1"

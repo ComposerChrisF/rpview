@@ -5,6 +5,7 @@ pub mod image_loader;
 pub mod settings_io;
 pub mod style;
 pub mod svg;
+pub mod window_level;
 pub mod zoom;
 
 /// Like `eprintln!`, but only emits output in debug builds.

@@ -17,8 +17,6 @@ pub struct FilterControls {
     pub contrast_slider: Entity<Slider>,
     pub gamma_slider: Entity<Slider>,
 
-    /// Overlay transparency (0-255)
-    pub overlay_transparency: u8,
     /// Font size scale multiplier
     pub font_size_scale: f32,
 }
@@ -26,12 +24,7 @@ pub struct FilterControls {
 impl EventEmitter<FilterControlsEvent> for FilterControls {}
 
 impl FilterControls {
-    pub fn new(
-        filters: FilterSettings,
-        overlay_transparency: u8,
-        font_size_scale: f32,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(filters: FilterSettings, font_size_scale: f32, cx: &mut Context<Self>) -> Self {
         // Create brightness slider (-100 to +100, current value)
         let brightness_slider = cx.new(|cx| {
             Slider::new(cx)
@@ -96,7 +89,6 @@ impl FilterControls {
             brightness_slider,
             contrast_slider,
             gamma_slider,
-            overlay_transparency,
             font_size_scale,
         }
     }
@@ -129,19 +121,12 @@ impl Render for FilterControls {
         let brightness_value = self.brightness_slider.read(cx).value();
         let contrast_value = self.contrast_slider.read(cx).value();
         let gamma_value = self.gamma_slider.read(cx).value();
-        let disable_enable = crate::utils::style::format_shortcut("1", false, false);
         let reset_all = crate::utils::style::format_shortcut("R", true, false);
 
         div()
-            .absolute()
-            .top(px(20.0))
-            .right(px(20.0))
-            .bg(Colors::overlay_bg_alpha(self.overlay_transparency))
-            .border_1()
-            .border_color(rgba(0x44_44_44_FF))
-            .rounded(px(8.0))
+            .size_full()
+            .bg(Colors::background())
             .p(Spacing::lg())
-            .min_w(px(320.0))
             .child(
                 div()
                     .flex()
@@ -252,7 +237,7 @@ impl Render for FilterControls {
                                 div()
                                     .text_size(TextSize::sm())
                                     .text_color(rgb(0xAAAAAA))
-                                    .child(format!("{}: Disable/Enable", disable_enable)),
+                                    .child("1 / 2: Disable/Enable"),
                             )
                             .child(
                                 div()

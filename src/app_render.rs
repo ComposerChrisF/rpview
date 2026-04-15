@@ -427,9 +427,6 @@ impl Render for App {
             .when(self.show_settings, |el| {
                 el.child(self.settings_window.clone())
             })
-            .when(self.show_filters, |el| {
-                el.child(self.filter_controls.clone())
-            })
             // Delete confirmation card at bottom-center
             .when_some(self.pending_delete, |el, mode| {
                 let current_path = self.app_state.current_image().cloned();
@@ -573,9 +570,7 @@ impl Render for App {
             .track_focus(&self.focus_handle)
             .focus(|s| s)
             // Enable ImageViewer key context (for arrow key navigation) only when no modal is open
-            .when(!self.show_settings && !self.show_filters, |div| {
-                div.key_context("ImageViewer")
-            })
+            .when(!self.show_settings, |div| div.key_context("ImageViewer"))
             .size_full()
             .flex()
             .flex_col()

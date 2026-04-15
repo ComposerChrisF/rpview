@@ -52,12 +52,6 @@ impl App {
             cx.notify();
             return;
         }
-        if self.show_filters {
-            self.show_filters = false;
-            self.focus_handle.focus(window);
-            cx.notify();
-            return;
-        }
 
         let now = Instant::now();
 
@@ -187,15 +181,103 @@ impl App {
         }
     }
 
-    pub(crate) fn handle_toggle_filters(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_filters = !self.show_filters;
-
-        // Restore focus to the main app when hiding filters
-        if !self.show_filters {
-            self.focus_handle.focus(window);
+    pub(crate) fn handle_toggle_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.filter_window.is_some() {
+            self.close_filter_window(cx);
+        } else {
+            self.open_filter_window(cx);
         }
-
         cx.notify();
+    }
+
+    /// Spawn the floating, always-on-top filter window. Does nothing if one is already open.
+    pub(crate) fn open_filter_window(&mut self, cx: &mut Context<Self>) {
+        if self.filter_window.is_some() {
+            return;
+        }
+        let bounds = self
+            .settings
+            .appearance
+            .filter_window_bounds
+            .map(|b| b.to_bounds())
+            .unwrap_or_else(|| {
+                gpui::Bounds::centered(None, gpui::size(gpui::px(360.0), gpui::px(320.0)), cx)
+            });
+
+        let filter_controls = self.filter_controls.clone();
+        let weak_app = cx.weak_entity();
+
+        let result = cx.open_window(
+            gpui::WindowOptions {
+                window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
+                kind: gpui::WindowKind::Floating,
+                is_resizable: true,
+                is_movable: true,
+                titlebar: Some(gpui::TitlebarOptions {
+                    title: Some("Filters".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            move |window, cx| {
+                crate::utils::window_level::set_always_on_top(window);
+
+                let view =
+                    cx.new(|inner_cx| FilterWindowView::new(filter_controls.clone(), inner_cx));
+
+                // Persist bounds on move/resize.
+                let weak_for_bounds = weak_app.clone();
+                view.update(cx, |_, inner_cx| {
+                    inner_cx
+                        .observe_window_bounds(window, move |_, window, cx| {
+                            let bounds = window.bounds();
+                            let _ = weak_for_bounds.update(cx, |app, _| {
+                                app.settings.appearance.filter_window_bounds = Some(
+                                    crate::state::settings::PersistedWindowBounds::from_bounds(
+                                        bounds,
+                                    ),
+                                );
+                                let _ = crate::utils::settings_io::save_settings(&app.settings);
+                            });
+                        })
+                        .detach();
+
+                    // Clear the handle on the main App when this view (and thus its window) drops.
+                    let weak_for_close = weak_app.clone();
+                    inner_cx
+                        .on_release(move |_, app_cx| {
+                            let _ = weak_for_close.update(app_cx, |app, _| {
+                                app.filter_window = None;
+                                app.settings.appearance.filter_window_open = false;
+                                let _ = crate::utils::settings_io::save_settings(&app.settings);
+                            });
+                        })
+                        .detach();
+                });
+
+                view
+            },
+        );
+
+        match result {
+            Ok(handle) => {
+                self.filter_window = Some(handle);
+                self.settings.appearance.filter_window_open = true;
+                let _ = crate::utils::settings_io::save_settings(&self.settings);
+            }
+            Err(e) => {
+                eprintln!("Failed to open filter window: {:?}", e);
+            }
+        }
+    }
+
+    /// Close the floating filter window if one is open.
+    pub(crate) fn close_filter_window(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.filter_window.take() {
+            let _ = handle.update(cx, |_, window, _| window.remove_window());
+            self.settings.appearance.filter_window_open = false;
+            let _ = crate::utils::settings_io::save_settings(&self.settings);
+        }
     }
 
     pub(crate) fn handle_disable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {

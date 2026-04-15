@@ -185,7 +185,7 @@ impl HelpOverlay {
                 .into_any_element(),
             self.render_shortcut(
                 format_shortcut("F", false, false),
-                "Toggle filter controls".to_string(),
+                "Show/hide filter window".to_string(),
             )
             .into_any_element(),
             self.render_shortcut("1".to_string(), "Disable filters".to_string())
