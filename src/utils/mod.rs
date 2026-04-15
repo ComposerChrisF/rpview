@@ -4,6 +4,7 @@ pub mod file_scanner;
 pub mod filters;
 pub mod float_map;
 pub mod image_loader;
+pub mod local_contrast;
 pub mod settings_io;
 pub mod style;
 pub mod svg;
