@@ -67,7 +67,8 @@ mod utils;
 use cli::Cli;
 use components::{
     DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, FilterWindowView,
-    HelpOverlay, ImageViewer, SettingsWindow,
+    HelpOverlay, ImageViewer, LocalContrastControls, LocalContrastControlsEvent,
+    LocalContrastWindowView, SettingsWindow,
 };
 use state::{AppSettings, AppState};
 use utils::debug_eprintln;
@@ -80,11 +81,12 @@ use rpview::{
     NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit,
     PanDown, PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
     PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, RequestDelete,
-    RequestPermanentDelete, ResetFilters, ResetSettingsToDefaults, RevealInFinder, SaveFile,
-    SaveFileToDownloads, SortAlphabetical, SortByModified, SortByTypeToggle,
-    ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters, ToggleHelp,
-    ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow,
-    ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
+    RequestPermanentDelete, ResetFilters, ResetLocalContrast, ResetSettingsToDefaults,
+    RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical, SortByModified,
+    SortByTypeToggle, ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters,
+    ToggleHelp, ToggleLocalContrast, ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast,
+    ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow,
+    ZoomReset, ZoomResetAndCenter,
 };
 
 /// What kind of delete is pending
@@ -127,6 +129,11 @@ struct App {
     filter_window: Option<WindowHandle<FilterWindowView>>,
     /// Filter controls component (shared between no-window state and the filter window)
     filter_controls: Entity<FilterControls>,
+    /// Open floating Local Contrast window handle (None = closed)
+    local_contrast_window: Option<WindowHandle<LocalContrastWindowView>>,
+    /// Local Contrast controls (sliders). Always exists; lives in the App so
+    /// its slider values persist across open/close of the LC window.
+    local_contrast_controls: Entity<LocalContrastControls>,
     /// Settings window component
     settings_window: Entity<SettingsWindow>,
     /// Help overlay component
@@ -311,6 +318,26 @@ fn main() {
                         )
                         .detach();
 
+                    // Create local-contrast controls (sliders live on the App; the
+                    // LC window renders this entity when open).
+                    let local_contrast_controls = inner_cx.new(|cx| {
+                        LocalContrastControls::new(settings.appearance.font_size_scale, cx)
+                    });
+                    inner_cx
+                        .subscribe(
+                            &local_contrast_controls,
+                            |this, _entity, _event: &LocalContrastControlsEvent, cx| {
+                                let params =
+                                    this.local_contrast_controls.read(cx).get_parameters(cx);
+                                this.viewer.update_local_contrast(params);
+                                this.local_contrast_controls.update(cx, |c, cx| {
+                                    c.set_status("Processing…", cx);
+                                });
+                                cx.notify();
+                            },
+                        )
+                        .detach();
+
                     // Create settings window
                     let settings_window =
                         inner_cx.new(|cx| SettingsWindow::new(settings.clone(), cx));
@@ -356,6 +383,8 @@ fn main() {
                         show_settings: false,
                         filter_window: None,
                         filter_controls,
+                        local_contrast_window: None,
+                        local_contrast_controls,
                         settings_window,
                         help_overlay,
                         debug_overlay,

@@ -14,6 +14,7 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-cmd-a", SortAlphabetical, None),
         KeyBinding::new("shift-cmd-m", SortByModified, None),
         KeyBinding::new("shift-cmd-t", SortByTypeToggle, None),
+        KeyBinding::new("shift-cmd-l", ToggleLocalContrast, None),
         // Zoom controls - base (normal speed)
         KeyBinding::new("=", ZoomIn, None), // = key (same as +)
         KeyBinding::new("+", ZoomIn, None),
@@ -102,6 +103,8 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-ctrl-m", SortByModified, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("shift-ctrl-t", SortByTypeToggle, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-l", ToggleLocalContrast, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-0", ZoomResetAndCenter, None),
         #[cfg(not(target_os = "macos"))]
@@ -196,6 +199,9 @@ pub(crate) fn setup_menus(cx: &mut gpui::App) {
                 MenuItem::action("Disable Filters", DisableFilters),
                 MenuItem::action("Enable Filters", EnableFilters),
                 MenuItem::action("Reset Filters", ResetFilters),
+                MenuItem::separator(),
+                MenuItem::action("Local Contrast...", ToggleLocalContrast),
+                MenuItem::action("Reset Local Contrast", ResetLocalContrast),
                 MenuItem::separator(),
                 MenuItem::action("Toggle Help", ToggleHelp),
                 MenuItem::action("Toggle Debug", ToggleDebug),

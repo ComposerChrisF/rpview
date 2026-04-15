@@ -57,7 +57,7 @@ pub enum ReturnImage {
 /// Full parameter set for `locally_normalize_luminance`. Defaults match the
 /// C# `AdaptiveContrastDsp.Parameters` constructor defaults. See
 /// `docs/local-contrast-spec.md` §3.1 for semantics.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Parameters {
     /// Radius (in pixels) of the local window. `0` = auto (`width / 32`).
     pub cxy_window: u32,

@@ -280,6 +280,84 @@ impl App {
         }
     }
 
+    pub(crate) fn handle_toggle_local_contrast(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.local_contrast_window.is_some() {
+            self.close_local_contrast_window(cx);
+        } else {
+            self.open_local_contrast_window(cx);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn handle_reset_local_contrast(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.local_contrast_controls.update(cx, |c, cx| {
+            c.reset_sliders(cx);
+            c.set_status("", cx);
+        });
+        if let Some(loaded) = self.viewer.current_image.as_mut() {
+            loaded.lc_render = None;
+            loaded.cached_lc_params = None;
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn open_local_contrast_window(&mut self, cx: &mut Context<Self>) {
+        if self.local_contrast_window.is_some() {
+            return;
+        }
+        let bounds = gpui::Bounds::centered(None, gpui::size(gpui::px(360.0), gpui::px(260.0)), cx);
+        let controls = self.local_contrast_controls.clone();
+        let weak_app = cx.weak_entity();
+
+        let result = cx.open_window(
+            gpui::WindowOptions {
+                window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
+                kind: gpui::WindowKind::Floating,
+                is_resizable: true,
+                is_movable: true,
+                titlebar: Some(gpui::TitlebarOptions {
+                    title: Some("Local Contrast".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            move |window, cx| {
+                crate::utils::window_level::set_always_on_top(window);
+                let view = cx.new(|inner_cx| {
+                    crate::components::LocalContrastWindowView::new(controls.clone(), inner_cx)
+                });
+                let weak_for_close = weak_app.clone();
+                view.update(cx, |_, inner_cx| {
+                    inner_cx
+                        .on_release(move |_, app_cx| {
+                            let _ = weak_for_close
+                                .update(app_cx, |app, _| app.local_contrast_window = None);
+                        })
+                        .detach();
+                });
+                view
+            },
+        );
+        match result {
+            Ok(handle) => self.local_contrast_window = Some(handle),
+            Err(e) => eprintln!("Failed to open local-contrast window: {:?}", e),
+        }
+    }
+
+    pub(crate) fn close_local_contrast_window(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.local_contrast_window.take() {
+            let _ = handle.update(cx, |_, window, _| window.remove_window());
+        }
+    }
+
     pub(crate) fn handle_disable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.viewer.image_state.filters_enabled = false;
         self.viewer.update_filtered_cache();
@@ -1226,6 +1304,19 @@ impl App {
                 || (filters.gamma - 1.0).abs() >= 0.001)
         {
             self.viewer.update_filtered_cache();
+        }
+
+        // Re-apply local contrast to the new image if the user has non-zero
+        // LC sliders. Session-global LC parameters: they follow the user
+        // across images the same way filters do.
+        let lc_params = self.local_contrast_controls.read(cx).get_parameters(cx);
+        if lc_params.contrast.abs() >= 0.001
+            || lc_params.lighten_shadows.abs() >= 0.001
+            || lc_params.darken_highlights.abs() >= 0.001
+        {
+            self.viewer.update_local_contrast(lc_params);
+            self.local_contrast_controls
+                .update(cx, |c, cx| c.set_status("Processing…", cx));
         }
     }
 
