@@ -261,6 +261,7 @@ fn main() {
         cx.activate(true);
 
         let reopen_filter_window = settings.appearance.filter_window_open;
+        let reopen_lc_window = settings.appearance.local_contrast_window_open;
         let main_window = match cx.open_window(
             WindowOptions {
                 ..Default::default()
@@ -326,14 +327,27 @@ fn main() {
                     inner_cx
                         .subscribe(
                             &local_contrast_controls,
-                            |this, _entity, _event: &LocalContrastControlsEvent, cx| {
-                                let params =
-                                    this.local_contrast_controls.read(cx).get_parameters(cx);
-                                this.viewer.update_local_contrast(params);
-                                this.local_contrast_controls.update(cx, |c, cx| {
-                                    c.set_status("Processing…", cx);
-                                });
-                                cx.notify();
+                            |this, _entity, event: &LocalContrastControlsEvent, cx| match event {
+                                LocalContrastControlsEvent::ResetRequested => {
+                                    this.local_contrast_controls.update(cx, |c, cx| {
+                                        c.reset_sliders(cx);
+                                        c.set_status("", cx);
+                                    });
+                                    if let Some(loaded) = this.viewer.current_image.as_mut() {
+                                        loaded.lc_render = None;
+                                        loaded.cached_lc_params = None;
+                                    }
+                                    cx.notify();
+                                }
+                                LocalContrastControlsEvent::ParametersChanged => {
+                                    let params =
+                                        this.local_contrast_controls.read(cx).get_parameters(cx);
+                                    this.viewer.update_local_contrast(params);
+                                    this.local_contrast_controls.update(cx, |c, cx| {
+                                        c.set_status("Processing…", cx);
+                                    });
+                                    cx.notify();
+                                }
                             },
                         )
                         .detach();
@@ -411,6 +425,15 @@ fn main() {
             cx.defer(move |cx| {
                 let _ = main_window.update(cx, |app, _window, app_cx| {
                     app.open_filter_window(app_cx);
+                });
+            });
+        }
+
+        // Same for the Local Contrast window.
+        if reopen_lc_window {
+            cx.defer(move |cx| {
+                let _ = main_window.update(cx, |app, _window, app_cx| {
+                    app.open_local_contrast_window(app_cx);
                 });
             });
         }

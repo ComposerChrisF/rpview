@@ -313,7 +313,14 @@ impl App {
         if self.local_contrast_window.is_some() {
             return;
         }
-        let bounds = gpui::Bounds::centered(None, gpui::size(gpui::px(380.0), gpui::px(440.0)), cx);
+        let bounds = self
+            .settings
+            .appearance
+            .local_contrast_window_bounds
+            .map(|b| b.to_bounds())
+            .unwrap_or_else(|| {
+                gpui::Bounds::centered(None, gpui::size(gpui::px(380.0), gpui::px(440.0)), cx)
+            });
         let controls = self.local_contrast_controls.clone();
         let weak_app = cx.weak_entity();
 
@@ -334,12 +341,33 @@ impl App {
                 let view = cx.new(|inner_cx| {
                     crate::components::LocalContrastWindowView::new(controls.clone(), inner_cx)
                 });
-                let weak_for_close = weak_app.clone();
+
+                // Persist bounds on move/resize.
+                let weak_for_bounds = weak_app.clone();
                 view.update(cx, |_, inner_cx| {
                     inner_cx
+                        .observe_window_bounds(window, move |_, window, cx| {
+                            let bounds = window.bounds();
+                            let _ = weak_for_bounds.update(cx, |app, _| {
+                                app.settings.appearance.local_contrast_window_bounds = Some(
+                                    crate::state::settings::PersistedWindowBounds::from_bounds(
+                                        bounds,
+                                    ),
+                                );
+                                let _ = crate::utils::settings_io::save_settings(&app.settings);
+                            });
+                        })
+                        .detach();
+
+                    // Clear the handle + persisted-open flag when the view (window) drops.
+                    let weak_for_close = weak_app.clone();
+                    inner_cx
                         .on_release(move |_, app_cx| {
-                            let _ = weak_for_close
-                                .update(app_cx, |app, _| app.local_contrast_window = None);
+                            let _ = weak_for_close.update(app_cx, |app, _| {
+                                app.local_contrast_window = None;
+                                app.settings.appearance.local_contrast_window_open = false;
+                                let _ = crate::utils::settings_io::save_settings(&app.settings);
+                            });
                         })
                         .detach();
                 });
@@ -347,7 +375,11 @@ impl App {
             },
         );
         match result {
-            Ok(handle) => self.local_contrast_window = Some(handle),
+            Ok(handle) => {
+                self.local_contrast_window = Some(handle);
+                self.settings.appearance.local_contrast_window_open = true;
+                let _ = crate::utils::settings_io::save_settings(&self.settings);
+            }
             Err(e) => eprintln!("Failed to open local-contrast window: {:?}", e),
         }
     }
@@ -355,6 +387,8 @@ impl App {
     pub(crate) fn close_local_contrast_window(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.local_contrast_window.take() {
             let _ = handle.update(cx, |_, window, _| window.remove_window());
+            self.settings.appearance.local_contrast_window_open = false;
+            let _ = crate::utils::settings_io::save_settings(&self.settings);
         }
     }
 

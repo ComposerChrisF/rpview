@@ -197,6 +197,11 @@ impl HelpOverlay {
                 "Reset all filters".to_string(),
             )
             .into_any_element(),
+            self.render_shortcut(
+                format_shortcut("L", true, false),
+                "Show/hide Local Contrast dialog".to_string(),
+            )
+            .into_any_element(),
             // File Operations section
             self.render_section_header("File Operations".to_string())
                 .into_any_element(),
