@@ -1076,20 +1076,27 @@ impl App {
         self.do_pan(-1.0, 0.0, self.settings.keyboard_mouse.pan_speed_normal, cx);
     }
 
+    /// Fast-pan speed is measured in image pixels (pre-zoom), so the on-screen
+    /// distance grows with zoom. Multiplying by `image_state.zoom` converts the
+    /// image-pixel step into screen pixels for `viewer.pan()`.
+    fn fast_pan_speed(&self) -> f32 {
+        self.settings.keyboard_mouse.pan_speed_fast * self.viewer.image_state.zoom
+    }
+
     pub(crate) fn handle_pan_up_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.do_pan(0.0, 1.0, self.settings.keyboard_mouse.pan_speed_fast, cx);
+        self.do_pan(0.0, 1.0, self.fast_pan_speed(), cx);
     }
 
     pub(crate) fn handle_pan_down_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.do_pan(0.0, -1.0, self.settings.keyboard_mouse.pan_speed_fast, cx);
+        self.do_pan(0.0, -1.0, self.fast_pan_speed(), cx);
     }
 
     pub(crate) fn handle_pan_left_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.do_pan(1.0, 0.0, self.settings.keyboard_mouse.pan_speed_fast, cx);
+        self.do_pan(1.0, 0.0, self.fast_pan_speed(), cx);
     }
 
     pub(crate) fn handle_pan_right_fast(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.do_pan(-1.0, 0.0, self.settings.keyboard_mouse.pan_speed_fast, cx);
+        self.do_pan(-1.0, 0.0, self.fast_pan_speed(), cx);
     }
 
     pub(crate) fn handle_pan_up_slow(&mut self, _window: &mut Window, cx: &mut Context<Self>) {

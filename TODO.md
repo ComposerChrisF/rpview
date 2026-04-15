@@ -1169,7 +1169,7 @@ Phase 7 has been successfully completed! The application now:
 - Implements spacebar+mouse drag panning with 1:1 pixel movement for intuitive direct manipulation
 - Provides WASD and IJKL keyboard panning controls (10px base speed)
 - Supports pan speed modifiers:
-  - Shift modifier for fast panning (3x speed = 30px)
+  - Shift modifier for fast panning (30 image pixels, scaled by zoom so visual distance grows as you zoom in)
   - Cmd/Ctrl modifier for slow panning (0.3x speed = 3px)
 - Implements intelligent pan constraints to prevent images from going completely off-screen
 - Ensures at least a small portion of the image remains visible (10% or 50px, whichever is smaller)
