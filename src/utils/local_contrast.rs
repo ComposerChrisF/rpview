@@ -1,9 +1,10 @@
 #![allow(dead_code)] // Consumed by future UI wiring (Phase D).
 
-//! Phase B port of `FraleyMusic.ImageDsp.AdaptiveContrastDsp.LocallyNormalizeLuminance`.
+//! Port of `FraleyMusic.ImageDsp.AdaptiveContrastDsp.LocallyNormalizeLuminance`.
 //!
-//! Single-threaded, OkLCh-based (swap for HSL from the C# original).
-//! See `docs/local-contrast-spec.md` §3 for the algorithm narrative.
+//! OkLCh-based (swap for HSL from the C# original). Parallelized across
+//! histogram-block rows via rayon. See `docs/local-contrast-spec.md` §3 for
+//! the algorithm narrative.
 //!
 //! Intentional deviations from the C# source at this phase:
 //! - Color space is OkLCh, not HSL. The scalar L is Oklab's perceptual L.
@@ -19,8 +20,22 @@
 //! for parity with C# reference outputs. See §6 of the spec for the
 //! efficiency passes planned for Phase E.
 
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+use rayon::prelude::*;
+
 use crate::utils::color;
 use crate::utils::float_map::FloatMap;
+
+// ---------------------------------------------------------------------------
+// Feedback / cancellation
+// ---------------------------------------------------------------------------
+
+/// Progress + cancellation callback. Called from worker threads, so it must
+/// be `Send + Sync`. Return `true` to request cancellation; the algorithm
+/// stops at the next safe point and returns `None`.
+pub type FeedbackFn = dyn Fn(f32, &str) -> bool + Send + Sync;
 
 // ---------------------------------------------------------------------------
 // Parameters
@@ -276,8 +291,61 @@ impl HistogramGrid {
     }
 }
 
+/// Compute a single histogram site. Extracted so both the serial and
+/// parallel grid builders can share the inner math.
+#[allow(clippy::too_many_arguments)]
+fn compute_histogram_at(
+    x_block: usize,
+    y_block: usize,
+    l_src: &[f32],
+    bin_map: &[u8],
+    width: u32,
+    height: u32,
+    cxy_window: u32,
+    cxy_block: u32,
+    kernel: &[f32],
+) -> Option<Histogram> {
+    let width_usize = width as usize;
+    let kernel_side = (cxy_window as usize) * 2 + 1;
+    let cx = x_block as i64 * cxy_block as i64;
+    let cy = y_block as i64 * cxy_block as i64;
+    let k = cxy_window as i64;
+
+    let x_left = (cx - k).max(0);
+    let y_top = (cy - k).max(0);
+    let x_right = (cx + k).min(width as i64 - 1);
+    let y_bottom = (cy + k).min(height as i64 - 1);
+
+    let mut h = Histogram::empty();
+    let mut weighted_l_sum = 0.0f32;
+
+    let y_weight_start = (y_top - cy + k) as usize;
+    for (y_rel, y_window) in (y_top..=y_bottom).enumerate() {
+        let y_weight = y_weight_start + y_rel;
+        for (x_rel, x_window) in (x_left..=x_right).enumerate() {
+            let x_weight = ((x_left - cx + k) as usize) + x_rel;
+            let w = kernel[y_weight * kernel_side + x_weight];
+            if w == 0.0 {
+                continue;
+            }
+            let pixel_idx = (y_window as usize) * width_usize + (x_window as usize);
+            let bin = bin_map[pixel_idx] as usize;
+            h.bins[bin] += w;
+            h.total += w;
+            weighted_l_sum += w * l_src[pixel_idx];
+        }
+    }
+    if h.total <= 0.0 {
+        return None;
+    }
+    h.mean = weighted_l_sum; // finalize() rescales
+    h.finalize();
+    Some(h)
+}
+
 /// Build the grid of sparsely-spaced weighted histograms over the luminance
-/// plane.
+/// plane. Parallelized over histogram-block rows.
+#[allow(clippy::too_many_arguments)]
 fn build_histogram_grid(
     l_src: &[f32],
     bin_map: &[u8],
@@ -286,61 +354,94 @@ fn build_histogram_grid(
     cxy_window: u32,
     cxy_block: u32,
     kernel: &[f32],
-) -> HistogramGrid {
-    let width_usize = width as usize;
-    let kernel_side = (cxy_window as usize) * 2 + 1;
+    progress: &ParallelProgress<'_>,
+) -> Option<HistogramGrid> {
     let cx_histograms = width.div_ceil(cxy_block) as usize;
     let cy_histograms = height.div_ceil(cxy_block) as usize;
-    let slots = (cx_histograms + 1) * (cy_histograms + 1);
-    let mut histograms: Vec<Option<Histogram>> = (0..slots).map(|_| None).collect();
+    let row_len = cx_histograms + 1;
+    let total_rows = cy_histograms + 1; // +1 for overshoot guard row (stays empty)
+    let mut histograms: Vec<Option<Histogram>> = (0..row_len * total_rows).map(|_| None).collect();
 
-    for y_block in 0..cy_histograms {
-        for x_block in 0..cx_histograms {
-            let cx = x_block as i64 * cxy_block as i64;
-            let cy = y_block as i64 * cxy_block as i64;
-            let k = cxy_window as i64;
-
-            // Window rect clipped to image bounds.
-            let x_left = (cx - k).max(0);
-            let y_top = (cy - k).max(0);
-            let x_right = (cx + k).min(width as i64 - 1);
-            let y_bottom = (cy + k).min(height as i64 - 1);
-
-            let mut h = Histogram::empty();
-            let mut weighted_l_sum = 0.0f32;
-
-            let y_weight_start = (y_top - cy + k) as usize;
-            for (y_rel, y_window) in (y_top..=y_bottom).enumerate() {
-                let y_weight = y_weight_start + y_rel;
-                for (x_rel, x_window) in (x_left..=x_right).enumerate() {
-                    let x_weight = ((x_left - cx + k) as usize) + x_rel;
-                    let w = kernel[y_weight * kernel_side + x_weight];
-                    if w == 0.0 {
-                        continue;
-                    }
-                    let pixel_idx = (y_window as usize) * width_usize + (x_window as usize);
-                    let bin = bin_map[pixel_idx] as usize;
-                    h.bins[bin] += w;
-                    h.total += w;
-                    weighted_l_sum += w * l_src[pixel_idx];
-                }
+    histograms
+        .par_chunks_mut(row_len)
+        .take(cy_histograms)
+        .enumerate()
+        .for_each(|(y_block, row)| {
+            if progress.is_cancelled() {
+                return;
             }
-            if h.total <= 0.0 {
-                continue;
+            for (x_block, slot) in row.iter_mut().enumerate().take(cx_histograms) {
+                *slot = compute_histogram_at(
+                    x_block, y_block, l_src, bin_map, width, height, cxy_window, cxy_block, kernel,
+                );
             }
-            // Stash the weighted sum in `mean` for now; `finalize()` rescales.
-            h.mean = weighted_l_sum;
-            h.finalize();
+            progress.report_row(cy_histograms, 0.05, 0.30, "Building histograms...");
+        });
 
-            let idx = y_block * (cx_histograms + 1) + x_block;
-            histograms[idx] = Some(h);
-        }
+    if progress.is_cancelled() {
+        return None;
     }
-
-    HistogramGrid {
+    Some(HistogramGrid {
         cx_histograms,
         cy_histograms,
         histograms,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Progress tracking helper
+// ---------------------------------------------------------------------------
+
+/// Thread-safe progress + cancellation tracker. Serializes calls to the
+/// user-provided feedback callback by gating on a `Mutex<usize>` threshold.
+struct ParallelProgress<'a> {
+    completed: AtomicUsize,
+    next_report: Mutex<usize>,
+    report_every: usize,
+    cancel: AtomicBool,
+    feedback: Option<&'a FeedbackFn>,
+}
+
+impl<'a> ParallelProgress<'a> {
+    fn new(total_ticks: usize, feedback: Option<&'a FeedbackFn>) -> Self {
+        let report_every = ((total_ticks / 100).max(1)).min(total_ticks.max(1));
+        Self {
+            completed: AtomicUsize::new(0),
+            next_report: Mutex::new(report_every),
+            report_every,
+            cancel: AtomicBool::new(false),
+            feedback,
+        }
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel.load(Ordering::Relaxed)
+    }
+
+    fn cancel(&self) {
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+
+    /// Report completion of one unit of work. `progress_min` / `progress_max`
+    /// give the algorithmic phase's slice of the 0..1 progress bar.
+    fn report_row(&self, total: usize, progress_min: f32, progress_max: f32, message: &str) {
+        let done = self.completed.fetch_add(1, Ordering::Relaxed) + 1;
+        let Some(fb) = self.feedback else {
+            return;
+        };
+        // Serialize callback invocations: only the thread that crosses the
+        // current threshold fires the callback and advances it.
+        let mut threshold = self.next_report.lock().unwrap();
+        if done < *threshold {
+            return;
+        }
+        *threshold = done + self.report_every;
+        drop(threshold);
+        let frac = (done as f32 / total as f32).min(1.0);
+        let progress = progress_min + frac * (progress_max - progress_min);
+        if fb(progress, message) {
+            self.cancel();
+        }
     }
 }
 
@@ -383,12 +484,20 @@ fn normalize_value_via_4_histograms(
 // Main entry point
 // ---------------------------------------------------------------------------
 
-/// Apply local-contrast luminance normalization to `source`, returning a new
-/// FloatMap. See `docs/local-contrast-spec.md` §3 for the algorithm details.
+/// Apply local-contrast luminance normalization to `source`.
 ///
-/// **Phase B**: single-threaded, full-resolution, faithful to the C# original
-/// modulo the two intentional deviations documented at the top of this file.
-pub fn locally_normalize_luminance(source: &FloatMap, params: &Parameters) -> FloatMap {
+/// Returns `None` if `feedback` requested cancellation at any checkpoint.
+/// Otherwise returns the processed image. See `docs/local-contrast-spec.md`
+/// §3 for algorithmic details.
+///
+/// The algorithm is parallelized across histogram-block rows via rayon.
+/// Progress is reported to `feedback` at ~1% granularity; returning `true`
+/// from the callback stops the processing at the next safe checkpoint.
+pub fn locally_normalize_luminance(
+    source: &FloatMap,
+    params: &Parameters,
+    feedback: Option<&FeedbackFn>,
+) -> Option<FloatMap> {
     let width = source.width;
     let height = source.height;
     let n = (width as usize) * (height as usize);
@@ -406,155 +515,217 @@ pub fn locally_normalize_luminance(source: &FloatMap, params: &Parameters) -> Fl
         cxy_block = 2;
     }
 
-    // --- Decompose to OkLCh -------------------------------------------------
+    if let Some(fb) = feedback
+        && fb(0.01, "Setting up...")
+    {
+        return None;
+    }
+
+    // --- Decompose to OkLCh (parallel per-pixel) ---------------------------
     let mut l_src = vec![0.0f32; n];
     let mut c_src = vec![0.0f32; n];
     let mut h_src = vec![0.0f32; n];
-    for i in 0..n {
-        let (l, c, h) = color::srgb_to_oklch(source.r[i], source.g[i], source.b[i]);
-        l_src[i] = l;
-        c_src[i] = c;
-        h_src[i] = h;
-    }
+    (
+        l_src.par_iter_mut(),
+        c_src.par_iter_mut(),
+        h_src.par_iter_mut(),
+        source.r.par_iter(),
+        source.g.par_iter(),
+        source.b.par_iter(),
+    )
+        .into_par_iter()
+        .for_each(|(l, c, h, &r, &g, &b)| {
+            let (ll, cc, hh) = color::srgb_to_oklch(r, g, b);
+            *l = ll;
+            *c = cc;
+            *h = hh;
+        });
 
-    // --- Per-pixel bin map --------------------------------------------------
-    let mut bin_map = vec![0u8; n];
-    for i in 0..n {
-        let b = (l_src[i] * 255.0).round();
-        bin_map[i] = b.clamp(0.0, 255.0) as u8;
-    }
+    // --- Per-pixel bin map (parallel) --------------------------------------
+    let bin_map: Vec<u8> = l_src
+        .par_iter()
+        .map(|&l| (l * 255.0).round().clamp(0.0, 255.0) as u8)
+        .collect();
 
     // --- Kernel + histogram grid -------------------------------------------
     let kernel = build_windowing_kernel(cxy_window);
-    let grid = build_histogram_grid(
-        &l_src, &bin_map, width, height, cxy_window, cxy_block, &kernel,
-    );
+    let cy_histograms = height.div_ceil(cxy_block) as usize;
+    let progress = ParallelProgress::new(cy_histograms, feedback);
 
-    // --- Per-pixel normalization -------------------------------------------
+    let grid = build_histogram_grid(
+        &l_src, &bin_map, width, height, cxy_window, cxy_block, &kernel, &progress,
+    )?;
+
+    // --- Per-pixel normalization (parallel across block rows) --------------
     let mut l_dest = vec![0.0f32; n];
     let mut c_dest = c_src.clone();
     let cxy_block_f = cxy_block as f32;
     let width_usize = width as usize;
+    let block_row_pixels = (cxy_block as usize) * width_usize;
+    let return_image = params.return_image;
+    let use_median = params.use_median_for_contrast;
+    let use_doc = params.use_document_contrast;
+    let lighten_shadows = params.lighten_shadows;
+    let darken_highlights = params.darken_highlights;
+    let alpha_black = params.alpha_black;
+    let alpha_white = params.alpha_white;
+    let contrast_amt = params.contrast;
+    let mix_doc = params.mix_document_contrast;
+    let tilt_black = params.tilt_black_doc_contrast;
+    let tilt_white = params.tilt_white_doc_contrast;
+    let apply_x = params.apply_contrast_to_xition;
+    let apply_bw = params.apply_contrast_to_bw;
+    let cx_histograms = grid.cx_histograms;
     let empty = Histogram::empty();
 
-    for y_block in 0..grid.cy_histograms {
-        for x_block in 0..grid.cx_histograms {
-            let h1 = grid.get(x_block, y_block).unwrap_or(&empty);
-            // Edge fallback: if a neighbor slot is empty, reuse the nearest
-            // populated one, matching the C# null-fallback chain.
-            let h2 = grid.get(x_block + 1, y_block).unwrap_or(h1);
-            let h3 = grid.get(x_block, y_block + 1).unwrap_or(h1);
-            let h4 = grid.get(x_block + 1, y_block + 1).unwrap_or(h3);
+    // Phase 2 progress: 0.30 .. 0.90
+    let progress2 = ParallelProgress::new(grid.cy_histograms, feedback);
 
-            let x_pixel_start = x_block * (cxy_block as usize);
+    l_dest
+        .par_chunks_mut(block_row_pixels)
+        .zip(c_dest.par_chunks_mut(block_row_pixels))
+        .take(grid.cy_histograms)
+        .enumerate()
+        .for_each(|(y_block, (l_row, c_row))| {
+            if progress2.is_cancelled() {
+                return;
+            }
             let y_pixel_start = y_block * (cxy_block as usize);
-            for y_within in 0..(cxy_block as usize) {
-                let y = y_pixel_start + y_within;
-                if y >= height as usize {
-                    break;
-                }
-                let y_weight = 1.0 - (y_within as f32) / cxy_block_f;
-                for x_within in 0..(cxy_block as usize) {
-                    let x = x_pixel_start + x_within;
-                    if x >= width_usize {
+            // This row covers y ∈ [y_pixel_start, y_pixel_start + cxy_block),
+            // clipped to the image height at the very last row.
+            let rows_in_block = (l_row.len() / width_usize).min(cxy_block as usize);
+
+            for x_block in 0..cx_histograms {
+                let h1 = grid.get(x_block, y_block).unwrap_or(&empty);
+                let h2 = grid.get(x_block + 1, y_block).unwrap_or(h1);
+                let h3 = grid.get(x_block, y_block + 1).unwrap_or(h1);
+                let h4 = grid.get(x_block + 1, y_block + 1).unwrap_or(h3);
+
+                let x_pixel_start = x_block * (cxy_block as usize);
+                for y_within in 0..rows_in_block {
+                    let y = y_pixel_start + y_within;
+                    if y >= height as usize {
                         break;
                     }
-                    let x_weight = 1.0 - (x_within as f32) / cxy_block_f;
-                    let px = y * width_usize + x;
-                    let l_cur = l_src[px];
-                    let ibin_cur = bin_map[px] as usize;
+                    let y_weight = 1.0 - (y_within as f32) / cxy_block_f;
+                    let row_offset_in_chunk = y_within * width_usize;
+                    for x_within in 0..(cxy_block as usize) {
+                        let x = x_pixel_start + x_within;
+                        if x >= width_usize {
+                            break;
+                        }
+                        let x_weight = 1.0 - (x_within as f32) / cxy_block_f;
+                        let px_global = y * width_usize + x;
+                        let px_local = row_offset_in_chunk + x;
+                        let l_cur = l_src[px_global];
+                        let ibin_cur = bin_map[px_global] as usize;
 
-                    let frac_sum = normalize_value_via_4_histograms(
-                        ibin_cur, h1, h2, h3, h4, x_weight, y_weight,
-                    );
-
-                    let bin_mean_x1 = h1.mean * x_weight + h2.mean * (1.0 - x_weight);
-                    let bin_mean_x2 = h3.mean * x_weight + h4.mean * (1.0 - x_weight);
-                    let bin_mean = bin_mean_x1 * y_weight + bin_mean_x2 * (1.0 - y_weight);
-
-                    let bin_median_x1 = h1.median * x_weight + h2.median * (1.0 - x_weight);
-                    let bin_median_x2 = h3.median * x_weight + h4.median * (1.0 - x_weight);
-                    let bin_median = bin_median_x1 * y_weight + bin_median_x2 * (1.0 - y_weight);
-
-                    let bin_ref = if params.use_median_for_contrast {
-                        bin_median
-                    } else {
-                        bin_mean
-                    };
-
-                    // Standard contrast.
-                    let mut l_contrast = contrast_std(bin_ref / 255.0, l_cur, params.contrast);
-                    if params.use_document_contrast {
-                        l_contrast = contrast_doc(
-                            bin_ref / 255.0,
-                            l_contrast,
-                            params.mix_document_contrast,
-                            params.tilt_black_doc_contrast,
-                            params.tilt_white_doc_contrast,
-                            params.apply_contrast_to_xition,
-                            params.apply_contrast_to_bw,
+                        let frac_sum = normalize_value_via_4_histograms(
+                            ibin_cur, h1, h2, h3, h4, x_weight, y_weight,
                         );
-                    }
-                    if params.lighten_shadows != 0.0 && bin_ref <= 127.0 {
-                        let frac_dark = 128.0 / (1.0 + bin_ref);
-                        l_contrast = l_contrast * frac_dark * params.lighten_shadows
-                            + l_contrast * (1.0 - params.lighten_shadows);
-                    }
-                    if params.darken_highlights != 0.0 && bin_ref >= 127.5 {
-                        let frac_light = 127.5 / bin_ref;
-                        l_contrast = l_contrast * frac_light * params.darken_highlights
-                            + l_contrast * (1.0 - params.darken_highlights);
-                    }
 
-                    // Alpha-blend raw equalization with contrasted value.
-                    let frac_alpha = params.alpha_white
-                        + (params.alpha_black - params.alpha_white) * (1.0 - l_contrast);
-                    let mut l_final = frac_sum * frac_alpha + l_contrast * (1.0 - frac_alpha);
+                        let bin_mean_x1 = h1.mean * x_weight + h2.mean * (1.0 - x_weight);
+                        let bin_mean_x2 = h3.mean * x_weight + h4.mean * (1.0 - x_weight);
+                        let bin_mean = bin_mean_x1 * y_weight + bin_mean_x2 * (1.0 - y_weight);
 
-                    // Debug visualizations (ReturnImage variants).
-                    match params.return_image {
-                        ReturnImage::Dsp => {}
-                        ReturnImage::MedianGrayPointColored => l_final = bin_median / 255.0,
-                        ReturnImage::MedianGrayPointLuminance => {
-                            l_final = bin_median / 255.0;
-                            c_dest[px] = 0.0;
+                        let bin_median_x1 = h1.median * x_weight + h2.median * (1.0 - x_weight);
+                        let bin_median_x2 = h3.median * x_weight + h4.median * (1.0 - x_weight);
+                        let bin_median =
+                            bin_median_x1 * y_weight + bin_median_x2 * (1.0 - y_weight);
+
+                        let bin_ref = if use_median { bin_median } else { bin_mean };
+
+                        let mut l_contrast = contrast_std(bin_ref / 255.0, l_cur, contrast_amt);
+                        if use_doc {
+                            l_contrast = contrast_doc(
+                                bin_ref / 255.0,
+                                l_contrast,
+                                mix_doc,
+                                tilt_black,
+                                tilt_white,
+                                apply_x,
+                                apply_bw,
+                            );
                         }
-                        ReturnImage::MeanGrayPointColored => l_final = bin_mean / 255.0,
-                        ReturnImage::MeanGrayPointLuminance => {
-                            l_final = bin_mean / 255.0;
-                            c_dest[px] = 0.0;
+                        if lighten_shadows != 0.0 && bin_ref <= 127.0 {
+                            let frac_dark = 128.0 / (1.0 + bin_ref);
+                            l_contrast = l_contrast * frac_dark * lighten_shadows
+                                + l_contrast * (1.0 - lighten_shadows);
                         }
-                        ReturnImage::NormalizedValueColored => l_final = frac_sum,
-                        ReturnImage::NormalizedValueLuminance => {
-                            l_final = frac_sum;
-                            c_dest[px] = 0.0;
+                        if darken_highlights != 0.0 && bin_ref >= 127.5 {
+                            let frac_light = 127.5 / bin_ref;
+                            l_contrast = l_contrast * frac_light * darken_highlights
+                                + l_contrast * (1.0 - darken_highlights);
                         }
+
+                        let frac_alpha =
+                            alpha_white + (alpha_black - alpha_white) * (1.0 - l_contrast);
+                        let mut l_final = frac_sum * frac_alpha + l_contrast * (1.0 - frac_alpha);
+
+                        match return_image {
+                            ReturnImage::Dsp => {}
+                            ReturnImage::MedianGrayPointColored => l_final = bin_median / 255.0,
+                            ReturnImage::MedianGrayPointLuminance => {
+                                l_final = bin_median / 255.0;
+                                c_row[px_local] = 0.0;
+                            }
+                            ReturnImage::MeanGrayPointColored => l_final = bin_mean / 255.0,
+                            ReturnImage::MeanGrayPointLuminance => {
+                                l_final = bin_mean / 255.0;
+                                c_row[px_local] = 0.0;
+                            }
+                            ReturnImage::NormalizedValueColored => l_final = frac_sum,
+                            ReturnImage::NormalizedValueLuminance => {
+                                l_final = frac_sum;
+                                c_row[px_local] = 0.0;
+                            }
+                        }
+
+                        l_row[px_local] = l_final;
                     }
-
-                    l_dest[px] = l_final;
-                    // (HSL desaturation heuristic from C# lines 494-500 omitted —
-                    // Oklab chroma is stable near the luminance endpoints.)
                 }
             }
-        }
+            progress2.report_row(grid.cy_histograms, 0.30, 0.90, "Processing image...");
+        });
+
+    if progress2.is_cancelled() {
+        return None;
     }
 
-    // --- Reconstitute sRGB -------------------------------------------------
-    let mut dest = FloatMap {
+    if let Some(fb) = feedback
+        && fb(0.92, "Converting to RGB...")
+    {
+        return None;
+    }
+
+    // --- Reconstitute sRGB (parallel per-pixel) ----------------------------
+    let mut dest_r = vec![0.0f32; n];
+    let mut dest_g = vec![0.0f32; n];
+    let mut dest_b = vec![0.0f32; n];
+    (
+        dest_r.par_iter_mut(),
+        dest_g.par_iter_mut(),
+        dest_b.par_iter_mut(),
+        l_dest.par_iter(),
+        c_dest.par_iter(),
+        h_src.par_iter(),
+    )
+        .into_par_iter()
+        .for_each(|(dr, dg, db, &l, &c, &h)| {
+            let (r, g, b) = color::oklch_to_srgb(l, c, h);
+            *dr = clamp01(r);
+            *dg = clamp01(g);
+            *db = clamp01(b);
+        });
+
+    Some(FloatMap {
         width,
         height,
-        r: vec![0.0; n],
-        g: vec![0.0; n],
-        b: vec![0.0; n],
+        r: dest_r,
+        g: dest_g,
+        b: dest_b,
         a: source.a.clone(),
-    };
-    for i in 0..n {
-        let (r, g, b) = color::oklch_to_srgb(l_dest[i], c_dest[i], h_src[i]);
-        dest.r[i] = clamp01(r);
-        dest.g[i] = clamp01(g);
-        dest.b[i] = clamp01(b);
-    }
-    dest
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -673,7 +844,7 @@ mod tests {
             cxy_block: 2,
             ..Default::default()
         };
-        let out = locally_normalize_luminance(&src, &params);
+        let out = locally_normalize_luminance(&src, &params, None).expect("not cancelled");
         // All output pixels should be equal (no spatial variation).
         let r0 = out.r[0];
         for i in 0..out.pixel_count() {
@@ -717,7 +888,7 @@ mod tests {
             alpha_white: 0.0,
             ..Default::default()
         };
-        let out = locally_normalize_luminance(&src, &params);
+        let out = locally_normalize_luminance(&src, &params, None).expect("not cancelled");
         let diff = max_abs_diff(&src, &out);
         assert!(diff < 1e-3, "identity pipeline drifted by {}", diff);
     }
@@ -730,7 +901,76 @@ mod tests {
             *v = (i % 4) as f32 / 4.0;
         }
         let saved = src.a.clone();
-        let out = locally_normalize_luminance(&src, &Parameters::default());
+        let out =
+            locally_normalize_luminance(&src, &Parameters::default(), None).expect("not cancelled");
         assert_eq!(out.a, saved);
+    }
+
+    // --- Parallel / cancellation behaviors ---------------------------------
+
+    /// Build a small image with spatial variation so parallel and serial
+    /// paths have non-trivial work to do.
+    fn gradient_map(width: u32, height: u32) -> FloatMap {
+        let n = (width as usize) * (height as usize);
+        let mut m = FloatMap {
+            width,
+            height,
+            r: vec![0.0; n],
+            g: vec![0.0; n],
+            b: vec![0.0; n],
+            a: Some(vec![1.0; n]),
+        };
+        for y in 0..height {
+            for x in 0..width {
+                let i = m.idx(x, y);
+                m.r[i] = x as f32 / (width - 1) as f32;
+                m.g[i] = y as f32 / (height - 1) as f32;
+                m.b[i] = 0.5;
+            }
+        }
+        m
+    }
+
+    #[test]
+    fn parallel_outputs_match_repeated_runs() {
+        // Rayon parallelism with float accumulation can reorder sums across
+        // threads. Since each histogram site is computed entirely by one
+        // worker and each output pixel only reads the (now-final) histograms,
+        // results should be bit-identical run-to-run. Verify.
+        let src = gradient_map(48, 32);
+        let params = Parameters::default();
+        let a = locally_normalize_luminance(&src, &params, None).unwrap();
+        let b = locally_normalize_luminance(&src, &params, None).unwrap();
+        assert_eq!(a.r, b.r);
+        assert_eq!(a.g, b.g);
+        assert_eq!(a.b, b.b);
+    }
+
+    #[test]
+    fn cancellation_returns_none() {
+        // Callback returns true immediately — algorithm should bail out.
+        let src = gradient_map(48, 32);
+        let fb: Box<FeedbackFn> = Box::new(|_, _| true);
+        let out = locally_normalize_luminance(&src, &Parameters::default(), Some(&*fb));
+        assert!(out.is_none());
+    }
+
+    #[test]
+    fn progress_callback_is_called_with_increasing_values() {
+        use std::sync::{Arc, Mutex};
+        let src = gradient_map(48, 32);
+        let seen: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen_cb = Arc::clone(&seen);
+        let fb: Box<FeedbackFn> = Box::new(move |p, _msg| {
+            seen_cb.lock().unwrap().push(p);
+            false
+        });
+        let out = locally_normalize_luminance(&src, &Parameters::default(), Some(&*fb));
+        assert!(out.is_some());
+        let values = seen.lock().unwrap().clone();
+        assert!(!values.is_empty(), "feedback never called");
+        // Progress starts low and ends high.
+        assert!(values[0] <= 0.1);
+        assert!(values.iter().cloned().fold(0.0f32, f32::max) >= 0.90);
     }
 }
