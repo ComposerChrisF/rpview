@@ -66,8 +66,8 @@ mod utils;
 
 use cli::Cli;
 use components::{
-    DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, HelpOverlay,
-    ImageViewer, SettingsWindow,
+    DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, FilterWindowView,
+    HelpOverlay, ImageViewer, SettingsWindow,
 };
 use state::{AppSettings, AppState};
 use utils::debug_eprintln;
@@ -123,9 +123,9 @@ struct App {
     show_debug: bool,
     /// Whether settings window is visible
     show_settings: bool,
-    /// Whether filter controls overlay is visible
-    show_filters: bool,
-    /// Filter controls component
+    /// Open floating filter window handle (None = closed)
+    filter_window: Option<WindowHandle<FilterWindowView>>,
+    /// Filter controls component (shared between no-window state and the filter window)
     filter_controls: Entity<FilterControls>,
     /// Settings window component
     settings_window: Entity<SettingsWindow>,
@@ -253,7 +253,8 @@ fn main() {
 
         cx.activate(true);
 
-        if let Err(e) = cx.open_window(
+        let reopen_filter_window = settings.appearance.filter_window_open;
+        let main_window = match cx.open_window(
             WindowOptions {
                 ..Default::default()
             },
@@ -286,11 +287,10 @@ fn main() {
                     );
                     window.set_window_title(&title);
 
-                    // Create filter controls
+                    // Create filter controls (shared between no-window state and the floating filter window)
                     let filter_controls = inner_cx.new(|cx| {
                         FilterControls::new(
                             viewer.image_state.filters,
-                            settings.appearance.overlay_transparency,
                             settings.appearance.font_size_scale,
                             cx,
                         )
@@ -354,7 +354,7 @@ fn main() {
                         show_help: false,
                         show_debug: false,
                         show_settings: false,
-                        show_filters: false,
+                        filter_window: None,
                         filter_controls,
                         settings_window,
                         help_overlay,
@@ -370,8 +370,20 @@ fn main() {
                 })
             },
         ) {
-            eprintln!("Failed to open window: {:?}", e);
-            return;
+            Ok(handle) => handle,
+            Err(e) => {
+                eprintln!("Failed to open window: {:?}", e);
+                return;
+            }
+        };
+
+        // Reopen the floating filter window if it was open when the app last quit.
+        if reopen_filter_window {
+            cx.defer(move |cx| {
+                let _ = main_window.update(cx, |app, _window, app_cx| {
+                    app.open_filter_window(app_cx);
+                });
+            });
         }
 
         // Check for pending open paths from macOS "Open With" events
