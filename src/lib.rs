@@ -23,6 +23,8 @@ actions!(
         SortAlphabetical,
         SortByModified,
         SortByTypeToggle,
+        ToggleLocalContrast,
+        ResetLocalContrast,
         ZoomIn,
         ZoomOut,
         ZoomReset,

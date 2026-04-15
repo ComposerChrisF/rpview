@@ -68,6 +68,14 @@ impl Render for App {
             cx.notify();
         }
 
+        // Same for local-contrast processing.
+        if self.viewer.check_lc_processing() {
+            self.local_contrast_controls.update(cx, |c, cx| {
+                c.set_status("Ready", cx);
+            });
+            cx.notify();
+        }
+
         // --- SVG dynamic re-rasterization ---
         let svg_just_finished = self.viewer.check_svg_reraster_processing();
         if svg_just_finished {
@@ -644,6 +652,12 @@ impl Render for App {
             }))
             .on_action(cx.listener(|this, _: &SortByTypeToggle, window, cx| {
                 this.handle_sort_by_type_toggle(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleLocalContrast, window, cx| {
+                this.handle_toggle_local_contrast(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ResetLocalContrast, window, cx| {
+                this.handle_reset_local_contrast(window, cx);
             }))
             .on_action(cx.listener(|this, _: &ZoomIn, window, cx| {
                 this.handle_zoom_in(window, cx);
