@@ -163,7 +163,11 @@ pub fn load_image_async(
                             initial_frame_paths.push(temp_path);
                         }
                         Err(_e) => {
-                            debug_eprintln!("[ASYNC LOAD ERROR] Failed to cache frame {}: {}", i, _e);
+                            debug_eprintln!(
+                                "[ASYNC LOAD ERROR] Failed to cache frame {}: {}",
+                                i,
+                                _e
+                            );
                             initial_frame_paths.push(PathBuf::new());
                         }
                     }

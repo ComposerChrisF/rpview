@@ -113,6 +113,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 - [x] Add sort mode toggle keyboard shortcuts
 - [x] Implement Shift+Cmd+A for alphabetical (Shift+Cmd+A on macOS)
 - [x] Implement Shift+Cmd+M for modified date (Shift+Cmd+M on macOS)
+- [x] Implement Shift+Cmd+T for composite Type+Alpha / Type+Modified sort (toggles secondary)
 - [x] Maintain current image when switching sort modes
 - [x] Update display to show current sort mode
 

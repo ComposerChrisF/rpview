@@ -183,7 +183,10 @@ pub fn apply_filters(
 
     let input_bytes = rgba_img.as_raw();
     let output_bytes: &mut [u8] = output.as_mut();
-    for (src, dst) in input_bytes.chunks_exact(4).zip(output_bytes.chunks_exact_mut(4)) {
+    for (src, dst) in input_bytes
+        .chunks_exact(4)
+        .zip(output_bytes.chunks_exact_mut(4))
+    {
         dst[0] = lut[src[0] as usize];
         dst[1] = lut[src[1] as usize];
         dst[2] = lut[src[2] as usize];

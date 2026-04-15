@@ -1,6 +1,6 @@
 use super::image_state::{FilterSettings, ImageState};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 /// Sort mode for image list
@@ -12,23 +12,69 @@ pub enum SortMode {
 
     /// Modified date (newest first)
     ModifiedDate,
+
+    /// Group by image type, then alphabetical within each type
+    TypeAlpha,
+
+    /// Group by image type, then modified date (newest first) within each type
+    TypeModified,
 }
 
 impl SortMode {
-    /// Short label for window title template `{sm}` — e.g. "A" or "M"
+    /// Short label for window title template `{sm}` — e.g. "A", "M", "TA", "TM"
     pub fn short_label(self) -> &'static str {
         match self {
             SortMode::Alphabetical => "A",
             SortMode::ModifiedDate => "M",
+            SortMode::TypeAlpha => "TA",
+            SortMode::TypeModified => "TM",
         }
     }
 
-    /// Long label for window title template `{sortmode}` — e.g. "alphabetical" or "modified"
+    /// Long label for window title template `{sortmode}`
     pub fn long_label(self) -> &'static str {
         match self {
             SortMode::Alphabetical => "alphabetical",
             SortMode::ModifiedDate => "modified",
+            SortMode::TypeAlpha => "type+alphabetical",
+            SortMode::TypeModified => "type+modified",
         }
+    }
+}
+
+/// Image type grouping used as the primary key for composite sort modes.
+/// Variants are ordered alphabetically by extension, with JPG/JPEG merged
+/// into `Jpeg` and TIF/TIFF merged into `Tiff` so synonym extensions group
+/// together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ImageTypeGroup {
+    Bmp,
+    Gif,
+    Ico,
+    Jpeg,
+    Png,
+    Svg,
+    Tiff,
+    Webp,
+    Other,
+}
+
+/// Classify a path into an ImageTypeGroup by its file extension (case-insensitive).
+pub fn image_type_group(path: &Path) -> ImageTypeGroup {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase());
+    match ext.as_deref() {
+        Some("bmp") => ImageTypeGroup::Bmp,
+        Some("gif") => ImageTypeGroup::Gif,
+        Some("ico") => ImageTypeGroup::Ico,
+        Some("jpg") | Some("jpeg") => ImageTypeGroup::Jpeg,
+        Some("png") => ImageTypeGroup::Png,
+        Some("svg") => ImageTypeGroup::Svg,
+        Some("tif") | Some("tiff") => ImageTypeGroup::Tiff,
+        Some("webp") => ImageTypeGroup::Webp,
+        _ => ImageTypeGroup::Other,
     }
 }
 
@@ -249,6 +295,20 @@ impl AppState {
                     Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok())
                 });
             }
+            SortMode::TypeAlpha => {
+                self.image_paths.sort_by_cached_key(|p| {
+                    (image_type_group(p), p.to_string_lossy().to_lowercase())
+                });
+            }
+            SortMode::TypeModified => {
+                use std::cmp::Reverse;
+                self.image_paths.sort_by_cached_key(|p| {
+                    (
+                        image_type_group(p),
+                        Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok()),
+                    )
+                });
+            }
         }
 
         // Restore current_index to point at the same image after reordering
@@ -273,6 +333,60 @@ mod tests {
     // Test constants
     const DEFAULT_CACHE_SIZE: usize = 1000;
     const SMALL_CACHE_SIZE: usize = 2;
+
+    #[test]
+    fn test_image_type_group_jpg_jpeg_merge() {
+        assert_eq!(
+            image_type_group(Path::new("a.jpg")),
+            image_type_group(Path::new("a.jpeg"))
+        );
+        assert_eq!(
+            image_type_group(Path::new("a.tif")),
+            image_type_group(Path::new("a.tiff"))
+        );
+    }
+
+    #[test]
+    fn test_image_type_group_order() {
+        // Alphabetical by extension with JPG/JPEG merged into Jpeg slot
+        // and TIF/TIFF merged into Tiff slot.
+        assert!(ImageTypeGroup::Bmp < ImageTypeGroup::Gif);
+        assert!(ImageTypeGroup::Gif < ImageTypeGroup::Ico);
+        assert!(ImageTypeGroup::Ico < ImageTypeGroup::Jpeg);
+        assert!(ImageTypeGroup::Jpeg < ImageTypeGroup::Png);
+        assert!(ImageTypeGroup::Png < ImageTypeGroup::Svg);
+        assert!(ImageTypeGroup::Svg < ImageTypeGroup::Tiff);
+        assert!(ImageTypeGroup::Tiff < ImageTypeGroup::Webp);
+    }
+
+    #[test]
+    fn test_type_alpha_sort_groups_by_type_then_alpha() {
+        let paths = vec![
+            PathBuf::from("zeta.png"),
+            PathBuf::from("alpha.gif"),
+            PathBuf::from("beta.jpeg"),
+            PathBuf::from("delta.jpg"),
+            PathBuf::from("gamma.bmp"),
+        ];
+        let mut state = AppState::new(paths);
+        state.set_sort_mode(SortMode::TypeAlpha);
+        let order: Vec<_> = state
+            .image_paths
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        // Expected: BMP → GIF → JPEG (jpeg and jpg merged, alphabetical within) → PNG
+        assert_eq!(
+            order,
+            vec![
+                "gamma.bmp".to_string(),
+                "alpha.gif".to_string(),
+                "beta.jpeg".to_string(),
+                "delta.jpg".to_string(),
+                "zeta.png".to_string(),
+            ]
+        );
+    }
 
     #[test]
     fn test_sort_mode_default() {
