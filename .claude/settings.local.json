@@ -108,7 +108,8 @@
       "WebFetch(domain:ubos.tech)",
       "WebFetch(domain:gpui-ce.github.io)",
       "Bash(gh release *)",
-      "Bash(verset --bump-minor)"
+      "Bash(verset --bump-minor)",
+      "Bash(verset --bump-patch)"
     ]
   }
 }
