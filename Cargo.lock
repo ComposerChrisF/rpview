@@ -4568,7 +4568,7 @@ dependencies = [
 
 [[package]]
 name = "rpview"
-version = "0.11.2"
+version = "0.11.3"
 dependencies = [
  "block2",
  "ccf-gpui-widgets",
@@ -4581,6 +4581,7 @@ dependencies = [
  "objc2-app-kit",
  "objc2-foundation",
  "raw-window-handle",
+ "rayon",
  "resvg 0.47.0",
  "rfd",
  "serde",
