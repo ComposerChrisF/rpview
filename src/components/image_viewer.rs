@@ -784,11 +784,15 @@ impl ImageViewer {
             return;
         };
 
-        // No-op fast path: contrast/shadows/highlights all neutral → clear
-        // any cached LC render so rendering falls back to filtered/original.
+        // Skip processing only when every parameter that affects the output
+        // is at its identity value. Previously this only checked the three
+        // main sliders, which silently skipped alpha and doc-mode effects.
         let is_noop = params.contrast.abs() < 0.001
             && params.lighten_shadows.abs() < 0.001
-            && params.darken_highlights.abs() < 0.001;
+            && params.darken_highlights.abs() < 0.001
+            && params.alpha_black.abs() < 0.001
+            && params.alpha_white.abs() < 0.001
+            && !params.use_document_contrast;
         if is_noop {
             loaded.lc_render = None;
             loaded.cached_lc_params = None;
