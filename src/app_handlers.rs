@@ -53,16 +53,18 @@ impl App {
             return;
         }
 
-        let now = Instant::now();
+        self.register_escape_press(cx);
+    }
 
-        // Remove presses older than 2 seconds
+    /// Record an ESC press for the 3-presses-in-2-seconds quit shortcut.
+    /// Used both by the main-window handler above and by floating sub-
+    /// windows (Filter / Local Contrast) — an ESC in any of our windows
+    /// counts toward the same quit counter.
+    pub(crate) fn register_escape_press(&mut self, cx: &mut Context<Self>) {
+        let now = Instant::now();
         self.escape_presses
             .retain(|&time| now.duration_since(time) < Duration::from_secs(2));
-
-        // Add current press
         self.escape_presses.push(now);
-
-        // Check if we have 3 presses within 2 seconds
         if self.escape_presses.len() >= 3 {
             cx.quit();
         }
@@ -222,8 +224,17 @@ impl App {
             move |window, cx| {
                 crate::utils::window_level::set_always_on_top(window);
 
-                let view =
-                    cx.new(|inner_cx| FilterWindowView::new(filter_controls.clone(), inner_cx));
+                let weak_for_escape = weak_app.clone();
+                let on_escape: crate::components::filter_window::EscapeCallback =
+                    Box::new(move |window, app_cx| {
+                        window.remove_window();
+                        let _ = weak_for_escape.update(app_cx, |app, inner_cx| {
+                            app.register_escape_press(inner_cx);
+                        });
+                    });
+                let view = cx.new(|inner_cx| {
+                    FilterWindowView::new(filter_controls.clone(), on_escape, inner_cx)
+                });
 
                 // Persist bounds on move/resize.
                 let weak_for_bounds = weak_app.clone();
@@ -338,8 +349,20 @@ impl App {
             },
             move |window, cx| {
                 crate::utils::window_level::set_always_on_top(window);
+                let weak_for_escape = weak_app.clone();
+                let on_escape: crate::components::local_contrast_window::EscapeCallback =
+                    Box::new(move |window, app_cx| {
+                        window.remove_window();
+                        let _ = weak_for_escape.update(app_cx, |app, inner_cx| {
+                            app.register_escape_press(inner_cx);
+                        });
+                    });
                 let view = cx.new(|inner_cx| {
-                    crate::components::LocalContrastWindowView::new(controls.clone(), inner_cx)
+                    crate::components::LocalContrastWindowView::new(
+                        controls.clone(),
+                        on_escape,
+                        inner_cx,
+                    )
                 });
 
                 // Persist bounds on move/resize.
