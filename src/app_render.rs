@@ -84,7 +84,7 @@ impl Render for App {
         // While LC is running, keep requesting animation frames so we poll
         // the channel promptly when the worker finishes — otherwise nothing
         // re-wakes the render loop after the user stops moving the slider.
-        if self.viewer.is_processing_lc {
+        if self.viewer.is_processing_lc() {
             if let Some(pct) = self.viewer.lc_progress_percent() {
                 self.local_contrast_controls.update(cx, |c, cx| {
                     c.set_status(format!("Processing… {:.0}%", pct), cx);

@@ -1,15 +1,8 @@
 //! Minimal root view for the floating Local Contrast window.
 
 use crate::EscapePressed;
-use crate::components::LocalContrastControls;
+use crate::components::{EscapeCallback, LocalContrastControls};
 use gpui::*;
-
-/// Callback invoked when the user presses ESC while this window has focus.
-/// The owning binary uses this to close the window and tick the main App's
-/// quit counter; kept as a closure so this component lives in the crate
-/// shared between lib and bin builds without depending on the binary's
-/// `App` type.
-pub type EscapeCallback = Box<dyn Fn(&mut Window, &mut App) + 'static>;
 
 pub struct LocalContrastWindowView {
     pub controls: Entity<LocalContrastControls>,

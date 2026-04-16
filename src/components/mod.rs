@@ -1,5 +1,12 @@
 pub mod animation_indicator;
 pub mod debug_overlay;
+
+/// Callback invoked when the user presses ESC while a floating companion
+/// window (filter, local-contrast, …) has focus. The owning binary uses this
+/// to close the window and tick the main App's quit counter; kept as a
+/// closure so these window-root views can live in the crate shared between
+/// lib and bin builds without depending on the binary's `App` type.
+pub type EscapeCallback = Box<dyn Fn(&mut gpui::Window, &mut gpui::App) + 'static>;
 pub mod error_display;
 pub mod filter_controls;
 pub mod filter_window;
