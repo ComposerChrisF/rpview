@@ -177,6 +177,12 @@ pub struct ImageViewer {
     /// In-flight local-contrast job (cancel flag, progress counter, result
     /// channel). `None` when no worker thread is running.
     pub(crate) lc_job: Option<LcJob>,
+    /// Parameters queued for a follow-on LC run. Populated when
+    /// `update_local_contrast` is called while a worker is already in
+    /// flight — `check_lc_processing` kicks these off once the current job
+    /// finishes. Keeping at most one worker prevents thread pile-up when
+    /// the user rapidly scrubs sliders or the resize toggle.
+    pub(crate) pending_lc_params: Option<crate::utils::local_contrast::Parameters>,
     /// Session-wide toggle for the LC output (so the `1`/`2` keys can A/B
     /// the processed image against the un-processed one).
     pub(crate) lc_enabled: bool,
@@ -226,6 +232,7 @@ impl ImageViewer {
             is_processing_filters: false,
             filter_processing_handle: None,
             lc_job: None,
+            pending_lc_params: None,
             lc_enabled: true,
             svg_reraster_path: None,
             svg_reraster_region: None,
@@ -840,8 +847,13 @@ impl ImageViewer {
     /// `decoded_rgba8`, runs `locally_normalize_luminance`, and sends the
     /// resulting in-memory image back via an mpsc channel. Cancelled by
     /// flipping an `AtomicBool` the worker's feedback callback watches.
+    ///
+    /// At most one worker thread is ever in flight. If a job is already
+    /// running when this is called, the incoming params are stashed in
+    /// `pending_lc_params` and picked up by `check_lc_processing` once the
+    /// current worker exits. This prevents thread pile-up (and the memory
+    /// pressure that comes with it) when the user rapidly scrubs sliders.
     pub fn update_local_contrast(&mut self, params: crate::utils::local_contrast::Parameters) {
-        use std::sync::atomic::{AtomicBool, Ordering};
         // LC doesn't make sense for SVGs (rasterized at a fixed scale).
         if let Some(ref loaded) = self.current_image {
             if crate::utils::file_scanner::is_svg(&loaded.path) {
@@ -849,16 +861,15 @@ impl ImageViewer {
             }
         }
 
-        // Cancel any in-flight LC computation.
-        if let Some(job) = self.lc_job.take() {
-            job.request_cancel();
-        }
-
         let Some(loaded) = self.current_image.as_mut() else {
             return;
         };
 
         if params.is_identity() {
+            if let Some(job) = self.lc_job.take() {
+                job.request_cancel();
+            }
+            self.pending_lc_params = None;
             loaded.lc_render = None;
             loaded.lc_render_size = None;
             loaded.cached_lc_params = None;
@@ -867,8 +878,32 @@ impl ImageViewer {
 
         // Skip re-processing if params haven't changed since the last render.
         if loaded.cached_lc_params.as_ref() == Some(&params) && loaded.lc_render.is_some() {
+            // Cache hit: the current buffer already matches — drop any stale
+            // pending request and don't disturb an in-flight job (it's for
+            // the same or a newer request).
             return;
         }
+
+        // If a worker is already running, stash these params and let it
+        // finish; `check_lc_processing` will pick up the latest queued
+        // params and start the follow-on job. Tell the old worker to
+        // abandon its output since we're about to supersede it.
+        if let Some(job) = self.lc_job.as_ref() {
+            job.request_cancel();
+            self.pending_lc_params = Some(params);
+            return;
+        }
+
+        self.spawn_lc_worker(params);
+    }
+
+    /// Actually spawn the worker thread. Precondition: `self.lc_job` is
+    /// `None`. Caller is responsible for the identity / cache-hit checks.
+    fn spawn_lc_worker(&mut self, params: crate::utils::local_contrast::Parameters) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let Some(loaded) = self.current_image.as_mut() else {
+            return;
+        };
 
         // Lazily decode the source and build the planar float copy (same
         // pattern as filters). The f32/255 conversion is 6–20ms for a large
@@ -958,6 +993,8 @@ impl ImageViewer {
         if let Some(job) = self.lc_job.take() {
             job.request_cancel();
         }
+        // Also drop any queued follow-on job so we truly stop.
+        self.pending_lc_params = None;
     }
 
     /// A/B toggle: hide the LC render so the main window shows the
@@ -997,7 +1034,7 @@ impl ImageViewer {
             return false;
         };
         self.lc_job = None;
-        match result {
+        let installed = match result {
             Some((render_image, size)) => {
                 let size_transition = self.current_image.as_mut().map(|loaded| {
                     let old_eff = effective_image_size(loaded, self.lc_enabled);
@@ -1020,7 +1057,14 @@ impl ImageViewer {
                 true
             }
             None => false,
+        };
+        // Kick off any follow-on request that was queued while this worker
+        // was busy. Going through `update_local_contrast` means the
+        // identity / cache-hit short-circuits still apply.
+        if let Some(pending) = self.pending_lc_params.take() {
+            self.update_local_contrast(pending);
         }
+        installed
     }
 
     /// Check for completed filter processing and install the resulting in-memory image.

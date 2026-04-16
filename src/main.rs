@@ -352,15 +352,13 @@ fn main() {
                                     let preview =
                                         this.local_contrast_controls.read(cx).preview_enabled;
                                     if !preview {
-                                        // Preview off: cancel any in-flight compute and
-                                        // suppress the LC render so the viewer shows the
-                                        // unprocessed image. Don't clear cached_lc_params
-                                        // — we want re-enabling Preview to detect that
-                                        // params changed and trigger processing.
+                                        // Preview off: just hide the LC render via the A/B
+                                        // flag, preserving the cached buffer so turning
+                                        // Preview back on is instantaneous when params
+                                        // haven't changed. Also cancel any in-flight job
+                                        // since its result would be thrown away anyway.
                                         this.viewer.cancel_lc_processing();
-                                        if let Some(loaded) = this.viewer.current_image.as_mut() {
-                                            loaded.lc_render = None;
-                                        }
+                                        this.viewer.set_lc_enabled(false);
                                         this.local_contrast_controls.update(cx, |c, cx| {
                                             c.set_status("Preview off", cx);
                                             c.set_progress(None, cx);
@@ -368,13 +366,24 @@ fn main() {
                                         cx.notify();
                                         return;
                                     }
+                                    // Preview on: show the LC render again. If params
+                                    // match the cached ones, update_local_contrast bails
+                                    // early and we display the cached buffer instantly.
+                                    this.viewer.set_lc_enabled(true);
                                     let params =
                                         this.local_contrast_controls.read(cx).get_parameters(cx);
                                     this.viewer.update_local_contrast(params);
-                                    this.local_contrast_controls.update(cx, |c, cx| {
-                                        c.set_status("Processing…", cx);
-                                        c.set_progress(Some(0.0), cx);
-                                    });
+                                    if this.viewer.is_processing_lc() {
+                                        this.local_contrast_controls.update(cx, |c, cx| {
+                                            c.set_status("Processing…", cx);
+                                            c.set_progress(Some(0.0), cx);
+                                        });
+                                    } else {
+                                        this.local_contrast_controls.update(cx, |c, cx| {
+                                            c.set_status("", cx);
+                                            c.set_progress(None, cx);
+                                        });
+                                    }
                                     cx.notify();
                                 }
                             },
