@@ -5,6 +5,11 @@
 use crate::utils::local_contrast::Parameters;
 use std::path::PathBuf;
 
+/// Sentinel label displayed in the preset dropdown when the current parameter
+/// set doesn't match any saved preset. Also used as a guard in save/load so
+/// the user can't save a preset under this reserved name.
+pub const CUSTOM_PRESET_LABEL: &str = "(Custom)";
+
 fn presets_dir() -> PathBuf {
     let settings_path = crate::utils::settings_io::get_settings_path();
     settings_path

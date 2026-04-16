@@ -225,7 +225,7 @@ impl App {
                 crate::utils::window_level::set_always_on_top(window);
 
                 let weak_for_escape = weak_app.clone();
-                let on_escape: crate::components::filter_window::EscapeCallback =
+                let on_escape: crate::components::EscapeCallback =
                     Box::new(move |window, app_cx| {
                         window.remove_window();
                         let _ = weak_for_escape.update(app_cx, |app, inner_cx| {
@@ -350,7 +350,7 @@ impl App {
             move |window, cx| {
                 crate::utils::window_level::set_always_on_top(window);
                 let weak_for_escape = weak_app.clone();
-                let on_escape: crate::components::local_contrast_window::EscapeCallback =
+                let on_escape: crate::components::EscapeCallback =
                     Box::new(move |window, app_cx| {
                         window.remove_window();
                         let _ = weak_for_escape.update(app_cx, |app, inner_cx| {
@@ -1380,13 +1380,7 @@ impl App {
     /// sliders "follow" the user across images like the filter sliders do.
     pub(crate) fn reapply_local_contrast_if_active(&mut self, cx: &mut Context<Self>) {
         let params = self.local_contrast_controls.read(cx).get_parameters(cx);
-        let has_effect = params.contrast.abs() >= 0.001
-            || params.lighten_shadows.abs() >= 0.001
-            || params.darken_highlights.abs() >= 0.001
-            || params.alpha_black.abs() >= 0.001
-            || params.alpha_white.abs() >= 0.001
-            || params.use_document_contrast;
-        if !has_effect {
+        if params.is_identity() {
             return;
         }
         self.viewer.update_local_contrast(params);

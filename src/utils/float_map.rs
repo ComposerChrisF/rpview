@@ -6,7 +6,8 @@
 //! lean — just the planes we actually need plus cheap conversions to and
 //! from `image::RgbaImage`. Higher-level data like Oklab channels are held
 //! in separate `FloatMap` instances rather than extra fields here.
-#![allow(dead_code)] // Consumed by phases B+ of the local-contrast pipeline.
+
+#![allow(dead_code)] // `new`/`pixel_count`/`idx`/`to_rgba8` round out the API and are exercised by tests.
 
 use image::{ImageBuffer, Rgba, RgbaImage};
 

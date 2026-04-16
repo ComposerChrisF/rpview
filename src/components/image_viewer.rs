@@ -22,6 +22,30 @@ use std::time::Instant;
 /// Result type for SVG re-rasterization background tasks
 type SvgRerasterResult = Result<(PathBuf, Option<SvgRerasterRegion>), String>;
 
+/// Bundle of state for an in-flight local-contrast computation. `Some` while
+/// a worker thread is running, `None` otherwise — consolidates what used to
+/// be four lockstep fields (`is_processing_lc`, handle, cancel, progress).
+pub(crate) struct LcJob {
+    pub handle: std::sync::mpsc::Receiver<Option<Arc<gpui::RenderImage>>>,
+    pub cancel: Arc<std::sync::atomic::AtomicBool>,
+    pub progress_bips: Arc<std::sync::atomic::AtomicU32>,
+}
+
+impl LcJob {
+    /// Progress of the background LC job as a percentage in `0.0..=100.0`.
+    pub fn progress_percent(&self) -> f32 {
+        let bips = self
+            .progress_bips
+            .load(std::sync::atomic::Ordering::Relaxed);
+        (bips as f32) / 100.0
+    }
+    /// Signal the worker thread to abort at its next checkpoint.
+    pub fn request_cancel(&self) {
+        self.cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// Loaded image data
 ///
 /// # Animation Frame Caching Strategy
@@ -62,6 +86,11 @@ pub struct LoadedImage {
     pub filtered_render: Option<Arc<gpui::RenderImage>>,
     /// Filter settings used to produce `filtered_render` (for change detection).
     pub cached_filter_settings: Option<FilterSettings>,
+    /// Planar-float copy of `decoded_rgba8` cached for the local-contrast
+    /// worker. Avoids re-doing the f32/255 conversion (6–20ms for a large
+    /// RGBA image) on every slider tick. Populated lazily on the first LC
+    /// application.
+    pub lc_source_fmap: Option<Arc<crate::utils::float_map::FloatMap>>,
     /// In-memory local-contrast output. Takes priority over `filtered_render`
     /// when present. Cleared on navigation or Reset.
     pub lc_render: Option<Arc<gpui::RenderImage>>,
@@ -121,16 +150,9 @@ pub struct ImageViewer {
     pub(crate) filter_processing_handle:
         Option<std::sync::mpsc::Receiver<Result<Arc<gpui::RenderImage>, String>>>,
 
-    /// Local-contrast processing: whether a worker thread is currently busy.
-    pub(crate) is_processing_lc: bool,
-    /// Channel for the LC worker's result (None = cancelled or failed).
-    pub(crate) lc_processing_handle:
-        Option<std::sync::mpsc::Receiver<Option<Arc<gpui::RenderImage>>>>,
-    /// Cancel flag shared with the LC worker thread.
-    pub(crate) lc_cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
-    /// Shared progress counter in 1/10000ths (0..=10000), written by the LC
-    /// worker's feedback callback and read by the UI for a percent display.
-    pub(crate) lc_progress_bips: Arc<std::sync::atomic::AtomicU32>,
+    /// In-flight local-contrast job (cancel flag, progress counter, result
+    /// channel). `None` when no worker thread is running.
+    pub(crate) lc_job: Option<LcJob>,
     /// Session-wide toggle for the LC output (so the `1`/`2` keys can A/B
     /// the processed image against the un-processed one).
     pub(crate) lc_enabled: bool,
@@ -179,10 +201,7 @@ impl ImageViewer {
             is_loading: false,
             is_processing_filters: false,
             filter_processing_handle: None,
-            is_processing_lc: false,
-            lc_processing_handle: None,
-            lc_cancel: None,
-            lc_progress_bips: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            lc_job: None,
             lc_enabled: true,
             svg_reraster_path: None,
             svg_reraster_region: None,
@@ -515,6 +534,7 @@ impl ImageViewer {
                     decoded_rgba8: None,
                     filtered_render: None,
                     cached_filter_settings: None,
+                    lc_source_fmap: None,
                     lc_render: None,
                     cached_lc_params: None,
                     animation_data,
@@ -615,6 +635,7 @@ impl ImageViewer {
                             decoded_rgba8: None,
                             filtered_render: None,
                             cached_filter_settings: None,
+                            lc_source_fmap: None,
                             lc_render: None,
                             cached_lc_params: None,
                             animation_data: data.animation_data,
@@ -774,26 +795,15 @@ impl ImageViewer {
         }
 
         // Cancel any in-flight LC computation.
-        if let Some(cancel) = self.lc_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
+        if let Some(job) = self.lc_job.take() {
+            job.request_cancel();
         }
-        self.lc_processing_handle = None;
-        self.is_processing_lc = false;
 
         let Some(loaded) = self.current_image.as_mut() else {
             return;
         };
 
-        // Skip processing only when every parameter that affects the output
-        // is at its identity value. Previously this only checked the three
-        // main sliders, which silently skipped alpha and doc-mode effects.
-        let is_noop = params.contrast.abs() < 0.001
-            && params.lighten_shadows.abs() < 0.001
-            && params.darken_highlights.abs() < 0.001
-            && params.alpha_black.abs() < 0.001
-            && params.alpha_white.abs() < 0.001
-            && !params.use_document_contrast;
-        if is_noop {
+        if params.is_identity() {
             loaded.lc_render = None;
             loaded.cached_lc_params = None;
             return;
@@ -804,7 +814,9 @@ impl ImageViewer {
             return;
         }
 
-        // Lazily decode the source (same pattern as filters).
+        // Lazily decode the source and build the planar float copy (same
+        // pattern as filters). The f32/255 conversion is 6–20ms for a large
+        // RGBA image and would otherwise repeat on every slider tick.
         if loaded.decoded_rgba8.is_none() {
             match image_loader::load_image(&loaded.path) {
                 Ok(img) => {
@@ -816,29 +828,36 @@ impl ImageViewer {
                 }
             }
         }
-        let source = loaded
-            .decoded_rgba8
+        if loaded.lc_source_fmap.is_none() {
+            let rgba = loaded
+                .decoded_rgba8
+                .as_ref()
+                .expect("decoded source just populated");
+            loaded.lc_source_fmap = Some(Arc::new(crate::utils::float_map::FloatMap::from_rgba8(
+                rgba,
+            )));
+        }
+        let fmap = loaded
+            .lc_source_fmap
             .as_ref()
-            .expect("decoded source just populated")
+            .expect("float map just populated")
             .clone();
 
         let cancel = Arc::new(AtomicBool::new(false));
         let cancel_for_thread = cancel.clone();
-        self.lc_cancel = Some(cancel);
-        self.is_processing_lc = true;
-        self.lc_progress_bips.store(0, Ordering::Relaxed);
-        let progress_for_thread = self.lc_progress_bips.clone();
+        let progress_bips = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let progress_for_thread = progress_bips.clone();
 
         let (tx, rx) = std::sync::mpsc::channel();
-        self.lc_processing_handle = Some(rx);
+        self.lc_job = Some(LcJob {
+            handle: rx,
+            cancel,
+            progress_bips,
+        });
 
         std::thread::spawn(move || {
-            use crate::utils::float_map::FloatMap;
             use crate::utils::local_contrast::FeedbackFn;
-            use std::sync::atomic::AtomicU32;
-            let _: &AtomicU32 = &progress_for_thread; // type hint only
             debug_eprintln!("[LC_THREAD] start");
-            let fmap = FloatMap::from_rgba8(&source);
             let cancel_watch = cancel_for_thread.clone();
             let progress_watch = progress_for_thread.clone();
             let feedback: Box<FeedbackFn> = Box::new(move |p, _msg| {
@@ -847,7 +866,7 @@ impl ImageViewer {
                 cancel_watch.load(Ordering::Relaxed)
             });
             let out = crate::utils::local_contrast::locally_normalize_luminance(
-                &fmap,
+                fmap.as_ref(),
                 &params,
                 Some(&*feedback),
             );
@@ -864,26 +883,23 @@ impl ImageViewer {
         });
     }
 
+    /// `true` while a worker thread is running.
+    pub fn is_processing_lc(&self) -> bool {
+        self.lc_job.is_some()
+    }
+
     /// Current LC progress in percent (0.0–100.0) while processing. Returns
     /// `None` when nothing is in-flight.
     pub fn lc_progress_percent(&self) -> Option<f32> {
-        if !self.is_processing_lc {
-            return None;
-        }
-        let bips = self
-            .lc_progress_bips
-            .load(std::sync::atomic::Ordering::Relaxed);
-        Some((bips as f32) / 100.0)
+        self.lc_job.as_ref().map(LcJob::progress_percent)
     }
 
     /// Cancel any in-flight LC computation. The worker observes the cancel
     /// flag at its next checkpoint and drops its result silently.
     pub fn cancel_lc_processing(&mut self) {
-        if let Some(cancel) = self.lc_cancel.take() {
-            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(job) = self.lc_job.take() {
+            job.request_cancel();
         }
-        self.lc_processing_handle = None;
-        self.is_processing_lc = false;
     }
 
     /// A/B toggle: hide the LC render so the main window shows the
@@ -900,15 +916,13 @@ impl ImageViewer {
     /// Check for completed LC processing; if a result arrived, install it on
     /// the current image. Returns true if a new LC render was applied.
     pub fn check_lc_processing(&mut self) -> bool {
-        let Some(rx) = &self.lc_processing_handle else {
+        let Some(job) = self.lc_job.as_ref() else {
             return false;
         };
-        let Ok(result) = rx.try_recv() else {
+        let Ok(result) = job.handle.try_recv() else {
             return false;
         };
-        self.lc_processing_handle = None;
-        self.lc_cancel = None;
-        self.is_processing_lc = false;
+        self.lc_job = None;
         match result {
             Some(render_image) => {
                 if let Some(loaded) = self.current_image.as_mut() {

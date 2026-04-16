@@ -1,10 +1,8 @@
 //! Minimal root view for the floating Filter window.
 
 use crate::EscapePressed;
-use crate::components::FilterControls;
+use crate::components::{EscapeCallback, FilterControls};
 use gpui::*;
-
-pub type EscapeCallback = Box<dyn Fn(&mut Window, &mut App) + 'static>;
 
 pub struct FilterWindowView {
     pub filter_controls: Entity<FilterControls>,

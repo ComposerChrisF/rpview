@@ -243,7 +243,7 @@ impl LocalContrastControls {
 
     fn build_preset_dropdown(selected: Option<&str>, cx: &mut Context<Self>) -> Entity<Dropdown> {
         let names = lc_presets::list_preset_names();
-        let mut choices = vec!["(Custom)".to_string()];
+        let mut choices = vec![lc_presets::CUSTOM_PRESET_LABEL.to_string()];
         choices.extend(names);
         cx.new(|cx| {
             let mut d = Dropdown::new(cx).choices(choices);
@@ -261,7 +261,7 @@ impl LocalContrastControls {
         cx: &mut Context<Self>,
     ) {
         if let DropdownEvent::Change(name) = event {
-            if name == "(Custom)" {
+            if name == lc_presets::CUSTOM_PRESET_LABEL {
                 self.current_preset = None;
                 return;
             }
@@ -311,7 +311,7 @@ impl LocalContrastControls {
 
     fn save_current_as_preset(&mut self, name: &str, cx: &mut Context<Self>) {
         let name = name.trim();
-        if name.is_empty() || name == "(Custom)" {
+        if name.is_empty() || name == lc_presets::CUSTOM_PRESET_LABEL {
             return;
         }
         let params = self.get_parameters(cx);

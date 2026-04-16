@@ -1,5 +1,3 @@
-#![allow(dead_code)] // Consumed by phases B+ of the local-contrast pipeline.
-
 //! Color-space conversions used by the local-contrast pipeline.
 //!
 //! Pipeline: `sRGB (u8 or f32 0..1)  →  linear sRGB  →  Oklab (L,a,b)  →  OkLCh (L,C,h)`

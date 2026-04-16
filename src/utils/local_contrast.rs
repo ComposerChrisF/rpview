@@ -1,24 +1,19 @@
-#![allow(dead_code)] // Consumed by future UI wiring (Phase D).
-
 //! Port of `FraleyMusic.ImageDsp.AdaptiveContrastDsp.LocallyNormalizeLuminance`.
 //!
 //! OkLCh-based (swap for HSL from the C# original). Parallelized across
 //! histogram-block rows via rayon. See `docs/local-contrast-spec.md` §3 for
 //! the algorithm narrative.
 //!
-//! Intentional deviations from the C# source at this phase:
+//! Intentional deviations from the C# source:
 //! - Color space is OkLCh, not HSL. The scalar L is Oklab's perceptual L.
 //! - The §3.4 step 11 "desaturate near extremes" heuristic is omitted — it's
 //!   an HSL workaround; Oklab chroma degrades gracefully at the endpoints.
 //! - Cumulative-sum per histogram is precomputed once (O(256) per site),
-//!   turning each per-pixel histogram lookup from O(256) to O(1). This
-//!   changes no outputs; it's a straightforward implementation choice the
-//!   C# original happens not to make.
+//!   turning each per-pixel histogram lookup from O(256) to O(1).
 //!
 //! All other behavior — including the known `Contrast_Std` quirk on the
 //! white-side branch (mixed 0..1 / 0..255 scale) — is preserved verbatim
-//! for parity with C# reference outputs. See §6 of the spec for the
-//! efficiency passes planned for Phase E.
+//! for parity with C# reference outputs.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -104,6 +99,20 @@ impl Default for Parameters {
             return_image: ReturnImage::Dsp,
             resize_factor: 1.0,
         }
+    }
+}
+
+impl Parameters {
+    /// Returns `true` when every parameter that influences the output is at
+    /// its neutral value. Used to short-circuit processing when the user has
+    /// dialed everything to zero.
+    pub fn is_identity(&self) -> bool {
+        self.contrast.abs() < 0.001
+            && self.lighten_shadows.abs() < 0.001
+            && self.darken_highlights.abs() < 0.001
+            && self.alpha_black.abs() < 0.001
+            && self.alpha_white.abs() < 0.001
+            && !self.use_document_contrast
     }
 }
 
@@ -632,17 +641,8 @@ pub fn locally_normalize_luminance(
     let block_row_pixels = (cxy_block as usize) * width_usize;
     let return_image = params.return_image;
     let use_median = params.use_median_for_contrast;
-    let use_doc = params.use_document_contrast;
-    let lighten_shadows = params.lighten_shadows;
-    let darken_highlights = params.darken_highlights;
     let alpha_black = params.alpha_black;
     let alpha_white = params.alpha_white;
-    let contrast_amt = params.contrast;
-    let mix_doc = params.mix_document_contrast;
-    let tilt_black = params.tilt_black_doc_contrast;
-    let tilt_white = params.tilt_white_doc_contrast;
-    let apply_x = params.apply_contrast_to_xition;
-    let apply_bw = params.apply_contrast_to_bw;
     let cx_histograms = grid.cx_histograms;
     let empty = Histogram::empty();
 
@@ -703,29 +703,7 @@ pub fn locally_normalize_luminance(
 
                         let bin_ref = if use_median { bin_median } else { bin_mean };
 
-                        let mut l_contrast = contrast_std(bin_ref / 255.0, l_cur, contrast_amt);
-                        if use_doc {
-                            l_contrast = contrast_doc(
-                                bin_ref / 255.0,
-                                l_contrast,
-                                mix_doc,
-                                tilt_black,
-                                tilt_white,
-                                apply_x,
-                                apply_bw,
-                            );
-                        }
-                        if lighten_shadows != 0.0 && bin_ref <= 127.0 {
-                            let frac_dark = 128.0 / (1.0 + bin_ref);
-                            l_contrast = l_contrast * frac_dark * lighten_shadows
-                                + l_contrast * (1.0 - lighten_shadows);
-                        }
-                        if darken_highlights != 0.0 && bin_ref >= 127.5 {
-                            let frac_light = 127.5 / bin_ref;
-                            l_contrast = l_contrast * frac_light * darken_highlights
-                                + l_contrast * (1.0 - darken_highlights);
-                        }
-
+                        let l_contrast = apply_tone_curve(l_cur, bin_ref, params);
                         let frac_alpha =
                             alpha_white + (alpha_black - alpha_white) * (1.0 - l_contrast);
                         let mut l_final = frac_sum * frac_alpha + l_contrast * (1.0 - frac_alpha);
