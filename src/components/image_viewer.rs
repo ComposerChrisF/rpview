@@ -22,6 +22,17 @@ use std::time::Instant;
 /// Result type for SVG re-rasterization background tasks
 type SvgRerasterResult = Result<(PathBuf, Option<SvgRerasterRegion>), String>;
 
+/// A snapshot of a displayed image, stored by Cmd/Ctrl+3..9 and recalled
+/// with the corresponding number key. Slots let the user A/B compare
+/// arbitrary images or processing stages: 1 = raw, 2 = processed, 3..9 =
+/// user-saved snapshots.
+#[derive(Clone)]
+pub(crate) struct SavedSlot {
+    pub render: Arc<gpui::RenderImage>,
+    pub width: u32,
+    pub height: u32,
+}
+
 /// Bundle of state for an in-flight local-contrast computation. `Some` while
 /// a worker thread is running, `None` otherwise — consolidates what used to
 /// be four lockstep fields (`is_processing_lc`, handle, cancel, progress).
@@ -29,6 +40,20 @@ type SvgRerasterResult = Result<(PathBuf, Option<SvgRerasterRegion>), String>;
 /// image plus its pixel dimensions (which may differ from the source's when
 /// the user picked a non-1× resize factor).
 pub(crate) type LcResult = Option<(Arc<gpui::RenderImage>, (u32, u32))>;
+
+/// Convert an RGBA image to a BGRA-ordered `RenderImage` suitable for GPUI.
+fn rgba_to_bgra_render_image(rgba: &image::RgbaImage) -> Arc<gpui::RenderImage> {
+    let mut bgra = rgba.clone();
+    for px in bgra.pixels_mut() {
+        let r = px[0];
+        px[0] = px[2];
+        px[2] = r;
+    }
+    let frame = image::Frame::new(bgra);
+    Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
+        frame, 1,
+    )))
+}
 
 /// Effective display dimensions for `loaded`. When an LC render is active
 /// (enabled *and* present), its pixel size drives zoom/fit math and the
@@ -49,6 +74,11 @@ pub(crate) struct LcJob {
     pub handle: std::sync::mpsc::Receiver<LcResult>,
     pub cancel: Arc<std::sync::atomic::AtomicBool>,
     pub progress_bips: Arc<std::sync::atomic::AtomicU32>,
+    /// Parameters this worker was launched with. Copied onto
+    /// `LoadedImage.cached_lc_params` when the result is installed so the
+    /// next `update_local_contrast` with the same params becomes a cache
+    /// hit instead of recomputing.
+    pub params: crate::utils::local_contrast::Parameters,
 }
 
 impl LcJob {
@@ -186,6 +216,11 @@ pub struct ImageViewer {
     /// Session-wide toggle for the LC output (so the `1`/`2` keys can A/B
     /// the processed image against the un-processed one).
     pub(crate) lc_enabled: bool,
+    /// User-saved image snapshots: indices 0..6 correspond to keys 3..9.
+    pub(crate) saved_slots: [Option<SavedSlot>; 7],
+    /// Which saved slot is currently being displayed (3..9), or `None` for
+    /// the normal display path (raw / filtered / LC).
+    pub(crate) active_slot: Option<u8>,
 
     // --- SVG dynamic re-rasterization state ---
     /// Active sharp re-raster path (replaces blurry base raster when zoomed in)
@@ -234,6 +269,8 @@ impl ImageViewer {
             lc_job: None,
             pending_lc_params: None,
             lc_enabled: true,
+            saved_slots: Default::default(),
+            active_slot: None,
             svg_reraster_path: None,
             svg_reraster_region: None,
             svg_reraster_scale: None,
@@ -259,10 +296,11 @@ impl ImageViewer {
 
     /// Calculate and set fit-to-window zoom for the current image
     pub fn fit_to_window(&mut self) {
-        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+        if let (Some((eff_w, eff_h)), Some(viewport)) =
+            (self.display_dimensions(), self.viewport_size)
+        {
             let viewport_width: f32 = viewport.width.into();
             let viewport_height: f32 = viewport.height.into();
-            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
 
             let fit_zoom =
                 zoom::calculate_fit_to_window(eff_w, eff_h, viewport_width, viewport_height);
@@ -306,8 +344,9 @@ impl ImageViewer {
         let new_zoom = zoom::zoom_in(old_zoom, step);
 
         // Adjust pan to keep center of image at same screen location (if we have the data)
-        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
-            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
+        if let (Some((eff_w, eff_h)), Some(viewport)) =
+            (self.display_dimensions(), self.viewport_size)
+        {
             self.adjust_pan_for_zoom(eff_w, eff_h, viewport, old_zoom, new_zoom);
         }
 
@@ -321,8 +360,9 @@ impl ImageViewer {
         let new_zoom = zoom::zoom_out(old_zoom, step);
 
         // Adjust pan to keep center of image at same screen location (if we have the data)
-        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
-            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
+        if let (Some((eff_w, eff_h)), Some(viewport)) =
+            (self.display_dimensions(), self.viewport_size)
+        {
             self.adjust_pan_for_zoom(eff_w, eff_h, viewport, old_zoom, new_zoom);
         }
 
@@ -387,11 +427,12 @@ impl ImageViewer {
     /// When going to fit-to-window, the image is fully centered.
     /// When going to 100%, the viewport-center anchor point is preserved.
     pub fn reset_zoom(&mut self) {
-        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+        if let (Some((eff_w, eff_h)), Some(viewport)) =
+            (self.display_dimensions(), self.viewport_size)
+        {
             if self.image_state.is_fit_to_window {
                 // Currently at fit-to-window → switch to 100% keeping viewport center stable
                 let old_zoom = self.image_state.zoom;
-                let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
                 self.adjust_pan_for_zoom(eff_w, eff_h, viewport, old_zoom, 1.0);
                 self.image_state.zoom = 1.0;
                 self.image_state.is_fit_to_window = false;
@@ -404,10 +445,11 @@ impl ImageViewer {
 
     /// Set zoom to 100% (actual size) with image centered
     pub fn set_one_hundred_percent(&mut self) {
-        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+        if let (Some((eff_w, eff_h)), Some(viewport)) =
+            (self.display_dimensions(), self.viewport_size)
+        {
             let viewport_width: f32 = viewport.width.into();
             let viewport_height: f32 = viewport.height.into();
-            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
 
             let zoomed_width = eff_w as f32;
             let zoomed_height = eff_h as f32;
@@ -441,10 +483,11 @@ impl ImageViewer {
     /// Constrain pan to prevent the image from going completely off-screen
     /// Ensures at least a small portion of the image remains visible
     fn constrain_pan(&self, pan_x: f32, pan_y: f32) -> (f32, f32) {
-        if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
+        if let (Some((eff_w, eff_h)), Some(viewport)) =
+            (self.display_dimensions(), self.viewport_size)
+        {
             let viewport_width: f32 = viewport.width.into();
             let viewport_height: f32 = viewport.height.into();
-            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
 
             let zoomed_width = eff_w as f32 * self.image_state.zoom;
             let zoomed_height = eff_h as f32 * self.image_state.zoom;
@@ -940,10 +983,12 @@ impl ImageViewer {
         let progress_for_thread = progress_bips.clone();
 
         let (tx, rx) = std::sync::mpsc::channel();
+        let params_for_thread = params.clone();
         self.lc_job = Some(LcJob {
             handle: rx,
             cancel,
             progress_bips,
+            params,
         });
 
         std::thread::spawn(move || {
@@ -958,7 +1003,7 @@ impl ImageViewer {
             });
             let out = crate::utils::local_contrast::locally_normalize_luminance(
                 fmap.as_ref(),
-                &params,
+                &params_for_thread,
                 Some(&*feedback),
             );
             let result = out.map(|out_map| {
@@ -1004,15 +1049,9 @@ impl ImageViewer {
         if self.lc_enabled == enabled {
             return;
         }
-        let old_eff = self
-            .current_image
-            .as_ref()
-            .map(|img| effective_image_size(img, self.lc_enabled));
+        let old_eff = self.display_dimensions();
         self.lc_enabled = enabled;
-        let new_eff = self
-            .current_image
-            .as_ref()
-            .map(|img| effective_image_size(img, self.lc_enabled));
+        let new_eff = self.display_dimensions();
         if let (Some(old), Some(new)) = (old_eff, new_eff)
             && old != new
         {
@@ -1024,6 +1063,113 @@ impl ImageViewer {
         self.lc_enabled
     }
 
+    /// Store the currently displayed image to a save slot (`slot` is 3..=9).
+    /// Captures whichever image source the render path would use: a recalled
+    /// slot, LC output, filtered output, or the raw source.
+    pub fn store_slot(&mut self, slot: u8) {
+        let idx = (slot.saturating_sub(3)) as usize;
+        if idx >= self.saved_slots.len() {
+            return;
+        }
+        if let Some(slot_data) = self.capture_current_display() {
+            self.saved_slots[idx] = Some(slot_data);
+        }
+    }
+
+    /// Recall a saved slot (`slot` is 3..=9). If the slot is empty this is
+    /// a no-op. If recalling the same slot that's already active, it's also
+    /// a no-op. The zoom is rescaled so the apparent on-screen size and pan
+    /// position stay the same, matching the 1/2 A/B toggle behaviour.
+    pub fn recall_slot(&mut self, slot: u8) {
+        let idx = (slot.saturating_sub(3)) as usize;
+        if idx >= self.saved_slots.len() || self.saved_slots[idx].is_none() {
+            return;
+        }
+        if self.active_slot == Some(slot) {
+            return;
+        }
+        let old_eff = self.display_dimensions();
+        self.active_slot = Some(slot);
+        let new_eff = self.display_dimensions();
+        if let (Some(old), Some(new)) = (old_eff, new_eff)
+            && old != new
+        {
+            self.rescale_for_size_change(old, new);
+        }
+    }
+
+    /// Exit slot-recall mode, returning to the normal display path.
+    /// Called by the `1`/`2` key handlers.
+    pub fn clear_active_slot(&mut self) {
+        if self.active_slot.is_none() {
+            return;
+        }
+        let old_eff = self.display_dimensions();
+        self.active_slot = None;
+        let new_eff = self.display_dimensions();
+        if let (Some(old), Some(new)) = (old_eff, new_eff)
+            && old != new
+        {
+            self.rescale_for_size_change(old, new);
+        }
+    }
+
+    /// Effective display dimensions taking active slot into account.
+    fn display_dimensions(&self) -> Option<(u32, u32)> {
+        if let Some(slot) = self.active_slot {
+            let idx = (slot - 3) as usize;
+            self.saved_slots[idx].as_ref().map(|s| (s.width, s.height))
+        } else {
+            self.current_image
+                .as_ref()
+                .map(|img| effective_image_size(img, self.lc_enabled))
+        }
+    }
+
+    /// Capture the currently visible image as a `SavedSlot`. Returns `None`
+    /// when there is no image to capture (e.g. empty directory).
+    fn capture_current_display(&mut self) -> Option<SavedSlot> {
+        // If a slot is being recalled, clone its data directly.
+        if let Some(slot) = self.active_slot {
+            let idx = (slot - 3) as usize;
+            return self.saved_slots[idx].clone();
+        }
+        let loaded = self.current_image.as_mut()?;
+        // LC render takes priority, then filtered, then raw source.
+        if self.lc_enabled {
+            if let Some(ref render) = loaded.lc_render {
+                let (w, h) = loaded
+                    .lc_render_size
+                    .unwrap_or((loaded.width, loaded.height));
+                return Some(SavedSlot {
+                    render: render.clone(),
+                    width: w,
+                    height: h,
+                });
+            }
+        }
+        if let Some(ref render) = loaded.filtered_render {
+            return Some(SavedSlot {
+                render: render.clone(),
+                width: loaded.width,
+                height: loaded.height,
+            });
+        }
+        // Raw source — need to create a BGRA RenderImage on the fly.
+        if loaded.decoded_rgba8.is_none() {
+            if let Ok(img) = image_loader::load_image(&loaded.path) {
+                loaded.decoded_rgba8 = Some(Arc::new(img.to_rgba8()));
+            }
+        }
+        let rgba = loaded.decoded_rgba8.as_ref()?;
+        let render = rgba_to_bgra_render_image(rgba);
+        Some(SavedSlot {
+            render,
+            width: loaded.width,
+            height: loaded.height,
+        })
+    }
+
     /// Check for completed LC processing; if a result arrived, install it on
     /// the current image. Returns true if a new LC render was applied.
     pub fn check_lc_processing(&mut self) -> bool {
@@ -1033,24 +1179,21 @@ impl ImageViewer {
         let Ok(result) = job.handle.try_recv() else {
             return false;
         };
-        self.lc_job = None;
+        // Take ownership of the job so we can move its `params` into the
+        // cache key. The worker thread has already exited (it's what sent
+        // us the result through the channel).
+        let completed_job = self.lc_job.take().expect("just matched .as_ref()");
         let installed = match result {
             Some((render_image, size)) => {
-                let size_transition = self.current_image.as_mut().map(|loaded| {
-                    let old_eff = effective_image_size(loaded, self.lc_enabled);
+                let old_eff = self.display_dimensions();
+                if let Some(loaded) = self.current_image.as_mut() {
                     loaded.lc_render = Some(render_image);
                     loaded.lc_render_size = Some(size);
-                    // We don't round-trip the params from the worker here;
-                    // the caller that invoked `update_local_contrast` is
-                    // responsible for treating its input params as the
-                    // "current" cache key. Good enough for MVP — see the
-                    // re-entrancy test in the test module.
-                    let new_eff = effective_image_size(loaded, self.lc_enabled);
-                    (old_eff, new_eff)
-                });
-                if let Some((old, new)) = size_transition
+                    loaded.cached_lc_params = Some(completed_job.params);
+                }
+                let new_eff = self.display_dimensions();
+                if let (Some(old), Some(new)) = (old_eff, new_eff)
                     && old != new
-                    && self.lc_enabled
                 {
                     self.rescale_for_size_change(old, new);
                 }
@@ -1598,7 +1741,9 @@ impl ImageViewer {
         show_zoom_indicator: bool,
         cx: &mut Context<V>,
     ) -> AnyElement {
-        let (width, height) = effective_image_size(loaded, self.lc_enabled);
+        let (width, height) = self
+            .display_dimensions()
+            .unwrap_or((loaded.width, loaded.height));
 
         // Get the display path (handles animation frames and filters)
         let path =
@@ -1650,18 +1795,22 @@ impl ImageViewer {
         let zoom_level = self.image_state.zoom;
         let is_fit = self.image_state.is_fit_to_window;
 
-        // Priority: local-contrast output > B/C/G filtered output > file path.
-        // Unique per-result ID ensures GPUI treats each fresh buffer as a new
-        // texture rather than reusing a cached one. The `lc_enabled` flag
-        // lets the `1` / `2` keys toggle LC off for A/B comparison without
-        // discarding the processed buffer.
-        let lc_candidate = if self.lc_enabled {
+        // Priority: saved slot > local-contrast output > B/C/G filtered output > file path.
+        let slot_candidate = self.active_slot.and_then(|s| {
+            self.saved_slots[(s - 3) as usize]
+                .as_ref()
+                .map(|slot| &slot.render)
+        });
+        let lc_candidate = if slot_candidate.is_none() && self.lc_enabled {
             loaded.lc_render.as_ref()
         } else {
             None
         };
         let (image_source, image_id): (gpui::ImageSource, ElementId) =
-            if let Some(render_image) = lc_candidate {
+            if let Some(render_image) = slot_candidate {
+                let id = ElementId::Name(format!("slot-{}", render_image.id.0).into());
+                (gpui::ImageSource::Render(render_image.clone()), id)
+            } else if let Some(render_image) = lc_candidate {
                 let id = ElementId::Name(format!("lc-{}", render_image.id.0).into());
                 (gpui::ImageSource::Render(render_image.clone()), id)
             } else if let Some(ref render_image) = loaded.filtered_render {

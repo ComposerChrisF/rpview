@@ -188,10 +188,17 @@ impl HelpOverlay {
                 "Show/hide filter window".to_string(),
             )
             .into_any_element(),
-            self.render_shortcut("1".to_string(), "Disable filters".to_string())
+            self.render_shortcut("1".to_string(), "Show raw image (A/B)".to_string())
                 .into_any_element(),
-            self.render_shortcut("2".to_string(), "Enable filters".to_string())
+            self.render_shortcut("2".to_string(), "Show processed image (A/B)".to_string())
                 .into_any_element(),
+            self.render_shortcut("3\u{2013}9".to_string(), "Recall saved slot".to_string())
+                .into_any_element(),
+            self.render_shortcut(
+                format_shortcut("3\u{2013}9", false, false),
+                "Save to slot".to_string(),
+            )
+            .into_any_element(),
             self.render_shortcut(
                 format_shortcut("R", true, false),
                 "Reset all filters".to_string(),
