@@ -571,13 +571,13 @@ impl Render for LocalContrastControls {
                             .child("Local Contrast"),
                     )
                     .child(section_separator())
-                    // Presets row: dropdown + save name + Save + Delete
+                    // Presets: dropdown on its own line; name input + Save/Del on the next.
+                    .child(self.preset_dropdown.clone())
                     .child(
                         div()
                             .flex()
                             .gap(px(4.0))
-                            .items_end()
-                            .child(div().flex_grow().child(self.preset_dropdown.clone()))
+                            .items_center()
                             .child(div().flex_grow().child(self.preset_name_input.clone()))
                             .child(
                                 div()
