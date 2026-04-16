@@ -194,11 +194,8 @@ impl HelpOverlay {
                 .into_any_element(),
             self.render_shortcut("3\u{2013}9".to_string(), "Recall saved slot".to_string())
                 .into_any_element(),
-            self.render_shortcut(
-                format_shortcut("3\u{2013}9", false, false),
-                "Save to slot".to_string(),
-            )
-            .into_any_element(),
+            self.render_shortcut("Ctrl+3\u{2013}9".to_string(), "Save to slot".to_string())
+                .into_any_element(),
             self.render_shortcut(
                 format_shortcut("R", true, false),
                 "Reset all filters".to_string(),
