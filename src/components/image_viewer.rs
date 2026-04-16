@@ -25,8 +25,28 @@ type SvgRerasterResult = Result<(PathBuf, Option<SvgRerasterRegion>), String>;
 /// Bundle of state for an in-flight local-contrast computation. `Some` while
 /// a worker thread is running, `None` otherwise — consolidates what used to
 /// be four lockstep fields (`is_processing_lc`, handle, cancel, progress).
+/// Payload the LC worker thread sends back on completion: the rendered
+/// image plus its pixel dimensions (which may differ from the source's when
+/// the user picked a non-1× resize factor).
+pub(crate) type LcResult = Option<(Arc<gpui::RenderImage>, (u32, u32))>;
+
+/// Effective display dimensions for `loaded`. When an LC render is active
+/// (enabled *and* present), its pixel size drives zoom/fit math and the
+/// resolution readout so that "100%" matches the actual pixels on the GPU —
+/// otherwise the source file's dimensions do.
+fn effective_image_size(loaded: &LoadedImage, lc_enabled: bool) -> (u32, u32) {
+    if lc_enabled
+        && loaded.lc_render.is_some()
+        && let Some(size) = loaded.lc_render_size
+    {
+        size
+    } else {
+        (loaded.width, loaded.height)
+    }
+}
+
 pub(crate) struct LcJob {
-    pub handle: std::sync::mpsc::Receiver<Option<Arc<gpui::RenderImage>>>,
+    pub handle: std::sync::mpsc::Receiver<LcResult>,
     pub cancel: Arc<std::sync::atomic::AtomicBool>,
     pub progress_bips: Arc<std::sync::atomic::AtomicU32>,
 }
@@ -94,6 +114,10 @@ pub struct LoadedImage {
     /// In-memory local-contrast output. Takes priority over `filtered_render`
     /// when present. Cleared on navigation or Reset.
     pub lc_render: Option<Arc<gpui::RenderImage>>,
+    /// Pixel dimensions of `lc_render`. Differs from `width`/`height` when
+    /// the LC dialog's resize factor is not 1× — zoom math and the readout
+    /// need the effective size so e.g. 100% zoom matches the 2× output.
+    pub lc_render_size: Option<(u32, u32)>,
     /// LC parameters used to produce `lc_render` (for change detection).
     pub cached_lc_params: Option<crate::utils::local_contrast::Parameters>,
     /// Animation data (if this is an animated image)
@@ -231,17 +255,14 @@ impl ImageViewer {
         if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
             let viewport_width: f32 = viewport.width.into();
             let viewport_height: f32 = viewport.height.into();
+            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
 
-            let fit_zoom = zoom::calculate_fit_to_window(
-                img.width,
-                img.height,
-                viewport_width,
-                viewport_height,
-            );
+            let fit_zoom =
+                zoom::calculate_fit_to_window(eff_w, eff_h, viewport_width, viewport_height);
 
             // Calculate pan to center the image in the viewing area
-            let zoomed_width = img.width as f32 * fit_zoom;
-            let zoomed_height = img.height as f32 * fit_zoom;
+            let zoomed_width = eff_w as f32 * fit_zoom;
+            let zoomed_height = eff_h as f32 * fit_zoom;
             let pan_x = (viewport_width - zoomed_width) / 2.0;
             let pan_y = (viewport_height - zoomed_height) / 2.0;
 
@@ -279,7 +300,8 @@ impl ImageViewer {
 
         // Adjust pan to keep center of image at same screen location (if we have the data)
         if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
-            self.adjust_pan_for_zoom(img.width, img.height, viewport, old_zoom, new_zoom);
+            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
+            self.adjust_pan_for_zoom(eff_w, eff_h, viewport, old_zoom, new_zoom);
         }
 
         self.image_state.zoom = new_zoom;
@@ -293,7 +315,8 @@ impl ImageViewer {
 
         // Adjust pan to keep center of image at same screen location (if we have the data)
         if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
-            self.adjust_pan_for_zoom(img.width, img.height, viewport, old_zoom, new_zoom);
+            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
+            self.adjust_pan_for_zoom(eff_w, eff_h, viewport, old_zoom, new_zoom);
         }
 
         self.image_state.zoom = new_zoom;
@@ -334,7 +357,8 @@ impl ImageViewer {
             if self.image_state.is_fit_to_window {
                 // Currently at fit-to-window → switch to 100% keeping viewport center stable
                 let old_zoom = self.image_state.zoom;
-                self.adjust_pan_for_zoom(img.width, img.height, viewport, old_zoom, 1.0);
+                let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
+                self.adjust_pan_for_zoom(eff_w, eff_h, viewport, old_zoom, 1.0);
                 self.image_state.zoom = 1.0;
                 self.image_state.is_fit_to_window = false;
             } else {
@@ -349,9 +373,10 @@ impl ImageViewer {
         if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
             let viewport_width: f32 = viewport.width.into();
             let viewport_height: f32 = viewport.height.into();
+            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
 
-            let zoomed_width = img.width as f32;
-            let zoomed_height = img.height as f32;
+            let zoomed_width = eff_w as f32;
+            let zoomed_height = eff_h as f32;
             let pan_x = (viewport_width - zoomed_width) / 2.0;
             let pan_y = (viewport_height - zoomed_height) / 2.0;
 
@@ -385,9 +410,10 @@ impl ImageViewer {
         if let (Some(img), Some(viewport)) = (&self.current_image, self.viewport_size) {
             let viewport_width: f32 = viewport.width.into();
             let viewport_height: f32 = viewport.height.into();
+            let (eff_w, eff_h) = effective_image_size(img, self.lc_enabled);
 
-            let zoomed_width = img.width as f32 * self.image_state.zoom;
-            let zoomed_height = img.height as f32 * self.image_state.zoom;
+            let zoomed_width = eff_w as f32 * self.image_state.zoom;
+            let zoomed_height = eff_h as f32 * self.image_state.zoom;
 
             // Define minimum visible portion (e.g., 50 pixels or 10% of image, whichever is smaller)
             let min_visible_x = (zoomed_width * 0.1).min(50.0);
@@ -536,6 +562,7 @@ impl ImageViewer {
                     cached_filter_settings: None,
                     lc_source_fmap: None,
                     lc_render: None,
+                    lc_render_size: None,
                     cached_lc_params: None,
                     animation_data,
                     frame_cache_paths,
@@ -637,6 +664,7 @@ impl ImageViewer {
                             cached_filter_settings: None,
                             lc_source_fmap: None,
                             lc_render: None,
+                            lc_render_size: None,
                             cached_lc_params: None,
                             animation_data: data.animation_data,
                             frame_cache_paths,
@@ -805,6 +833,7 @@ impl ImageViewer {
 
         if params.is_identity() {
             loaded.lc_render = None;
+            loaded.lc_render_size = None;
             loaded.cached_lc_params = None;
             return;
         }
@@ -871,11 +900,13 @@ impl ImageViewer {
                 Some(&*feedback),
             );
             let result = out.map(|out_map| {
+                let size = (out_map.width, out_map.height);
                 let bgra = out_map.to_bgra_image();
                 let frame = image::Frame::new(bgra);
-                Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
+                let render = Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
                     frame, 1,
-                )))
+                )));
+                (render, size)
             });
             progress_for_thread.store(10_000, Ordering::Relaxed);
             debug_eprintln!("[LC_THREAD] done, produced={}", result.is_some());
@@ -906,7 +937,14 @@ impl ImageViewer {
     /// unprocessed (or filter-processed) image. Does not destroy
     /// `LoadedImage.lc_render`, so re-enabling is free.
     pub fn set_lc_enabled(&mut self, enabled: bool) {
+        let changed = self.lc_enabled != enabled;
         self.lc_enabled = enabled;
+        // If the effective image size just flipped (LC output differs from
+        // the source's dimensions), refit so the on-screen image still fills
+        // the viewport instead of overflowing or shrinking.
+        if changed && self.image_state.is_fit_to_window {
+            self.fit_to_window();
+        }
     }
     #[allow(dead_code)]
     pub fn is_lc_enabled(&self) -> bool {
@@ -924,14 +962,25 @@ impl ImageViewer {
         };
         self.lc_job = None;
         match result {
-            Some(render_image) => {
-                if let Some(loaded) = self.current_image.as_mut() {
+            Some((render_image, size)) => {
+                let size_changed = if let Some(loaded) = self.current_image.as_mut() {
+                    let prev = loaded.lc_render_size;
                     loaded.lc_render = Some(render_image);
+                    loaded.lc_render_size = Some(size);
                     // We don't round-trip the params from the worker here;
                     // the caller that invoked `update_local_contrast` is
                     // responsible for treating its input params as the
                     // "current" cache key. Good enough for MVP — see the
                     // re-entrancy test in the test module.
+                    prev != Some(size)
+                } else {
+                    false
+                };
+                // If the LC output's pixel dimensions just changed (e.g. the
+                // user nudged the resize factor from 1× to 2×), refit so the
+                // on-screen image stays inside the viewport at the new size.
+                if size_changed && self.image_state.is_fit_to_window && self.lc_enabled {
+                    self.fit_to_window();
                 }
                 true
             }
@@ -1470,8 +1519,7 @@ impl ImageViewer {
         show_zoom_indicator: bool,
         cx: &mut Context<V>,
     ) -> AnyElement {
-        let width = loaded.width;
-        let height = loaded.height;
+        let (width, height) = effective_image_size(loaded, self.lc_enabled);
 
         // Get the display path (handles animation frames and filters)
         let path =

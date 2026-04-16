@@ -183,7 +183,7 @@ impl Render for DebugOverlay {
                     .child(self.render_info_line_wrapping("Image Filename", filename_str))
                     .child(self.render_info_line_wrapping("Image Folder", folder_str))
                     .child(self.render_info_line("Image Index", index_str))
-                    .child(self.render_info_line("Image Size", image_dims_str))
+                    .child(self.render_info_line("File Size", image_dims_str))
                     .child(
                         self.render_info_line(
                             "Sort Mode",
