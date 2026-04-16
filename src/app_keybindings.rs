@@ -78,6 +78,20 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("cmd-f", ToggleFilters, None),
         KeyBinding::new("1", DisableFilters, Some("ImageViewer")),
         KeyBinding::new("2", EnableFilters, Some("ImageViewer")),
+        KeyBinding::new("3", RecallSlot3, Some("ImageViewer")),
+        KeyBinding::new("4", RecallSlot4, Some("ImageViewer")),
+        KeyBinding::new("5", RecallSlot5, Some("ImageViewer")),
+        KeyBinding::new("6", RecallSlot6, Some("ImageViewer")),
+        KeyBinding::new("7", RecallSlot7, Some("ImageViewer")),
+        KeyBinding::new("8", RecallSlot8, Some("ImageViewer")),
+        KeyBinding::new("9", RecallSlot9, Some("ImageViewer")),
+        KeyBinding::new("cmd-3", StoreSlot3, Some("ImageViewer")),
+        KeyBinding::new("cmd-4", StoreSlot4, Some("ImageViewer")),
+        KeyBinding::new("cmd-5", StoreSlot5, Some("ImageViewer")),
+        KeyBinding::new("cmd-6", StoreSlot6, Some("ImageViewer")),
+        KeyBinding::new("cmd-7", StoreSlot7, Some("ImageViewer")),
+        KeyBinding::new("cmd-8", StoreSlot8, Some("ImageViewer")),
+        KeyBinding::new("cmd-9", StoreSlot9, Some("ImageViewer")),
         KeyBinding::new("shift-cmd-r", ResetFilters, None),
         // File operations
         KeyBinding::new("cmd-o", OpenFile, None),
@@ -147,6 +161,20 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("ctrl-backspace", RequestDelete, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("shift-ctrl-backspace", RequestPermanentDelete, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-3", StoreSlot3, Some("ImageViewer")),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-4", StoreSlot4, Some("ImageViewer")),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-5", StoreSlot5, Some("ImageViewer")),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-6", StoreSlot6, Some("ImageViewer")),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-7", StoreSlot7, Some("ImageViewer")),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-8", StoreSlot8, Some("ImageViewer")),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-9", StoreSlot9, Some("ImageViewer")),
     ]);
 }
 

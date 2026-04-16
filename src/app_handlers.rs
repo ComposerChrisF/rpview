@@ -416,20 +416,40 @@ impl App {
     }
 
     pub(crate) fn handle_disable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.clear_active_slot();
         self.viewer.image_state.filters_enabled = false;
         self.viewer.update_filtered_cache();
-        // `1` also hides Local Contrast for A/B comparison. We leave the
-        // processed buffer intact so re-enabling via `2` is instant.
         self.viewer.set_lc_enabled(false);
         self.save_current_image_state();
         cx.notify();
     }
 
     pub(crate) fn handle_enable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.viewer.clear_active_slot();
         self.viewer.image_state.filters_enabled = true;
         self.viewer.update_filtered_cache();
         self.viewer.set_lc_enabled(true);
         self.save_current_image_state();
+        cx.notify();
+    }
+
+    pub(crate) fn handle_store_slot(
+        &mut self,
+        slot: u8,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.viewer.store_slot(slot);
+        cx.notify();
+    }
+
+    pub(crate) fn handle_recall_slot(
+        &mut self,
+        slot: u8,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.viewer.recall_slot(slot);
         cx.notify();
     }
 

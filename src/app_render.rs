@@ -780,6 +780,48 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &EnableFilters, window, cx| {
                 this.handle_enable_filters(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &RecallSlot3, window, cx| {
+                this.handle_recall_slot(3, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RecallSlot4, window, cx| {
+                this.handle_recall_slot(4, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RecallSlot5, window, cx| {
+                this.handle_recall_slot(5, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RecallSlot6, window, cx| {
+                this.handle_recall_slot(6, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RecallSlot7, window, cx| {
+                this.handle_recall_slot(7, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RecallSlot8, window, cx| {
+                this.handle_recall_slot(8, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RecallSlot9, window, cx| {
+                this.handle_recall_slot(9, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StoreSlot3, window, cx| {
+                this.handle_store_slot(3, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StoreSlot4, window, cx| {
+                this.handle_store_slot(4, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StoreSlot5, window, cx| {
+                this.handle_store_slot(5, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StoreSlot6, window, cx| {
+                this.handle_store_slot(6, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StoreSlot7, window, cx| {
+                this.handle_store_slot(7, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StoreSlot8, window, cx| {
+                this.handle_store_slot(8, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StoreSlot9, window, cx| {
+                this.handle_store_slot(9, window, cx);
+            }))
             .on_action(cx.listener(|this, _: &ResetFilters, window, cx| {
                 this.handle_reset_filters(window, cx);
             }))
