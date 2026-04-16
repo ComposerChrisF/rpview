@@ -105,7 +105,7 @@ struct ToastState {
     created_at: Instant,
 }
 
-struct App {
+pub(crate) struct App {
     app_state: AppState,
     viewer: ImageViewer,
     focus_handle: FocusHandle,
