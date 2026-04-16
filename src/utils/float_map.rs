@@ -91,6 +91,40 @@ impl FloatMap {
         out
     }
 
+    /// Return a Lanczos3-resampled copy at `new_width` × `new_height`. Goes
+    /// through `image::Rgba32FImage` so no precision is lost in the
+    /// round-trip.
+    pub fn resize_lanczos3(&self, new_width: u32, new_height: u32) -> FloatMap {
+        use image::{Rgba, Rgba32FImage, imageops::FilterType, imageops::resize};
+        let mut src = Rgba32FImage::new(self.width, self.height);
+        for (i, px) in src.pixels_mut().enumerate() {
+            let a = self.a.as_ref().map(|v| v[i]).unwrap_or(1.0);
+            *px = Rgba([self.r[i], self.g[i], self.b[i], a]);
+        }
+        let resized = resize(&src, new_width, new_height, FilterType::Lanczos3);
+        let new_n = (new_width as usize) * (new_height as usize);
+        let mut r = Vec::with_capacity(new_n);
+        let mut g = Vec::with_capacity(new_n);
+        let mut b = Vec::with_capacity(new_n);
+        let mut alpha: Option<Vec<f32>> = self.a.as_ref().map(|_| Vec::with_capacity(new_n));
+        for px in resized.pixels() {
+            r.push(px[0]);
+            g.push(px[1]);
+            b.push(px[2]);
+            if let Some(ref mut a_vec) = alpha {
+                a_vec.push(px[3]);
+            }
+        }
+        FloatMap {
+            width: new_width,
+            height: new_height,
+            r,
+            g,
+            b,
+            a: alpha,
+        }
+    }
+
     /// Pack the planes into GPUI's expected pixel layout (BGRA) for use with
     /// `gpui::RenderImage`. The returned buffer is typed as `RgbaImage`
     /// because that's what `image::Frame::new` consumes, but the byte order

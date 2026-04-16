@@ -319,7 +319,7 @@ impl App {
             .local_contrast_window_bounds
             .map(|b| b.to_bounds())
             .unwrap_or_else(|| {
-                gpui::Bounds::centered(None, gpui::size(gpui::px(380.0), gpui::px(440.0)), cx)
+                gpui::Bounds::centered(None, gpui::size(gpui::px(320.0), gpui::px(760.0)), cx)
             });
         let controls = self.local_contrast_controls.clone();
         let weak_app = cx.weak_entity();
@@ -1344,18 +1344,31 @@ impl App {
             self.viewer.update_filtered_cache();
         }
 
-        // Re-apply local contrast to the new image if the user has non-zero
-        // LC sliders. Session-global LC parameters: they follow the user
-        // across images the same way filters do.
-        let lc_params = self.local_contrast_controls.read(cx).get_parameters(cx);
-        if lc_params.contrast.abs() >= 0.001
-            || lc_params.lighten_shadows.abs() >= 0.001
-            || lc_params.darken_highlights.abs() >= 0.001
-        {
-            self.viewer.update_local_contrast(lc_params);
-            self.local_contrast_controls
-                .update(cx, |c, cx| c.set_status("Processing…", cx));
+        // Legacy: we used to re-apply LC here, but the caller path
+        // (app_render.rs) skips this function for never-seen images, which
+        // made LC silently stop working after navigating away. The re-apply
+        // now lives in `reapply_local_contrast_if_active`, called
+        // unconditionally from the render loop whenever an async load
+        // finishes.
+    }
+
+    /// Re-trigger LC processing on the current image when the user has any
+    /// non-neutral LC knob. Called after every successful image load so the
+    /// sliders "follow" the user across images like the filter sliders do.
+    pub(crate) fn reapply_local_contrast_if_active(&mut self, cx: &mut Context<Self>) {
+        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
+        let has_effect = params.contrast.abs() >= 0.001
+            || params.lighten_shadows.abs() >= 0.001
+            || params.darken_highlights.abs() >= 0.001
+            || params.use_document_contrast;
+        if !has_effect {
+            return;
         }
+        self.viewer.update_local_contrast(params);
+        self.local_contrast_controls.update(cx, |c, cx| {
+            c.set_status("Processing…", cx);
+            c.set_progress(Some(0.0), cx);
+        });
     }
 
     pub(crate) fn update_viewer(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
