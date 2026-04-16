@@ -5,9 +5,12 @@
 //! contrast with sign, document-mode knobs + sub-toggles, shadow/highlight
 //! amounts with sign, and progress/cancel surface.
 
+use crate::utils::lc_presets;
 use crate::utils::local_contrast::Parameters;
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
-use ccf_gpui_widgets::prelude::{Slider, SliderEvent};
+use ccf_gpui_widgets::prelude::{
+    Dropdown, DropdownEvent, Slider, SliderEvent, TextInput, TextInputEvent,
+};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -29,6 +32,9 @@ pub struct LocalContrastControls {
 
     /// Currently-selected value from `RESIZE_CHOICES`.
     pub resize_factor: f32,
+    /// When false, slider changes don't trigger processing and the viewer
+    /// shows the unprocessed image. Flipping back to true re-triggers.
+    pub preview_enabled: bool,
 
     // --- Window / block sizes ------------------------------------------------
     pub cxy_window_auto: bool,
@@ -55,6 +61,12 @@ pub struct LocalContrastControls {
     // --- Highlights / shadows ------------------------------------------------
     pub darken_highlights_slider: Entity<Slider>,
     pub lighten_shadows_slider: Entity<Slider>,
+
+    // --- Presets ---------------------------------------------------------------
+    pub preset_dropdown: Entity<Dropdown>,
+    pub preset_name_input: Entity<TextInput>,
+    /// The currently-loaded preset name (None = custom / unsaved).
+    pub current_preset: Option<String>,
 }
 
 impl EventEmitter<LocalContrastControlsEvent> for LocalContrastControls {}
@@ -98,11 +110,28 @@ impl LocalContrastControls {
         let darken_highlights_slider = make_slider(cx, 0.0, -1.0, 1.0, 0.01, 2);
         let lighten_shadows_slider = make_slider(cx, 0.0, -1.0, 1.0, 0.01, 2);
 
+        let preset_dropdown = Self::build_preset_dropdown(None, cx);
+        cx.subscribe(&preset_dropdown, Self::on_preset_dropdown_change)
+            .detach();
+
+        let preset_name_input = cx.new(|cx| TextInput::new(cx).placeholder("Preset name…"));
+        cx.subscribe(
+            &preset_name_input,
+            |this, input, event: &TextInputEvent, cx| {
+                if let TextInputEvent::Enter = event {
+                    let name = input.read(cx).content().to_string();
+                    this.save_current_as_preset(&name, cx);
+                }
+            },
+        )
+        .detach();
+
         Self {
             font_size_scale,
             status: String::new(),
             progress: None,
             resize_factor: 1.0,
+            preview_enabled: true,
 
             cxy_window_auto: true,
             cxy_window_slider,
@@ -124,6 +153,10 @@ impl LocalContrastControls {
 
             darken_highlights_slider,
             lighten_shadows_slider,
+
+            preset_dropdown,
+            preset_name_input,
+            current_preset: None,
         }
     }
 
@@ -163,6 +196,7 @@ impl LocalContrastControls {
     pub fn reset_sliders(&mut self, cx: &mut Context<Self>) {
         let defaults = Parameters::default();
         self.resize_factor = 1.0;
+        self.preview_enabled = true;
         self.cxy_window_auto = true;
         self.cxy_block_auto = true;
         self.cxy_window_slider
@@ -202,6 +236,106 @@ impl LocalContrastControls {
 
     pub fn set_progress(&mut self, progress: Option<f32>, cx: &mut Context<Self>) {
         self.progress = progress;
+        cx.notify();
+    }
+
+    // --- Preset support --------------------------------------------------------
+
+    fn build_preset_dropdown(selected: Option<&str>, cx: &mut Context<Self>) -> Entity<Dropdown> {
+        let names = lc_presets::list_preset_names();
+        let mut choices = vec!["(Custom)".to_string()];
+        choices.extend(names);
+        cx.new(|cx| {
+            let mut d = Dropdown::new(cx).choices(choices);
+            if let Some(name) = selected {
+                d = d.with_selected_value(name);
+            }
+            d
+        })
+    }
+
+    fn on_preset_dropdown_change(
+        &mut self,
+        _dd: Entity<Dropdown>,
+        event: &DropdownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if let DropdownEvent::Change(name) = event {
+            if name == "(Custom)" {
+                self.current_preset = None;
+                return;
+            }
+            if let Some(params) = lc_presets::load_preset(name) {
+                self.apply_parameters(&params, cx);
+                self.current_preset = Some(name.clone());
+                cx.emit(LocalContrastControlsEvent::ParametersChanged);
+            }
+        }
+    }
+
+    fn apply_parameters(&mut self, p: &Parameters, cx: &mut Context<Self>) {
+        self.resize_factor = p.resize_factor;
+        self.cxy_window_auto = p.cxy_window == 0;
+        if !self.cxy_window_auto {
+            self.cxy_window_slider
+                .update(cx, |s, cx| s.set_value(p.cxy_window as f64, cx));
+        }
+        self.cxy_block_auto = p.cxy_block == 0;
+        if !self.cxy_block_auto {
+            self.cxy_block_slider
+                .update(cx, |s, cx| s.set_value(p.cxy_block as f64, cx));
+        }
+        self.alpha_black_slider
+            .update(cx, |s, cx| s.set_value(p.alpha_black as f64, cx));
+        self.alpha_white_slider
+            .update(cx, |s, cx| s.set_value(p.alpha_white as f64, cx));
+        self.use_median_for_contrast = p.use_median_for_contrast;
+        self.contrast_slider
+            .update(cx, |s, cx| s.set_value(p.contrast as f64, cx));
+        self.use_document_contrast = p.use_document_contrast;
+        self.mix_document_contrast_slider
+            .update(cx, |s, cx| s.set_value(p.mix_document_contrast as f64, cx));
+        self.apply_contrast_to_bw = p.apply_contrast_to_bw;
+        self.apply_contrast_to_xition = p.apply_contrast_to_xition;
+        self.tilt_black_slider.update(cx, |s, cx| {
+            s.set_value(p.tilt_black_doc_contrast as f64, cx)
+        });
+        self.tilt_white_slider.update(cx, |s, cx| {
+            s.set_value(p.tilt_white_doc_contrast as f64, cx)
+        });
+        self.darken_highlights_slider
+            .update(cx, |s, cx| s.set_value(p.darken_highlights as f64, cx));
+        self.lighten_shadows_slider
+            .update(cx, |s, cx| s.set_value(p.lighten_shadows as f64, cx));
+    }
+
+    fn save_current_as_preset(&mut self, name: &str, cx: &mut Context<Self>) {
+        let name = name.trim();
+        if name.is_empty() || name == "(Custom)" {
+            return;
+        }
+        let params = self.get_parameters(cx);
+        if let Err(e) = lc_presets::save_preset(name, &params) {
+            eprintln!("Failed to save preset: {}", e);
+            return;
+        }
+        self.current_preset = Some(name.to_string());
+        self.rebuild_preset_dropdown(cx);
+    }
+
+    fn delete_current_preset(&mut self, cx: &mut Context<Self>) {
+        let Some(name) = self.current_preset.take() else {
+            return;
+        };
+        let _ = lc_presets::delete_preset(&name);
+        self.rebuild_preset_dropdown(cx);
+    }
+
+    fn rebuild_preset_dropdown(&mut self, cx: &mut Context<Self>) {
+        let selected = self.current_preset.as_deref();
+        self.preset_dropdown = Self::build_preset_dropdown(selected, cx);
+        cx.subscribe(&self.preset_dropdown, Self::on_preset_dropdown_change)
+            .detach();
         cx.notify();
     }
 }
@@ -437,6 +571,68 @@ impl Render for LocalContrastControls {
                             .child("Local Contrast"),
                     )
                     .child(section_separator())
+                    // Presets row: dropdown + save name + Save + Delete
+                    .child(
+                        div()
+                            .flex()
+                            .gap(px(4.0))
+                            .items_end()
+                            .child(div().flex_grow().child(self.preset_dropdown.clone()))
+                            .child(div().flex_grow().child(self.preset_name_input.clone()))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .px(px(8.0))
+                                    .py(px(4.0))
+                                    .rounded(px(3.0))
+                                    .border_1()
+                                    .border_color(rgba(0x55_55_55_FF))
+                                    .cursor_pointer()
+                                    .text_size(scaled_text_size(10.0, font))
+                                    .text_color(Colors::text())
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _evt, _window, cx| {
+                                            let name = this
+                                                .preset_name_input
+                                                .read(cx)
+                                                .content()
+                                                .to_string();
+                                            this.save_current_as_preset(&name, cx);
+                                        }),
+                                    )
+                                    .child("Save"),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .px(px(8.0))
+                                    .py(px(4.0))
+                                    .rounded(px(3.0))
+                                    .border_1()
+                                    .border_color(rgba(0x55_55_55_FF))
+                                    .cursor_pointer()
+                                    .text_size(scaled_text_size(10.0, font))
+                                    .text_color(Colors::text())
+                                    .when(self.current_preset.is_some(), |el| {
+                                        el.on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _evt, _window, cx| {
+                                                this.delete_current_preset(cx);
+                                            }),
+                                        )
+                                    })
+                                    .when(self.current_preset.is_none(), |el| {
+                                        el.text_color(rgb(0x666666))
+                                    })
+                                    .child("Del"),
+                            ),
+                    )
+                    .child(section_separator())
                     // Resize toggle (5-way)
                     .child(
                         div()
@@ -445,6 +641,13 @@ impl Render for LocalContrastControls {
                             .child("Resize input"),
                     )
                     .child(resize_toggle_row(self.resize_factor, font, cx))
+                    .child(checkbox_row(
+                        "Preview".to_string(),
+                        self.preview_enabled,
+                        font,
+                        cx,
+                        |this| this.preview_enabled = !this.preview_enabled,
+                    ))
                     .child(section_separator())
                     // Window size
                     .child(checkbox_row(

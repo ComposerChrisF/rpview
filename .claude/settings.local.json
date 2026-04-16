@@ -109,7 +109,8 @@
       "WebFetch(domain:gpui-ce.github.io)",
       "Bash(gh release *)",
       "Bash(verset --bump-minor)",
-      "Bash(verset --bump-patch)"
+      "Bash(verset --bump-patch)",
+      "Read(//Users/chris/Chris/App/Rust/ccf-gpui-widgets/src/**)"
     ]
   }
 }

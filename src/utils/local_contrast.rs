@@ -43,7 +43,7 @@ pub type FeedbackFn = dyn Fn(f32, &str) -> bool + Send + Sync;
 
 /// What image to produce — `Dsp` is the normal processed output; the other
 /// variants expose intermediate visualizations useful for tuning defaults.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ReturnImage {
     Dsp,
     MedianGrayPointColored,
@@ -57,7 +57,7 @@ pub enum ReturnImage {
 /// Full parameter set for `locally_normalize_luminance`. Defaults match the
 /// C# `AdaptiveContrastDsp.Parameters` constructor defaults. See
 /// `docs/local-contrast-spec.md` §3.1 for semantics.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Parameters {
     /// Radius (in pixels) of the local window. `0` = auto (`width / 32`).
     pub cxy_window: u32,

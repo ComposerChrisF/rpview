@@ -349,6 +349,25 @@ fn main() {
                                     cx.notify();
                                 }
                                 LocalContrastControlsEvent::ParametersChanged => {
+                                    let preview =
+                                        this.local_contrast_controls.read(cx).preview_enabled;
+                                    if !preview {
+                                        // Preview off: cancel any in-flight compute and
+                                        // suppress the LC render so the viewer shows the
+                                        // unprocessed image. Don't clear cached_lc_params
+                                        // — we want re-enabling Preview to detect that
+                                        // params changed and trigger processing.
+                                        this.viewer.cancel_lc_processing();
+                                        if let Some(loaded) = this.viewer.current_image.as_mut() {
+                                            loaded.lc_render = None;
+                                        }
+                                        this.local_contrast_controls.update(cx, |c, cx| {
+                                            c.set_status("Preview off", cx);
+                                            c.set_progress(None, cx);
+                                        });
+                                        cx.notify();
+                                        return;
+                                    }
                                     let params =
                                         this.local_contrast_controls.read(cx).get_parameters(cx);
                                     this.viewer.update_local_contrast(params);

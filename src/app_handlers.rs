@@ -1360,6 +1360,8 @@ impl App {
         let has_effect = params.contrast.abs() >= 0.001
             || params.lighten_shadows.abs() >= 0.001
             || params.darken_highlights.abs() >= 0.001
+            || params.alpha_black.abs() >= 0.001
+            || params.alpha_white.abs() >= 0.001
             || params.use_document_contrast;
         if !has_effect {
             return;
