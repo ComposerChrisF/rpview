@@ -349,6 +349,33 @@ impl ImageViewer {
         self.image_state.pan = self.constrain_pan(new_pan_x, new_pan_y);
     }
 
+    /// React to the effective image-size changing beneath us — e.g. the LC
+    /// dialog's resize factor switches the displayed pixels from
+    /// 1000×1000 → 4000×4000, or the `1`/`2` A/B toggle flips between the
+    /// original source and a scaled LC render. Goal: keep the apparent
+    /// on-screen size and pan position of the image unchanged so the user
+    /// can cleanly compare at the same zoom/pan.
+    ///
+    /// For fit-to-window mode: recomputing the fit naturally preserves both
+    /// the apparent size (still fills the viewport) and the pan (still
+    /// centered), so we just re-call `fit_to_window`.
+    ///
+    /// Otherwise: scale `zoom` inversely with the size ratio and leave `pan`
+    /// alone. `apparent_width = width * zoom` stays constant, and because
+    /// `pan` is the screen position of the image's top-left corner, it
+    /// doesn't shift when only the pixel grid underneath resamples.
+    fn rescale_for_size_change(&mut self, old_eff: (u32, u32), new_eff: (u32, u32)) {
+        if old_eff == new_eff || new_eff.0 == 0 || old_eff.0 == 0 {
+            return;
+        }
+        if self.image_state.is_fit_to_window {
+            self.fit_to_window();
+        } else {
+            let scale = old_eff.0 as f32 / new_eff.0 as f32;
+            self.image_state.zoom *= scale;
+        }
+    }
+
     /// Toggle between fit-to-window (centered) and 100% zoom.
     /// When going to fit-to-window, the image is fully centered.
     /// When going to 100%, the viewport-center anchor point is preserved.
@@ -937,13 +964,22 @@ impl ImageViewer {
     /// unprocessed (or filter-processed) image. Does not destroy
     /// `LoadedImage.lc_render`, so re-enabling is free.
     pub fn set_lc_enabled(&mut self, enabled: bool) {
-        let changed = self.lc_enabled != enabled;
+        if self.lc_enabled == enabled {
+            return;
+        }
+        let old_eff = self
+            .current_image
+            .as_ref()
+            .map(|img| effective_image_size(img, self.lc_enabled));
         self.lc_enabled = enabled;
-        // If the effective image size just flipped (LC output differs from
-        // the source's dimensions), refit so the on-screen image still fills
-        // the viewport instead of overflowing or shrinking.
-        if changed && self.image_state.is_fit_to_window {
-            self.fit_to_window();
+        let new_eff = self
+            .current_image
+            .as_ref()
+            .map(|img| effective_image_size(img, self.lc_enabled));
+        if let (Some(old), Some(new)) = (old_eff, new_eff)
+            && old != new
+        {
+            self.rescale_for_size_change(old, new);
         }
     }
     #[allow(dead_code)]
@@ -963,8 +999,8 @@ impl ImageViewer {
         self.lc_job = None;
         match result {
             Some((render_image, size)) => {
-                let size_changed = if let Some(loaded) = self.current_image.as_mut() {
-                    let prev = loaded.lc_render_size;
+                let size_transition = self.current_image.as_mut().map(|loaded| {
+                    let old_eff = effective_image_size(loaded, self.lc_enabled);
                     loaded.lc_render = Some(render_image);
                     loaded.lc_render_size = Some(size);
                     // We don't round-trip the params from the worker here;
@@ -972,15 +1008,14 @@ impl ImageViewer {
                     // responsible for treating its input params as the
                     // "current" cache key. Good enough for MVP — see the
                     // re-entrancy test in the test module.
-                    prev != Some(size)
-                } else {
-                    false
-                };
-                // If the LC output's pixel dimensions just changed (e.g. the
-                // user nudged the resize factor from 1× to 2×), refit so the
-                // on-screen image stays inside the viewport at the new size.
-                if size_changed && self.image_state.is_fit_to_window && self.lc_enabled {
-                    self.fit_to_window();
+                    let new_eff = effective_image_size(loaded, self.lc_enabled);
+                    (old_eff, new_eff)
+                });
+                if let Some((old, new)) = size_transition
+                    && old != new
+                    && self.lc_enabled
+                {
+                    self.rescale_for_size_change(old, new);
                 }
                 true
             }
