@@ -332,11 +332,20 @@ fn main() {
                                     this.local_contrast_controls.update(cx, |c, cx| {
                                         c.reset_sliders(cx);
                                         c.set_status("", cx);
+                                        c.set_progress(None, cx);
                                     });
                                     if let Some(loaded) = this.viewer.current_image.as_mut() {
                                         loaded.lc_render = None;
                                         loaded.cached_lc_params = None;
                                     }
+                                    cx.notify();
+                                }
+                                LocalContrastControlsEvent::CancelRequested => {
+                                    this.viewer.cancel_lc_processing();
+                                    this.local_contrast_controls.update(cx, |c, cx| {
+                                        c.set_status("Cancelled", cx);
+                                        c.set_progress(None, cx);
+                                    });
                                     cx.notify();
                                 }
                                 LocalContrastControlsEvent::ParametersChanged => {
@@ -345,6 +354,7 @@ fn main() {
                                     this.viewer.update_local_contrast(params);
                                     this.local_contrast_controls.update(cx, |c, cx| {
                                         c.set_status("Processing…", cx);
+                                        c.set_progress(Some(0.0), cx);
                                     });
                                     cx.notify();
                                 }

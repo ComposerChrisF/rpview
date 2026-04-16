@@ -16,6 +16,11 @@ impl Render for App {
         if self.viewer.check_async_load() {
             // Image loaded successfully or failed - load state and setup animation
             if let Some(path) = self.app_state.current_image().cloned() {
+                // Re-apply Local Contrast on every new image (session-global
+                // sliders). Done before filter-state restore so the async LC
+                // worker kicks off as early as possible.
+                self.reapply_local_contrast_if_active(cx);
+
                 // Load cached state if available and enabled in settings
                 if self.settings.viewer_behavior.remember_per_image_state
                     && self.app_state.image_states.contains_key(&path)
@@ -72,6 +77,7 @@ impl Render for App {
         if self.viewer.check_lc_processing() {
             self.local_contrast_controls.update(cx, |c, cx| {
                 c.set_status("Ready", cx);
+                c.set_progress(None, cx);
             });
             cx.notify();
         }
@@ -82,6 +88,7 @@ impl Render for App {
             if let Some(pct) = self.viewer.lc_progress_percent() {
                 self.local_contrast_controls.update(cx, |c, cx| {
                     c.set_status(format!("Processing… {:.0}%", pct), cx);
+                    c.set_progress(Some(pct / 100.0), cx);
                 });
             }
             window.request_animation_frame();

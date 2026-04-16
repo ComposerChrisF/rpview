@@ -872,6 +872,16 @@ impl ImageViewer {
         Some((bips as f32) / 100.0)
     }
 
+    /// Cancel any in-flight LC computation. The worker observes the cancel
+    /// flag at its next checkpoint and drops its result silently.
+    pub fn cancel_lc_processing(&mut self) {
+        if let Some(cancel) = self.lc_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.lc_processing_handle = None;
+        self.is_processing_lc = false;
+    }
+
     /// A/B toggle: hide the LC render so the main window shows the
     /// unprocessed (or filter-processed) image. Does not destroy
     /// `LoadedImage.lc_render`, so re-enabling is free.

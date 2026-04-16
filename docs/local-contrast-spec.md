@@ -377,14 +377,13 @@ C# lines 494-500. The heuristic exists because HSL hue is unstable at L→0 and 
 
 Turns multi-second-per-image into tens of milliseconds — approaches interactive for single-slider edits on small previews.
 
-### 6.8 Feature flags for A/B testing
+### 6.8 Status of the deviations
 
-- `LC_KERNEL_GAUSSIAN` (default on) — separable Gaussian vs disc fallback.
-- `LC_MEAN_VIA_INTEGRAL_IMAGE` (default on when median mode off).
-- `LC_DOWNSAMPLE_GRAYPOINT` (default on, factor=4).
-- `LC_USE_FRACSUM` (default off) — §6.4 behavioral toggle.
-- `LC_HISTOGRAM_BINS` (default 64).
-- `LC_SKIP_DESATURATION` (default on under OkLCh).
+All of §6 was initially scoped as opt-in behind a `use_fast_path` flag. An early iteration shipped only the mean-via-integral-image deviation (§6.2) plus a crude `fracSum` proxy for the alpha blend. In practice the proxy diverged enough from real histogram equalization (a piecewise-linear ramp centered on the local mean, vs a true local CDF) that the fast path looked like a different algorithm, and the `alpha_black` / `alpha_white` sliders didn't behave consistently between paths. The flag and all its supporting code were removed.
+
+Current baseline: faithful histogram-based algorithm with OkLCh, parallelized across histogram-block rows via rayon. Observed perf is acceptable (hundreds of ms per compute on multi-megapixel images at default window size). §6 remains as a future roadmap — any future optimization should preserve the histogram-derived `fracSum` rather than approximate it.
+
+One idea worth pursuing later: a **local-variance–shaped proxy** for `fracSum` using a second integral image over `L²`. A sigmoid anchored at the local mean with width proportional to local σ would approximate the real CDF's behavior in both narrow (σ→0, stay put) and wide (σ large, stretch toward endpoints) distributions. Unlike the piecewise-linear proxy, it would respect the uniform-region invariant (`fracSum ≈ l_cur`). Cost: O(W·H) for the second prefix sum + a few float ops per pixel.
 
 ---
 

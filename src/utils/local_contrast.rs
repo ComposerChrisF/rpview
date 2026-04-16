@@ -77,13 +77,11 @@ pub struct Parameters {
     pub lighten_shadows: f32,
     pub darken_highlights: f32,
     pub return_image: ReturnImage,
-    /// When `true` (default), skip histograms and use an integral-image box
-    /// mean for the local gray-point. Orders of magnitude faster than the
-    /// faithful path, with visually similar output on photos. The `alpha_*`
-    /// and `use_median_for_contrast` fields are ignored on this path (no
-    /// histograms = no fracSum = no median). Set to `false` to use the
-    /// faithful C# algorithm for A/B comparison.
-    pub use_fast_path: bool,
+    /// Pre-process resize factor (Lanczos3). `1.0` = no resize. Values like
+    /// `0.5` halve each dimension before running LC and upscale the result
+    /// back to the original size on the way out — useful for previewing
+    /// expensive parameter combinations at a fraction of the cost.
+    pub resize_factor: f32,
 }
 
 impl Default for Parameters {
@@ -104,7 +102,7 @@ impl Default for Parameters {
             lighten_shadows: 0.50,
             darken_highlights: 0.0,
             return_image: ReturnImage::Dsp,
-            use_fast_path: true,
+            resize_factor: 1.0,
         }
     }
 }
@@ -526,122 +524,6 @@ fn apply_tone_curve(l_cur: f32, bin_ref: f32, params: &Parameters) -> f32 {
     l_contrast
 }
 
-/// Build a per-pixel map of local mean luminance via a summed-area table.
-///
-/// This is the fast-path replacement for the weighted disc-kernel mean the
-/// faithful algorithm computes at each histogram site. Each output pixel is
-/// the plain (unweighted) box mean of a `(2r+1)²` window around it, clipped
-/// to image bounds. Cost: O(W·H) for the prefix sum + O(1) per output pixel,
-/// regardless of `r`.
-///
-/// Returns a row-major `Vec<f32>` of length `width * height`, in `[0, 1]`.
-fn compute_box_mean_map_integral(l_src: &[f32], width: u32, height: u32, radius: u32) -> Vec<f32> {
-    let w = width as usize;
-    let h = height as usize;
-    let iw = w + 1;
-    let ih = h + 1;
-    // Summed-area table: ii[(y+1)*iw + (x+1)] = sum of l_src[0..=y][0..=x].
-    // f32 is sufficient precision for image luminance sums up to ~16M pixels.
-    let mut ii = vec![0.0f32; iw * ih];
-    for y in 0..h {
-        let mut row_sum = 0.0f32;
-        for x in 0..w {
-            row_sum += l_src[y * w + x];
-            ii[(y + 1) * iw + (x + 1)] = ii[y * iw + (x + 1)] + row_sum;
-        }
-    }
-
-    let r = radius as i64;
-    let mut out = vec![0.0f32; w * h];
-    out.par_chunks_mut(w).enumerate().for_each(|(y, row)| {
-        let y = y as i64;
-        let y0 = (y - r).max(0) as usize;
-        let y1 = ((y + r + 1) as usize).min(h);
-        let ii_top = &ii[y0 * iw..];
-        let ii_bot = &ii[y1 * iw..];
-        for (x_usize, cell) in row.iter_mut().enumerate() {
-            let x = x_usize as i64;
-            let x0 = (x - r).max(0) as usize;
-            let x1 = ((x + r + 1) as usize).min(w);
-            let sum = ii_bot[x1] - ii_top[x1] - ii_bot[x0] + ii_top[x0];
-            let count = ((x1 - x0) * (y1 - y0)) as f32;
-            *cell = sum / count;
-        }
-    });
-    out
-}
-
-/// Fast-path body of `locally_normalize_luminance`. Uses the integral-image
-/// box mean for the local gray-point and skips histograms + fracSum. The
-/// OkLCh planes are precomputed by the caller; this function handles the
-/// remaining stages (gray-point map, per-pixel tone curve, reconstitute sRGB)
-/// with feedback/cancellation.
-fn fast_path_finalize(
-    source: &FloatMap,
-    params: &Parameters,
-    l_src: Vec<f32>,
-    c_src: Vec<f32>,
-    h_src: Vec<f32>,
-    cxy_window: u32,
-    feedback: Option<&FeedbackFn>,
-) -> Option<FloatMap> {
-    let width = source.width;
-    let height = source.height;
-    let n = (width as usize) * (height as usize);
-
-    if let Some(fb) = feedback
-        && fb(0.10, "Building gray-point map...")
-    {
-        return None;
-    }
-    let mean_map = compute_box_mean_map_integral(&l_src, width, height, cxy_window);
-    if let Some(fb) = feedback
-        && fb(0.55, "Processing image...")
-    {
-        return None;
-    }
-
-    let mut l_dest = vec![0.0f32; n];
-    l_dest.par_iter_mut().enumerate().for_each(|(i, out)| {
-        let bin_ref = mean_map[i] * 255.0;
-        *out = apply_tone_curve(l_src[i], bin_ref, params);
-    });
-
-    if let Some(fb) = feedback
-        && fb(0.92, "Converting to RGB...")
-    {
-        return None;
-    }
-
-    let mut dest_r = vec![0.0f32; n];
-    let mut dest_g = vec![0.0f32; n];
-    let mut dest_b = vec![0.0f32; n];
-    (
-        dest_r.par_iter_mut(),
-        dest_g.par_iter_mut(),
-        dest_b.par_iter_mut(),
-        l_dest.par_iter(),
-        c_src.par_iter(),
-        h_src.par_iter(),
-    )
-        .into_par_iter()
-        .for_each(|(dr, dg, db, &l, &c, &h)| {
-            let (r, g, b) = color::oklch_to_srgb(l, c, h);
-            *dr = clamp01(r);
-            *dg = clamp01(g);
-            *db = clamp01(b);
-        });
-
-    Some(FloatMap {
-        width,
-        height,
-        r: dest_r,
-        g: dest_g,
-        b: dest_b,
-        a: source.a.clone(),
-    })
-}
-
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
@@ -650,20 +532,40 @@ fn fast_path_finalize(
 ///
 /// Returns `None` if `feedback` requested cancellation at any checkpoint.
 /// Otherwise returns the processed image. See `docs/local-contrast-spec.md`
-/// §3 for algorithmic details.
-///
-/// When `params.use_fast_path` is true (the default), the algorithm uses an
-/// integral-image box mean for the local gray-point and skips histograms +
-/// fracSum — orders of magnitude faster with visually similar output. When
-/// false, runs the faithful C# algorithm (parallelized across histogram-block
-/// rows via rayon). Progress is reported to `feedback` at ~1% granularity;
-/// returning `true` from the callback stops processing at the next safe
-/// checkpoint.
+/// §3 for algorithmic details. Parallelized across histogram-block rows via
+/// rayon. Progress is reported to `feedback` at ~1% granularity; returning
+/// `true` from the callback stops processing at the next safe checkpoint.
 pub fn locally_normalize_luminance(
     source: &FloatMap,
     params: &Parameters,
     feedback: Option<&FeedbackFn>,
 ) -> Option<FloatMap> {
+    // Optional pre-process resize. We resize the input and run the
+    // algorithm on it; we deliberately do **not** resize the result back
+    // up to the original dimensions — the renderer already scales the
+    // LC `RenderImage` to fit the displayed image bounds on the GPU, so
+    // an extra Lanczos pass on the way out would just do the same scaling
+    // more slowly and worse. (At 0.25× or 0.5×, GPU upscales our small
+    // result for display; at 2× or 4×, GPU downscales — extra detail is
+    // visible only when the user zooms in.)
+    if (params.resize_factor - 1.0).abs() > 0.001 {
+        if let Some(fb) = feedback
+            && fb(0.02, "Resizing…")
+        {
+            return None;
+        }
+        let new_w = ((source.width as f32) * params.resize_factor)
+            .round()
+            .max(1.0) as u32;
+        let new_h = ((source.height as f32) * params.resize_factor)
+            .round()
+            .max(1.0) as u32;
+        let resized = source.resize_lanczos3(new_w, new_h);
+        let mut inner = params.clone();
+        inner.resize_factor = 1.0;
+        return locally_normalize_luminance(&resized, &inner, feedback);
+    }
+
     let width = source.width;
     let height = source.height;
     let n = (width as usize) * (height as usize);
@@ -706,13 +608,6 @@ pub fn locally_normalize_luminance(
             *c = cc;
             *h = hh;
         });
-
-    // Fast path (Phase E): drop histograms + fracSum, use an integral-image
-    // box mean for the local gray-point. Orders of magnitude faster with
-    // similar visual output on photos; see `docs/local-contrast-spec.md` §6.
-    if params.use_fast_path {
-        return fast_path_finalize(source, params, l_src, c_src, h_src, cxy_window, feedback);
-    }
 
     // --- Per-pixel bin map (parallel) --------------------------------------
     let bin_map: Vec<u8> = l_src
@@ -1126,88 +1021,6 @@ mod tests {
         let fb: Box<FeedbackFn> = Box::new(|_, _| true);
         let out = locally_normalize_luminance(&src, &Parameters::default(), Some(&*fb));
         assert!(out.is_none());
-    }
-
-    // --- Fast-path specific -----------------------------------------------
-
-    #[test]
-    fn fast_path_matches_slow_path_roughly() {
-        // Fast and slow paths compute the local gray-point differently (box
-        // vs weighted disc) and the fast path drops the fracSum blend, so
-        // outputs won't be identical. Verify they're in the same
-        // neighborhood on a gradient image — far closer than either is to
-        // the original.
-        let src = gradient_map(64, 48);
-        let p_fast = Parameters {
-            contrast: 0.3,
-            lighten_shadows: 0.2,
-            ..Default::default()
-        };
-        let p_slow = Parameters {
-            use_fast_path: false,
-            ..p_fast.clone()
-        };
-
-        let fast = locally_normalize_luminance(&src, &p_fast, None).unwrap();
-        let slow = locally_normalize_luminance(&src, &p_slow, None).unwrap();
-
-        let mut max: f32 = 0.0;
-        let mut sum: f32 = 0.0;
-        for i in 0..fast.pixel_count() {
-            let d = (fast.r[i] - slow.r[i])
-                .abs()
-                .max((fast.g[i] - slow.g[i]).abs())
-                .max((fast.b[i] - slow.b[i]).abs());
-            max = max.max(d);
-            sum += d;
-        }
-        let mean = sum / fast.pixel_count() as f32;
-        // Empirically: box vs disc + dropped fracSum produces ~0.1 max
-        // difference at these parameter values; average is well under 0.05.
-        // Tolerances here are deliberately loose — this is a similarity
-        // test, not a bit-parity test.
-        assert!(max < 0.20, "fast vs slow max diff = {}", max);
-        assert!(mean < 0.05, "fast vs slow mean diff = {}", mean);
-    }
-
-    #[test]
-    fn integral_image_box_mean_matches_naive() {
-        // Compare the integral-image mean against a direct sum over the
-        // window, for a small image at a few representative pixels.
-        let w: u32 = 9;
-        let h: u32 = 7;
-        let mut l = Vec::with_capacity((w * h) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                l.push(((x + y) as f32) / ((w + h) as f32));
-            }
-        }
-        let r = 2u32;
-        let map = compute_box_mean_map_integral(&l, w, h, r);
-        for &(px, py) in &[(0u32, 0u32), (4, 3), (8, 6), (1, 5)] {
-            let x0 = px.saturating_sub(r) as i64;
-            let y0 = py.saturating_sub(r) as i64;
-            let x1 = ((px + r + 1) as i64).min(w as i64);
-            let y1 = ((py + r + 1) as i64).min(h as i64);
-            let mut sum = 0.0f32;
-            let mut count = 0u32;
-            for y in y0..y1 {
-                for x in x0..x1 {
-                    sum += l[(y as u32 * w + x as u32) as usize];
-                    count += 1;
-                }
-            }
-            let expected = sum / count as f32;
-            let got = map[(py * w + px) as usize];
-            assert!(
-                (got - expected).abs() < 1e-5,
-                "({},{}) got={} expected={}",
-                px,
-                py,
-                got,
-                expected
-            );
-        }
     }
 
     #[test]
