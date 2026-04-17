@@ -72,7 +72,7 @@ When directories are provided (or when no arguments are given):
 3. **Sorting:** Files are sorted alphabetically by default (can be changed in-app to sort by modification date)
 4. **Display:** The first image in the sorted list is displayed initially
 
-**Supported Extensions:** `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tiff`, `.tif`, `.ico`, `.webp`
+**Supported Extensions:** `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tiff`, `.tif`, `.ico`, `.webp`, `.svg`
 
 ## Navigation After Launch
 

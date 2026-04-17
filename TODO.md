@@ -557,11 +557,11 @@ This document outlines the development roadmap for rpview, organized by implemen
 - [x] Architecture overview (in DESIGN.md)
 - [ ] Component documentation
 - [ ] API documentation (rustdoc)
-- [ ] Contribution guidelines
+- [x] Contribution guidelines (CONTRIBUTING.md)
 
 ### Release Preparation
-- [ ] Set up semantic versioning
-- [ ] Create CHANGELOG.md
+- [x] Set up semantic versioning
+- [x] Create CHANGELOG.md
 - [ ] Create release notes template
 - [ ] Final testing on all platforms
 - [ ] Security review

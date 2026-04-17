@@ -16,7 +16,7 @@ fast. RPView fills the gap:
 | **Navigation speed** | Loads each image on demand | Preloads adjacent images into GPU memory — navigation is instant |
 | **Zoom precision** | Pinch or menu only | Five zoom speeds (keyboard), scroll-wheel zoom at cursor, Z+drag dynamic zoom |
 | **Pan** | Scroll or trackpad | WASD/IJKL keys, Space+drag, three speed tiers |
-| **Image filters** | None (need a separate editor) | Brightness, contrast, and gamma — live, per-image, remembered |
+| **Image filters** | None (need a separate editor) | Brightness, contrast, gamma, and local contrast — live, per-image |
 | **State memory** | Forgets zoom/pan when you move on | Remembers zoom, pan, and filter settings for up to 1,000 images |
 | **Animated GIF/WebP** | Basic playback | Frame-by-frame stepping, play/pause, GPU-preloaded frames |
 | **SVG rendering** | Static raster | Dynamic re-rendering at zoom level for always-crisp vectors |
@@ -84,6 +84,7 @@ Windows/Linux it's Ctrl. The table below writes "Cmd" — substitute as needed.
 | `Left` / `Right` | Previous / next image |
 | `Shift+Cmd+A` | Sort alphabetically |
 | `Shift+Cmd+M` | Sort by modified date |
+| `Shift+Cmd+T` | Sort by type (toggles alpha / modified within type) |
 | Drag & Drop | Open dropped files or folders |
 
 ### Zoom
@@ -112,13 +113,37 @@ Windows/Linux it's Ctrl. The table below writes "Cmd" — substitute as needed.
 
 | Key | Action |
 |-----|--------|
-| `Cmd+F` | Toggle filter controls panel |
-| `Cmd+1` | Disable all filters |
-| `Cmd+2` | Enable filters |
+| `Cmd+F` or `F` | Toggle filter controls window |
+| `1` | Disable filters (show original) |
+| `2` | Enable filters (show processed) |
 | `Shift+Cmd+R` | Reset filters to defaults |
 
-Brightness, contrast, and gamma are adjusted interactively from the filter
-panel. Filter state is remembered per-image.
+Brightness, contrast, and gamma are adjusted interactively from the floating
+filter window. Filter state is remembered per-image.
+
+### Local Contrast
+
+| Key | Action |
+|-----|--------|
+| `Shift+Cmd+L` | Toggle Local Contrast window |
+
+Local contrast enhancement uses perceptual luminance normalization in the
+OkLCh color space. Sliders for Contrast, Lighten Shadows, and Darken
+Highlights. Includes a pre-LC resize toggle (1/4× to 4×), preset
+save/load, and a Preview toggle for instant A/B comparison. Processing
+runs in background threads with progress indication.
+
+### Save/Recall Slots
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+3` – `Ctrl+9` | Save current display to slot |
+| `3` – `9` | Recall saved slot |
+| `1` / `2` | Return to original / processed view |
+
+Slots capture whatever is currently displayed — raw, filtered, or
+LC-processed. Zoom and pan are rescaled on slot transitions so the
+apparent image position stays constant.
 
 ### Animation (GIF / WebP)
 
@@ -167,7 +192,7 @@ between dark and light to check edges and transparency.
 | `Cmd+,` | Settings |
 | `Cmd+W` | Close window |
 | `Cmd+Q` | Quit |
-| `Esc` x3 (within 2 sec) | Quick quit |
+| `Esc` | Close Filter/LC window (or x3 within 2 sec to quit) |
 
 ## Features in Detail
 
@@ -200,7 +225,27 @@ SVGs use viewport-only rendering to stay fast.
 
 Brightness, contrast, and gamma — applied live, cached per-image, processed on
 background threads. Useful for inspecting dark photos, checking print contrast,
-or quickly comparing exposures.
+or quickly comparing exposures. The filter panel floats as a separate
+always-on-top window with persisted position.
+
+### Local Contrast Enhancement
+
+A perceptual local luminance normalization algorithm operating in the OkLCh
+color space (ported from FraleyMusic-ImageDsp). Opens as a floating dialog
+with sliders for Contrast, Lighten Shadows, and Darken Highlights. Advanced
+options include a pre-LC resize toggle (1/4× to 4× via Lanczos3), median
+gray-point, and document mode. Named presets can be saved, loaded, and
+deleted. Processing runs on a rayon thread pool with progress percentage and
+cancellation. The Preview toggle enables instant A/B comparison without
+recomputing.
+
+### Save/Recall Slots
+
+Ctrl+3–9 saves a snapshot of whatever is currently displayed into a numbered
+slot. Plain 3–9 recalls it. Press 1 or 2 to return to the normal raw or
+processed view. Zoom and pan are automatically rescaled on slot transitions
+so the image stays in the same screen position — useful for comparing
+different processing stages side by side.
 
 ### Animation Controls
 
@@ -255,15 +300,16 @@ state memory, animation auto-play, state cache size.
 **Performance** — Adjacent image preloading, filter processing threads,
 maximum image dimension limit.
 
-**Keyboard & Mouse** — Pan speeds (normal, fast, slow), scroll wheel zoom
-sensitivity, Z-drag sensitivity, spacebar pan acceleration.
+**Keyboard & Mouse** — Pan speeds (normal, fast, slow), pan direction mode
+(move image vs move viewport), scroll wheel zoom sensitivity, Z-drag
+sensitivity, spacebar pan acceleration.
 
 **File Operations** — Default save directory, default save format (PNG, JPEG,
 BMP, TIFF, WebP, or same-as-original), external viewer and editor commands.
 
 **Appearance** — Dark and light background colors, overlay transparency, font
-size scale, window title format (with `{filename}`, `{index}`, `{total}`
-placeholders).
+size scale, window title format (with `{filename}`, `{index}`, `{total}`,
+`{sm}`, `{sortmode}` placeholders).
 
 **Filters** — Default brightness, contrast, and gamma values.
 
@@ -282,7 +328,7 @@ cargo build
 # Release build (optimized, stripped)
 cargo build --release
 
-# Run tests (213 tests)
+# Run tests
 cargo test
 
 # macOS .app bundle (after release build)

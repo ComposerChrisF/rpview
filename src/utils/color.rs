@@ -255,4 +255,130 @@ mod tests {
             assert!(c < 1e-4, "gray v={} got chroma={}", v, c);
         }
     }
+
+    // -- srgb_to_linear boundary values ---------------------------------------
+
+    #[test]
+    fn srgb_to_linear_threshold_crossover() {
+        // Just below and above the 0.04045 threshold
+        let below = srgb_to_linear(0.04);
+        let above = srgb_to_linear(0.05);
+        // Both should be positive and monotonically increasing
+        assert!(below > 0.0);
+        assert!(above > below);
+        // Continuity at the threshold: the two branches should meet closely
+        let at_threshold = srgb_to_linear(0.04045);
+        let just_above = srgb_to_linear(0.04046);
+        assert!(
+            (at_threshold - just_above).abs() < 1e-4,
+            "discontinuity at threshold: {} vs {}",
+            at_threshold,
+            just_above
+        );
+    }
+
+    #[test]
+    fn srgb_to_linear_monotonic() {
+        let mut prev = srgb_to_linear(0.0);
+        for i in 1..=255 {
+            let v = i as f32 / 255.0;
+            let cur = srgb_to_linear(v);
+            assert!(cur >= prev, "not monotonic at i={}: {} < {}", i, cur, prev);
+            prev = cur;
+        }
+    }
+
+    // -- linear_to_srgb boundary values ---------------------------------------
+
+    #[test]
+    fn linear_to_srgb_threshold_crossover() {
+        let at = linear_to_srgb(0.003_130_8);
+        let just_above = linear_to_srgb(0.003_131);
+        assert!(
+            (at - just_above).abs() < 1e-3,
+            "discontinuity: {} vs {}",
+            at,
+            just_above
+        );
+    }
+
+    #[test]
+    fn linear_to_srgb_monotonic() {
+        let mut prev = linear_to_srgb(0.0);
+        for i in 1..=255 {
+            let v = i as f32 / 255.0;
+            let cur = linear_to_srgb(v);
+            assert!(cur >= prev, "not monotonic at i={}: {} < {}", i, cur, prev);
+            prev = cur;
+        }
+    }
+
+    // -- Oklab with clamped/out-of-range inputs -------------------------------
+
+    #[test]
+    fn oklab_handles_zero_inputs() {
+        let (l, a, b) = linear_srgb_to_oklab(0.0, 0.0, 0.0);
+        assert!(l.is_finite());
+        assert!(a.is_finite());
+        assert!(b.is_finite());
+    }
+
+    #[test]
+    fn oklab_inverse_preserves_gray_ramp() {
+        // Gray values should maintain r==g==b through the round-trip
+        for i in 0..=10 {
+            let v = i as f32 / 10.0;
+            let (ol, oa, ob) = linear_srgb_to_oklab(v, v, v);
+            let (r2, g2, b2) = oklab_to_linear_srgb(ol, oa, ob);
+            assert!(approx(r2, v, 1e-4), "gray v={}: r2={}", v, r2);
+            assert!(approx(g2, v, 1e-4), "gray v={}: g2={}", v, g2);
+            assert!(approx(b2, v, 1e-4), "gray v={}: b2={}", v, b2);
+        }
+    }
+
+    // -- OkLCh edge cases -----------------------------------------------------
+
+    #[test]
+    fn oklch_zero_chroma_hue_is_finite() {
+        // For achromatic colors (a=0, b=0), hue is technically undefined
+        // but we need it to be finite (not NaN)
+        let (_, _, h) = oklab_to_oklch(0.5, 0.0, 0.0);
+        assert!(h.is_finite(), "achromatic hue should be finite, got {h}");
+    }
+
+    #[test]
+    fn oklch_negative_atan2_wraps_to_positive() {
+        // atan2 with negative b should wrap to [0, TAU)
+        let (_, _, h) = oklab_to_oklch(0.5, 0.1, -0.1);
+        assert!(h >= 0.0, "hue should be >= 0, got {h}");
+        assert!(h < TAU, "hue should be < TAU, got {h}");
+    }
+
+    #[test]
+    fn oklch_full_hue_circle() {
+        // Evenly spaced hues should produce valid round-trip through oklab
+        for deg in (0..360).step_by(30) {
+            let h = (deg as f32).to_radians();
+            let (l, a, b) = oklch_to_oklab(0.5, 0.1, h);
+            let (l2, c2, h2) = oklab_to_oklch(l, a, b);
+            assert!(approx(l2, 0.5, EPS));
+            assert!(approx(c2, 0.1, EPS));
+            let h_diff = ((h2 - h).rem_euclid(TAU)).min(TAU - (h2 - h).rem_euclid(TAU));
+            assert!(h_diff < 1e-3, "hue mismatch at deg={}: h={} h2={}", deg, h, h2);
+        }
+    }
+
+    // -- sRGB end-to-end with saturated primaries ----------------------------
+
+    #[test]
+    fn srgb_oklch_roundtrip_pure_primaries() {
+        let primaries = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)];
+        for (r, g, b) in primaries {
+            let (l, c, h) = srgb_to_oklch(r, g, b);
+            let (r2, g2, b2) = oklch_to_srgb(l, c, h);
+            assert!(approx(r, r2, 1e-3), "R: {r} vs {r2}");
+            assert!(approx(g, g2, 1e-3), "G: {g} vs {g2}");
+            assert!(approx(b, b2, 1e-3), "B: {b} vs {b2}");
+        }
+    }
 }

@@ -70,25 +70,40 @@ cargo run -- image1.png image2.jpg
 ```
 rpview/
 ├── src/
-│   ├── main.rs           # Application entry point
-│   ├── error.rs          # Error types and handling
-│   ├── cli.rs            # Command-line argument parsing
-│   ├── state/            # Application and image state management
-│   │   ├── mod.rs
-│   │   ├── app_state.rs
-│   │   └── image_state.rs
-│   ├── components/       # UI components
-│   │   ├── mod.rs
-│   │   ├── image_viewer.rs
-│   │   └── ...
-│   └── utils/            # Utility modules
-│       ├── mod.rs
-│       ├── style.rs      # Styling utilities
-│       └── ...
+│   ├── main.rs                # Application entry point
+│   ├── lib.rs                 # Action definitions, shared types
+│   ├── cli.rs                 # Command-line argument parsing
+│   ├── error.rs               # Error types and handling
+│   ├── app_handlers.rs        # Event handlers
+│   ├── app_keybindings.rs     # Keybinding registration
+│   ├── app_render.rs          # Main window render method
+│   ├── macos_open_handler.rs  # macOS Finder "Open With" integration
+│   ├── state/
+│   │   ├── app_state.rs       # Global app state, sort modes
+│   │   ├── image_state.rs     # Per-image zoom/pan/filter cache
+│   │   └── settings.rs        # AppSettings (8 config sections)
+│   ├── components/
+│   │   ├── image_viewer.rs    # Image display, GPU preloading
+│   │   ├── filter_window.rs   # Floating filter panel
+│   │   ├── local_contrast_window.rs  # Floating LC panel
+│   │   ├── settings_window.rs # Interactive settings UI
+│   │   ├── menu_bar.rs        # Application menu
+│   │   ├── help_overlay.rs    # Keyboard shortcuts reference
+│   │   └── ...                # debug, zoom, animation, error, loading
+│   └── utils/
+│       ├── filters.rs         # RGB LUT brightness/contrast/gamma
+│       ├── local_contrast.rs  # OkLCh luminance normalization
+│       ├── float_map.rs       # Planar f32 bitmap
+│       ├── color.rs           # sRGB ↔ OkLCh conversion
+│       ├── image_loader.rs    # Async loading with cancellation
+│       ├── svg.rs             # SVG rasterization via resvg
+│       ├── animation.rs       # GIF/WebP frame extraction
+│       ├── zoom.rs            # Zoom math and clamping
+│       └── ...                # file_scanner, settings_io, style, etc.
 ├── Cargo.toml
-├── TODO.md               # Development roadmap
-├── DESIGN.md             # Application design documentation
-└── CLI.md                # CLI interface documentation
+├── DESIGN.md              # Application design documentation
+├── CLI.md                 # CLI interface documentation
+└── CHANGELOG.md           # Version history
 ```
 
 ## Development Workflow
@@ -130,7 +145,7 @@ Use clear commit messages:
 
 ```bash
 git fetch upstream
-git rebase upstream/main
+git rebase upstream/master
 ```
 
 ### 6. Push to Your Fork
@@ -229,8 +244,8 @@ cargo test test_name
 - Delete your feature branch
 - Update your local repository:
   ```bash
-  git checkout main
-  git pull upstream main
+  git checkout master
+  git pull upstream master
   ```
 
 ## Development Phases

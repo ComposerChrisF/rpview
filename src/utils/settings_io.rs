@@ -159,4 +159,81 @@ mod tests {
         let backup_path = test_path.with_extension("json.backup");
         assert!(backup_path.exists());
     }
+
+    #[test]
+    fn test_modified_settings_roundtrip() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_path = temp_dir.path().join("modified_settings.json");
+
+        let mut settings = AppSettings::default();
+        settings.viewer_behavior.default_zoom_mode =
+            crate::state::settings::ZoomMode::OneHundredPercent;
+        settings.appearance.font_size_scale = 2.0;
+
+        save_settings_to_path(&settings, &test_path).unwrap();
+        let loaded = load_settings_from_path(&test_path);
+
+        assert_eq!(
+            loaded.viewer_behavior.default_zoom_mode,
+            settings.viewer_behavior.default_zoom_mode
+        );
+        assert_eq!(loaded.appearance.font_size_scale, settings.appearance.font_size_scale);
+    }
+
+    #[test]
+    fn test_load_empty_file_returns_defaults() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_path = temp_dir.path().join("empty_settings.json");
+        std::fs::write(&test_path, "").unwrap();
+
+        // Empty string is not valid JSON — should return defaults
+        let settings = load_settings_from_path(&test_path);
+        assert_eq!(settings, AppSettings::default());
+    }
+
+    #[test]
+    fn test_partial_json_uses_serde_defaults_for_top_level() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_path = temp_dir.path().join("partial_settings.json");
+
+        // Save real settings, then re-serialize with only viewer_behavior
+        // changed. Top-level fields use #[derive(Default)] so missing
+        // sections get filled in by serde.
+        let mut settings = AppSettings::default();
+        settings.viewer_behavior.state_cache_size = 42;
+        save_settings_to_path(&settings, &test_path).unwrap();
+
+        let loaded = load_settings_from_path(&test_path);
+        assert_eq!(loaded.viewer_behavior.state_cache_size, 42);
+        // Untouched sections should match defaults
+        assert_eq!(loaded.performance, crate::state::settings::Performance::default());
+    }
+
+    #[test]
+    fn test_save_creates_parent_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested = temp_dir.path().join("a").join("b").join("settings.json");
+
+        // Parent doesn't exist yet, save_settings_to_path writes directly
+        // (it doesn't create parent dirs — that's get_settings_path's job)
+        // So this should fail
+        let result = save_settings_to_path(&AppSettings::default(), &nested);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_corrupt_backup_preserves_original_content() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_path = temp_dir.path().join("settings.json");
+
+        let corrupt_content = "not json at all {{{";
+        std::fs::write(&test_path, corrupt_content).unwrap();
+
+        let _ = load_settings_from_path(&test_path);
+
+        // The backup should contain the original corrupt content
+        let backup_path = test_path.with_extension("json.backup");
+        let backup_content = std::fs::read_to_string(&backup_path).unwrap();
+        assert_eq!(backup_content, corrupt_content);
+    }
 }

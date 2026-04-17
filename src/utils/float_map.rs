@@ -203,4 +203,128 @@ mod tests {
         assert_eq!(float_to_byte(1.5), 255);
         assert!(float_to_byte(f32::NAN) == 0); // NaN comparison is false for both branches
     }
+
+    // -- No-alpha initialization ----------------------------------------------
+
+    #[test]
+    fn new_without_alpha() {
+        let m = FloatMap::new(2, 3, false);
+        assert_eq!(m.pixel_count(), 6);
+        assert!(m.a.is_none());
+        assert!(m.r.iter().all(|&v| v == 0.0));
+    }
+
+    // -- pixel_count ----------------------------------------------------------
+
+    #[test]
+    fn pixel_count_1x1() {
+        assert_eq!(FloatMap::new(1, 1, false).pixel_count(), 1);
+    }
+
+    #[test]
+    fn pixel_count_large() {
+        assert_eq!(FloatMap::new(100, 200, false).pixel_count(), 20_000);
+    }
+
+    // -- to_bgra_image channel swap -------------------------------------------
+
+    #[test]
+    fn bgra_swaps_red_and_blue() {
+        let mut m = FloatMap::new(1, 1, false);
+        m.r[0] = 1.0; // red = 255
+        m.g[0] = 0.5; // green = 128
+        m.b[0] = 0.0; // blue = 0
+        let bgra = m.to_bgra_image();
+        let px = bgra.get_pixel(0, 0);
+        // BGRA layout: [B, G, R, A]
+        assert_eq!(px[0], 0);   // B channel gets blue (0.0)
+        assert_eq!(px[1], 128); // G channel gets green (0.5)
+        assert_eq!(px[2], 255); // R channel gets red (1.0)
+        assert_eq!(px[3], 255); // A defaults to 1.0 (no alpha plane)
+    }
+
+    #[test]
+    fn bgra_with_alpha() {
+        let mut m = FloatMap::new(1, 1, true);
+        m.r[0] = 0.0;
+        m.g[0] = 0.0;
+        m.b[0] = 0.0;
+        m.a.as_mut().unwrap()[0] = 0.5;
+        let bgra = m.to_bgra_image();
+        let px = bgra.get_pixel(0, 0);
+        assert_eq!(px[3], 128); // alpha 0.5 → 128
+    }
+
+    // -- to_rgba8 alpha fallback ----------------------------------------------
+
+    #[test]
+    fn to_rgba8_no_alpha_defaults_opaque() {
+        let m = FloatMap::new(2, 2, false);
+        let img = m.to_rgba8();
+        for px in img.pixels() {
+            assert_eq!(px[3], 255, "expected fully opaque when no alpha plane");
+        }
+    }
+
+    // -- resize ---------------------------------------------------------------
+
+    #[test]
+    fn resize_preserves_alpha_presence() {
+        let with_alpha = FloatMap::new(4, 4, true);
+        let resized = with_alpha.resize_lanczos3(2, 2);
+        assert!(resized.a.is_some());
+        assert_eq!(resized.pixel_count(), 4);
+
+        let without_alpha = FloatMap::new(4, 4, false);
+        let resized = without_alpha.resize_lanczos3(2, 2);
+        assert!(resized.a.is_none());
+        assert_eq!(resized.pixel_count(), 4);
+    }
+
+    #[test]
+    fn resize_to_same_size() {
+        let mut m = FloatMap::new(3, 3, false);
+        for i in 0..9 {
+            m.r[i] = i as f32 / 8.0;
+        }
+        let resized = m.resize_lanczos3(3, 3);
+        assert_eq!(resized.width, 3);
+        assert_eq!(resized.height, 3);
+        // Values should be very close to originals (some Lanczos ringing allowed)
+        for i in 0..9 {
+            let diff = (m.r[i] - resized.r[i]).abs();
+            assert!(diff < 0.15, "pixel {i}: orig={} resized={}", m.r[i], resized.r[i]);
+        }
+    }
+
+    // -- from_rgba8 / to_rgba8 with specific values ---------------------------
+
+    #[test]
+    fn from_rgba8_converts_channels_correctly() {
+        let mut img = RgbaImage::new(1, 1);
+        *img.get_pixel_mut(0, 0) = Rgba([100, 150, 200, 255]);
+        let m = FloatMap::from_rgba8(&img);
+        let tol = 0.005;
+        assert!((m.r[0] - 100.0 / 255.0).abs() < tol);
+        assert!((m.g[0] - 150.0 / 255.0).abs() < tol);
+        assert!((m.b[0] - 200.0 / 255.0).abs() < tol);
+        assert!((m.a.as_ref().unwrap()[0] - 1.0).abs() < tol);
+    }
+
+    // -- float_to_byte boundary -----------------------------------------------
+
+    #[test]
+    fn float_to_byte_exact_boundaries() {
+        // Verify each integer step maps correctly
+        for i in 0u8..=255 {
+            let f = i as f32 / 255.0;
+            assert_eq!(float_to_byte(f), i, "byte value {i}");
+        }
+    }
+
+    #[test]
+    fn float_to_byte_infinity() {
+        assert_eq!(float_to_byte(f32::INFINITY), 255);
+        assert_eq!(float_to_byte(f32::NEG_INFINITY), 0);
+    }
 }
