@@ -110,7 +110,9 @@
       "Bash(gh release *)",
       "Bash(verset --bump-minor)",
       "Bash(verset --bump-patch)",
-      "Read(//Users/chris/Chris/App/Rust/ccf-gpui-widgets/src/**)"
+      "Read(//Users/chris/Chris/App/Rust/ccf-gpui-widgets/src/**)",
+      "Bash(gh workflow *)",
+      "Bash(cargo update *)"
     ]
   }
 }
