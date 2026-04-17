@@ -269,22 +269,35 @@ fn test_navigation_single_image() {
 }
 
 #[test]
-fn test_cache_size_limit() {
-    let paths = vec![PathBuf::from("image1.png")];
+fn test_cache_size_limit_via_save() {
+    // Use save_current_state (which actually performs LRU eviction)
+    // rather than inserting directly into the HashMap.
+    let paths = vec![
+        PathBuf::from("img0.png"),
+        PathBuf::from("img1.png"),
+        PathBuf::from("img2.png"),
+    ];
     let mut state = AppState::new(paths);
-    state.max_cache_size = 2; // Set small cache for testing
+    state.max_cache_size = 2;
 
-    // Add 3 states (exceeds cache size)
-    for i in 0..3 {
-        let path = PathBuf::from(format!("image{}.png", i));
-        state.image_paths.push(path.clone());
+    // Save state for img0
+    state.current_index = 0;
+    let mut s0 = ImageState::new();
+    s0.zoom = 0.5;
+    state.save_current_state(s0);
 
-        let mut img_state = ImageState::new();
-        img_state.zoom = i as f32;
-        state.image_states.insert(path, img_state);
-    }
+    // Save state for img1 (cache now at capacity)
+    state.current_index = 1;
+    let mut s1 = ImageState::new();
+    s1.zoom = 1.5;
+    state.save_current_state(s1);
 
-    // Cache should only contain max_cache_size items (eviction happens on save_current_state)
-    // Note: Direct insertion bypasses eviction, so we test the eviction logic separately
-    assert!(state.image_states.len() <= state.max_cache_size + 1);
+    // Save state for img2 (should trigger eviction of oldest)
+    state.current_index = 2;
+    let mut s2 = ImageState::new();
+    s2.zoom = 2.5;
+    state.save_current_state(s2);
+
+    // Cache should not exceed max_cache_size
+    assert!(state.image_states.len() <= state.max_cache_size);
 }

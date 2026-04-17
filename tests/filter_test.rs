@@ -244,15 +244,17 @@ fn test_apply_filters_combined() {
 }
 
 #[test]
-fn test_apply_filters_order_matters() {
+fn test_apply_filters_extreme_values_no_panic() {
+    // Verify that applying all three filters at extreme values doesn't panic
+    // and produces a valid pixel (every u8 is in 0-255 by definition).
     let img = create_test_image(100, 100, 100);
 
     let result = apply_filters(&img, 50.0, 50.0, 1.5);
 
     let rgba = result.to_rgba8();
     let pixel = rgba.get_pixel(0, 0);
-    // Just verify it doesn't panic - u8 is always 0-255
-    assert!(pixel[0] == pixel[0]);
+    // All channels should have been modified from the original 100
+    assert_ne!(pixel[0], 100);
 }
 
 #[test]
@@ -302,7 +304,8 @@ fn test_contrast_on_midtone() {
 }
 
 #[test]
-fn test_gamma_lookup_table_optimization() {
+fn test_apply_gamma_deterministic() {
+    // Same input and gamma should always produce the same output
     let img = create_test_image(50, 100, 150);
 
     let result1 = apply_gamma(&img, 2.0);

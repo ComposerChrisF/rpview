@@ -91,7 +91,7 @@ Windows/Linux it's Ctrl. The table below writes "Cmd" — substitute as needed.
 
 | Key | Action |
 |-----|--------|
-| `+` / `-` | Zoom in / out (1.25x steps) |
+| `+` / `-` | Zoom in / out (1.2x steps) |
 | `Shift` + `+` / `-` | Fast zoom (1.5x steps) |
 | `Cmd` + `+` / `-` | Slow zoom (1.05x steps) |
 | `Shift+Cmd` + `+` / `-` | Incremental zoom (1% steps) |

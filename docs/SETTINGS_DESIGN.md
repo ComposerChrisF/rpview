@@ -125,8 +125,8 @@ pub struct Performance {
     pub preload_adjacent_images: bool,
     /// Number of background threads for filter processing
     pub filter_processing_threads: usize,
-    /// Maximum image dimensions to load (safety limit)
-    pub max_image_dimensions: (u32, u32),
+    /// Maximum image dimension to load (safety limit, applies to both width and height)
+    pub max_image_dimension: u32,
 }
 
 impl Default for Performance {
@@ -134,7 +134,7 @@ impl Default for Performance {
         Self {
             preload_adjacent_images: true,
             filter_processing_threads: 4,
-            max_image_dimensions: (16384, 16384), // 16K x 16K
+            max_image_dimension: 17000,
         }
     }
 }
@@ -147,6 +147,8 @@ pub struct KeyboardMouse {
     pub pan_speed_fast: f32,
     /// Pan speed with Cmd/Ctrl modifier (pixels)
     pub pan_speed_slow: f32,
+    /// Pan direction mode: move the image or move the viewport
+    pub pan_direction_mode: PanDirectionMode,
     /// Scroll wheel zoom sensitivity (zoom factor per notch)
     pub scroll_wheel_sensitivity: f32,
     /// Z-drag zoom sensitivity (percentage per pixel)
@@ -155,12 +157,19 @@ pub struct KeyboardMouse {
     pub spacebar_pan_accelerated: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum PanDirectionMode {
+    MoveImage,
+    MoveViewport,
+}
+
 impl Default for KeyboardMouse {
     fn default() -> Self {
         Self {
             pan_speed_normal: 10.0,
             pan_speed_fast: 30.0,
             pan_speed_slow: 3.0,
+            pan_direction_mode: PanDirectionMode::MoveImage,
             scroll_wheel_sensitivity: 1.1,
             z_drag_sensitivity: 0.01,
             spacebar_pan_accelerated: false,
@@ -184,7 +193,7 @@ impl Default for FileOperations {
     fn default() -> Self {
         Self {
             default_save_directory: None,
-            default_save_format: SaveFormat::Png,
+            default_save_format: SaveFormat::SameAsLoaded,
             auto_save_filtered_cache: false,
             remember_last_directory: true,
         }
@@ -193,6 +202,7 @@ impl Default for FileOperations {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum SaveFormat {
+    SameAsLoaded,
     Png,
     Jpeg,
     Bmp,
@@ -202,8 +212,12 @@ pub enum SaveFormat {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Appearance {
-    /// Background color for image viewer
-    pub background_color: [u8; 3], // RGB
+    /// Background color for dark mode
+    pub background_color_dark: [u8; 3], // RGB
+    /// Background color for light mode
+    pub background_color_light: [u8; 3], // RGB
+    /// Whether to use light background
+    pub use_light_background: bool,
     /// Alpha value for overlay backgrounds (0-255)
     pub overlay_transparency: u8,
     /// Font size multiplier for overlays (0.5 - 2.0)
@@ -215,10 +229,12 @@ pub struct Appearance {
 impl Default for Appearance {
     fn default() -> Self {
         Self {
-            background_color: [0x1e, 0x1e, 0x1e], // #1e1e1e
+            background_color_dark: [0x1e, 0x1e, 0x1e], // #1e1e1e
+            background_color_light: [0xe0, 0xe0, 0xe0], // #e0e0e0
+            use_light_background: false,
             overlay_transparency: 204, // ~80% opacity
             font_size_scale: 1.0,
-            window_title_format: "{filename} ({index}/{total})".to_string(),
+            window_title_format: "{filename} ({sm}, {index}/{total})".to_string(),
         }
     }
 }
