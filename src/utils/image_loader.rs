@@ -254,4 +254,154 @@ mod tests {
         let result = load_image(&path);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn load_nonexistent_returns_file_not_found() {
+        let path = PathBuf::from("/no_such_dir/missing.png");
+        let result = load_image(&path);
+        assert!(matches!(result, Err(AppError::FileNotFound(_))));
+    }
+
+    #[test]
+    fn load_real_png_succeeds() {
+        // Create a minimal valid PNG in a temp file
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.png");
+        let img = image::DynamicImage::new_rgba8(2, 2);
+        img.save(&path).unwrap();
+
+        let loaded = load_image(&path).unwrap();
+        assert_eq!(loaded.width(), 2);
+        assert_eq!(loaded.height(), 2);
+    }
+
+    #[test]
+    fn get_dimensions_for_real_png() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("dim_test.png");
+        let img = image::DynamicImage::new_rgba8(37, 53);
+        img.save(&path).unwrap();
+
+        let (w, h) = get_image_dimensions(&path).unwrap();
+        assert_eq!(w, 37);
+        assert_eq!(h, 53);
+    }
+
+    #[test]
+    fn get_dimensions_nonexistent_returns_error() {
+        let result = get_image_dimensions(Path::new("/tmp/no_such_file_12345.png"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cancel_flag_starts_false() {
+        let flag = Arc::new(Mutex::new(false));
+        assert!(!is_cancelled(&flag));
+    }
+
+    #[test]
+    fn cancel_flag_becomes_true() {
+        let flag = Arc::new(Mutex::new(false));
+        *flag.lock().unwrap() = true;
+        assert!(is_cancelled(&flag));
+    }
+
+    #[test]
+    fn loader_handle_cancel_sets_flag() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("cancel_test.png");
+        let img = image::DynamicImage::new_rgba8(1, 1);
+        img.save(&path).unwrap();
+
+        let handle = load_image_async(path, None, false);
+        handle.cancel();
+        // After cancel, the flag should be set (regardless of whether
+        // the thread already finished)
+        assert!(is_cancelled(&handle.cancel_flag));
+    }
+
+    #[test]
+    fn async_load_sends_success_for_valid_image() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("async_test.png");
+        let img = image::DynamicImage::new_rgba8(10, 10);
+        img.save(&path).unwrap();
+
+        let handle = load_image_async(path, None, false);
+        // Wait for result (with timeout)
+        let mut result = None;
+        for _ in 0..100 {
+            if let Some(msg) = handle.try_recv() {
+                result = Some(msg);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            matches!(result, Some(LoaderMessage::Success(_))),
+            "expected Success, got {:?}",
+            result.as_ref().map(|m| match m {
+                LoaderMessage::Success(_) => "Success",
+                LoaderMessage::Error(_, _) => "Error",
+                LoaderMessage::OversizedImage(_, _, _, _) => "OversizedImage",
+            })
+        );
+    }
+
+    #[test]
+    fn async_load_sends_oversized_when_exceeds_limit() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("big.png");
+        let img = image::DynamicImage::new_rgba8(500, 500);
+        img.save(&path).unwrap();
+
+        let max_dim = 100;
+        let handle = load_image_async(path, Some(max_dim), false);
+        let mut result = None;
+        for _ in 0..100 {
+            if let Some(msg) = handle.try_recv() {
+                result = Some(msg);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(matches!(result, Some(LoaderMessage::OversizedImage(_, _, _, _))));
+    }
+
+    #[test]
+    fn async_load_force_ignores_size_limit() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("big_force.png");
+        let img = image::DynamicImage::new_rgba8(500, 500);
+        img.save(&path).unwrap();
+
+        let max_dim = 100;
+        let handle = load_image_async(path, Some(max_dim), true);
+        let mut result = None;
+        for _ in 0..100 {
+            if let Some(msg) = handle.try_recv() {
+                result = Some(msg);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            matches!(result, Some(LoaderMessage::Success(_))),
+            "force_load should bypass size limit"
+        );
+    }
+
+    #[test]
+    fn async_load_error_for_nonexistent_file() {
+        let handle = load_image_async(PathBuf::from("/no_such_file_12345.png"), None, false);
+        let mut result = None;
+        for _ in 0..100 {
+            if let Some(msg) = handle.try_recv() {
+                result = Some(msg);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(matches!(result, Some(LoaderMessage::Error(_, _))));
+    }
 }

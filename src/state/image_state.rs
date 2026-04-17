@@ -108,3 +108,94 @@ impl AnimationState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- ImageState defaults --------------------------------------------------
+
+    #[test]
+    fn image_state_new_has_correct_defaults() {
+        let state = ImageState::new();
+        assert_eq!(state.zoom, 1.0);
+        assert_eq!(state.pan, (0.0, 0.0));
+        assert!(state.is_fit_to_window);
+        assert!(state.filters_enabled);
+        assert!(state.animation.is_none());
+        assert!(!state.override_size_limit);
+    }
+
+    #[test]
+    fn image_state_default_matches_new() {
+        let from_new = ImageState::new();
+        let from_default = ImageState::default();
+        assert_eq!(from_new.zoom, from_default.zoom);
+        assert_eq!(from_new.pan, from_default.pan);
+        assert_eq!(from_new.is_fit_to_window, from_default.is_fit_to_window);
+        assert_eq!(from_new.filters_enabled, from_default.filters_enabled);
+        assert_eq!(from_new.filters, from_default.filters);
+    }
+
+    #[test]
+    fn image_state_with_custom_filters() {
+        let custom = FilterSettings {
+            brightness: 25.0,
+            contrast: -10.0,
+            gamma: 2.2,
+        };
+        let state = ImageState::new_with_filter_defaults(custom);
+        assert_eq!(state.filters.brightness, 25.0);
+        assert_eq!(state.filters.contrast, -10.0);
+        assert_eq!(state.filters.gamma, 2.2);
+        // Other fields should still have defaults
+        assert_eq!(state.zoom, 1.0);
+        assert!(state.is_fit_to_window);
+    }
+
+    // -- FilterSettings defaults ----------------------------------------------
+
+    #[test]
+    fn filter_settings_default_is_neutral() {
+        let f = FilterSettings::default();
+        assert_eq!(f.brightness, 0.0);
+        assert_eq!(f.contrast, 0.0);
+        assert_eq!(f.gamma, 1.0);
+    }
+
+    #[test]
+    fn filter_settings_partial_eq() {
+        let a = FilterSettings { brightness: 1.0, contrast: 2.0, gamma: 3.0 };
+        let b = FilterSettings { brightness: 1.0, contrast: 2.0, gamma: 3.0 };
+        let c = FilterSettings { brightness: 1.0, contrast: 2.0, gamma: 3.1 };
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    // -- AnimationState -------------------------------------------------------
+
+    #[test]
+    fn animation_state_new_starts_at_frame_zero() {
+        let durations = vec![100, 200, 150];
+        let anim = AnimationState::new(3, durations.clone());
+        assert_eq!(anim.current_frame, 0);
+        assert!(anim.is_playing);
+        assert_eq!(anim.frame_count, 3);
+        assert_eq!(anim.frame_durations, durations);
+        assert!(!anim.next_frame_ready);
+    }
+
+    #[test]
+    fn animation_state_single_frame() {
+        let anim = AnimationState::new(1, vec![0]);
+        assert_eq!(anim.frame_count, 1);
+        assert_eq!(anim.frame_durations.len(), 1);
+    }
+
+    #[test]
+    fn animation_state_empty_durations() {
+        let anim = AnimationState::new(0, vec![]);
+        assert_eq!(anim.frame_count, 0);
+        assert!(anim.frame_durations.is_empty());
+    }
+}
