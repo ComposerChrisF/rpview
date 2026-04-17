@@ -59,7 +59,7 @@ mod windows_impl {
         let RawWindowHandle::Win32(h) = handle.as_raw() else {
             return;
         };
-        let hwnd = HWND(h.hwnd.get() as *mut _);
+        let hwnd = HWND(h.hwnd.get() as _);
         unsafe {
             let _ = SetWindowPos(
                 hwnd,
