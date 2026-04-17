@@ -1435,7 +1435,7 @@ impl App {
     }
 
     pub(crate) fn update_window_title(&mut self, window: &mut Window) {
-        let title = format_window_title(
+        let title = crate::window_title::format_window_title(
             self.app_state.current_image().map(|p| p.as_path()),
             self.app_state.current_index,
             self.app_state.image_paths.len(),
@@ -1443,108 +1443,5 @@ impl App {
             &self.settings,
         );
         window.set_window_title(&title);
-    }
-}
-
-/// Format the window title for the given image state.
-/// Returns `"rpview"` when `path` is `None`.
-pub(crate) fn format_window_title(
-    path: Option<&std::path::Path>,
-    index: usize,
-    total: usize,
-    sort_mode: state::app_state::SortMode,
-    settings: &AppSettings,
-) -> String {
-    match path {
-        Some(p) => {
-            let filename = p.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown");
-            let position = index + 1;
-            if settings.sort_navigation.show_image_counter {
-                settings
-                    .appearance
-                    .window_title_format
-                    .replace("{filename}", filename)
-                    .replace("{index}", &position.to_string())
-                    .replace("{total}", &total.to_string())
-                    .replace("{sortmode}", sort_mode.long_label())
-                    .replace("{sm}", sort_mode.short_label())
-            } else {
-                filename.to_string()
-            }
-        }
-        None => "rpview".to_string(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::state::app_state::SortMode;
-    use crate::state::settings::AppSettings;
-    use super::format_window_title;
-    use std::path::Path;
-
-    #[test]
-    fn test_format_window_title_all_placeholders() {
-        // Arrange
-        let settings = AppSettings::default();
-        let path = Path::new("/photos/sunset.png");
-
-        // Act
-        let title = format_window_title(Some(path), 2, 10, SortMode::Alphabetical, &settings);
-
-        // Assert — default template: "{filename} ({sm}, {index}/{total})"
-        assert_eq!(title, "sunset.png (A, 3/10)");
-    }
-
-    #[test]
-    fn test_format_window_title_modified_date_sort() {
-        let settings = AppSettings::default();
-        let path = Path::new("image.jpg");
-
-        let title = format_window_title(Some(path), 0, 5, SortMode::ModifiedDate, &settings);
-
-        assert_eq!(title, "image.jpg (M, 1/5)");
-    }
-
-    #[test]
-    fn test_format_window_title_type_modified_sort() {
-        let settings = AppSettings::default();
-        let path = Path::new("photo.webp");
-
-        let title = format_window_title(Some(path), 4, 20, SortMode::TypeModified, &settings);
-
-        assert_eq!(title, "photo.webp (TM, 5/20)");
-    }
-
-    #[test]
-    fn test_format_window_title_no_path_returns_rpview() {
-        let settings = AppSettings::default();
-
-        let title = format_window_title(None, 0, 0, SortMode::Alphabetical, &settings);
-
-        assert_eq!(title, "rpview");
-    }
-
-    #[test]
-    fn test_format_window_title_counter_disabled_returns_filename_only() {
-        let mut settings = AppSettings::default();
-        settings.sort_navigation.show_image_counter = false;
-        let path = Path::new("/dir/photo.png");
-
-        let title = format_window_title(Some(path), 3, 10, SortMode::Alphabetical, &settings);
-
-        assert_eq!(title, "photo.png");
-    }
-
-    #[test]
-    fn test_format_window_title_custom_template_with_sortmode() {
-        let mut settings = AppSettings::default();
-        settings.appearance.window_title_format =
-            "{filename} [{sortmode}] {index} of {total}".to_string();
-        let path = Path::new("pic.gif");
-
-        let title = format_window_title(Some(path), 1, 3, SortMode::TypeAlpha, &settings);
-
-        assert_eq!(title, "pic.gif [type+alphabetical] 2 of 3");
     }
 }

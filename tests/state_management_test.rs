@@ -298,6 +298,6 @@ fn test_cache_size_limit_via_save() {
     s2.zoom = 2.5;
     state.save_current_state(s2);
 
-    // Cache should not exceed max_cache_size
-    assert!(state.image_states.len() <= state.max_cache_size);
+    // Cache should have evicted the oldest, leaving exactly max_cache_size entries
+    assert_eq!(state.image_states.len(), 2);
 }

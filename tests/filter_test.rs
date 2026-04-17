@@ -245,16 +245,21 @@ fn test_apply_filters_combined() {
 
 #[test]
 fn test_apply_filters_extreme_values_no_panic() {
-    // Verify that applying all three filters at extreme values doesn't panic
-    // and produces a valid pixel (every u8 is in 0-255 by definition).
     let img = create_test_image(100, 100, 100);
 
-    let result = apply_filters(&img, 50.0, 50.0, 1.5);
-
+    // Max boundary: brightness=100, contrast=100, gamma=10.0
+    let result = apply_filters(&img, 100.0, 100.0, 10.0);
     let rgba = result.to_rgba8();
-    let pixel = rgba.get_pixel(0, 0);
-    // All channels should have been modified from the original 100
-    assert_ne!(pixel[0], 100);
+    assert_ne!(rgba.get_pixel(0, 0)[0], 100);
+
+    // Min boundary: brightness=-100, contrast=-100, gamma=0.1
+    let result = apply_filters(&img, -100.0, -100.0, 0.1);
+    let rgba = result.to_rgba8();
+    assert_ne!(rgba.get_pixel(0, 0)[0], 100);
+
+    // Beyond-clamp values should not panic either
+    let _ = apply_filters(&img, 200.0, 200.0, 20.0);
+    let _ = apply_filters(&img, -200.0, -200.0, 0.01);
 }
 
 #[test]

@@ -397,7 +397,6 @@ mod tests {
         assert_eq!(mode, SortMode::Alphabetical);
     }
 
-
     #[test]
     fn test_app_state_new_uses_default_sort_mode() {
         // Arrange & Act
@@ -689,9 +688,14 @@ mod tests {
         state.current_index = 1;
         state.save_current_state(ImageState::new());
 
-        // Access a.png to refresh its last_accessed time
+        // Backdate both entries so the subsequent get_current_state refresh
+        // produces a strictly newer Instant without needing thread::sleep
+        let past = Instant::now() - std::time::Duration::from_secs(1);
+        state.image_states.get_mut(&PathBuf::from("a.png")).unwrap().last_accessed = past;
+        state.image_states.get_mut(&PathBuf::from("b.png")).unwrap().last_accessed = past;
+
+        // Access a.png to refresh its last_accessed to now (strictly newer than `past`)
         state.current_index = 0;
-        std::thread::sleep(std::time::Duration::from_millis(10));
         let _ = state.get_current_state(FilterSettings::default());
 
         // Insert state for c.png — should evict b.png (least recently accessed), not a.png

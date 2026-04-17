@@ -1,4 +1,5 @@
 #![allow(clippy::collapsible_if)]
+// GPUI derive macros (e.g., IntoElement, Render) expand deeply; 128 is not enough.
 #![recursion_limit = "256"]
 
 use gpui::prelude::FluentBuilder;
@@ -64,6 +65,7 @@ mod components;
 mod error;
 mod state;
 mod utils;
+mod window_title;
 
 use cli::Cli;
 use components::{
@@ -289,7 +291,7 @@ fn main() {
                     }
 
                     // Set initial window title using the user's format setting
-                    let title = app_handlers::format_window_title(
+                    let title = window_title::format_window_title(
                         app_state.current_image().map(|p| p.as_path()),
                         app_state.current_index,
                         app_state.image_paths.len(),

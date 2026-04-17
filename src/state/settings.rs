@@ -638,7 +638,6 @@ mod tests {
         assert!(all_formats.contains(&SaveFormat::Webp));
     }
 
-
     #[test]
     fn test_filter_preset_creation() {
         // Arrange & Act
