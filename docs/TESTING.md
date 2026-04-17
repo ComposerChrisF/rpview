@@ -4,9 +4,9 @@ This document describes the test infrastructure for rpview.
 
 ## Overview
 
-rpview has comprehensive test coverage with **129 tests** covering all critical functionality:
-- **93 unit tests** for core modules
-- **36 integration tests** for end-to-end workflows
+rpview has comprehensive test coverage with **~326 tests** covering all critical functionality:
+- **215 unit tests** in the library crate (error, state, utils modules)
+- **~111 integration and binary-crate tests** for end-to-end workflows and binary-only modules
 
 ## Running Tests
 
@@ -274,19 +274,33 @@ fn test_zoom_in_normal() {
 ### Current Status
 
 ```
-Total Tests: 129
-├── Unit Tests: 93
-│   ├── File Operations: 13
-│   ├── State Management: 19
-│   ├── Zoom/Pan: 36
-│   └── Filters: 25
-└── Integration Tests: 36
-    ├── CLI Workflows: 4
-    ├── File Loading: 3
-    ├── Navigation: 4
-    └── Complete Workflows: 7
+Total Tests: ~326 (215 lib + 111 bin/integration)
+├── Library Unit Tests: 215
+│   ├── Error types: 10
+│   ├── CLI: 1
+│   ├── State (app_state): 30+
+│   ├── State (image_state): 8
+│   ├── State (settings): 16
+│   ├── Utils — file_scanner: 15
+│   ├── Utils — filters: 18
+│   ├── Utils — zoom: 16
+│   ├── Utils — color: 19
+│   ├── Utils — float_map: 17
+│   ├── Utils — local_contrast: 8
+│   ├── Utils — lc_presets: 10
+│   ├── Utils — animation: 11
+│   ├── Utils — image_loader: 12
+│   └── Utils — settings_io: 9
+├── Binary Crate Tests: ~221 (includes lib tests + app_handlers)
+│   └── app_handlers: 6 (window title formatting)
+└── Standalone Integration Tests: 111
+    ├── file_operations_test.rs: 13
+    ├── filter_test.rs: 25
+    ├── integration_test.rs: 18
+    ├── state_management_test.rs: 19
+    └── zoom_pan_test.rs: 36
 
-Pass Rate: 100% (129/129)
+Pass Rate: 100%
 Execution Time: < 1 second
 Platform: macOS (verified)
 ```

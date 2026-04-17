@@ -67,7 +67,7 @@ rpview --version
 
 When directories are provided (or when no arguments are given):
 
-1. **Scanning:** The application recursively scans the directory for image files
+1. **Scanning:** The application scans the directory for image files (non-recursive; subdirectories are ignored)
 2. **Filtering:** Only files with supported extensions are included
 3. **Sorting:** Files are sorted alphabetically by default (can be changed in-app to sort by modification date)
 4. **Display:** The first image in the sorted list is displayed initially

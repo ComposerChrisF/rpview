@@ -108,7 +108,7 @@ Five zoom speeds via keyboard, plus scroll-wheel and Z+drag:
 
 | Input | Behavior |
 |-------|----------|
-| `+` / `-` | 1.25× steps, centered on viewport center |
+| `+` / `-` | 1.2× steps, centered on viewport center |
 | `Shift` + `+` / `-` | 1.5× steps (fast) |
 | `Cmd/Ctrl` + `+` / `-` | 1.05× steps (slow) |
 | `Shift+Cmd/Ctrl` + `+` / `-` | 1% steps (incremental) |

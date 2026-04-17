@@ -1475,3 +1475,76 @@ pub(crate) fn format_window_title(
         None => "rpview".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::state::app_state::SortMode;
+    use crate::state::settings::AppSettings;
+    use super::format_window_title;
+    use std::path::Path;
+
+    #[test]
+    fn test_format_window_title_all_placeholders() {
+        // Arrange
+        let settings = AppSettings::default();
+        let path = Path::new("/photos/sunset.png");
+
+        // Act
+        let title = format_window_title(Some(path), 2, 10, SortMode::Alphabetical, &settings);
+
+        // Assert — default template: "{filename} ({sm}, {index}/{total})"
+        assert_eq!(title, "sunset.png (A, 3/10)");
+    }
+
+    #[test]
+    fn test_format_window_title_modified_date_sort() {
+        let settings = AppSettings::default();
+        let path = Path::new("image.jpg");
+
+        let title = format_window_title(Some(path), 0, 5, SortMode::ModifiedDate, &settings);
+
+        assert_eq!(title, "image.jpg (M, 1/5)");
+    }
+
+    #[test]
+    fn test_format_window_title_type_modified_sort() {
+        let settings = AppSettings::default();
+        let path = Path::new("photo.webp");
+
+        let title = format_window_title(Some(path), 4, 20, SortMode::TypeModified, &settings);
+
+        assert_eq!(title, "photo.webp (TM, 5/20)");
+    }
+
+    #[test]
+    fn test_format_window_title_no_path_returns_rpview() {
+        let settings = AppSettings::default();
+
+        let title = format_window_title(None, 0, 0, SortMode::Alphabetical, &settings);
+
+        assert_eq!(title, "rpview");
+    }
+
+    #[test]
+    fn test_format_window_title_counter_disabled_returns_filename_only() {
+        let mut settings = AppSettings::default();
+        settings.sort_navigation.show_image_counter = false;
+        let path = Path::new("/dir/photo.png");
+
+        let title = format_window_title(Some(path), 3, 10, SortMode::Alphabetical, &settings);
+
+        assert_eq!(title, "photo.png");
+    }
+
+    #[test]
+    fn test_format_window_title_custom_template_with_sortmode() {
+        let mut settings = AppSettings::default();
+        settings.appearance.window_title_format =
+            "{filename} [{sortmode}] {index} of {total}".to_string();
+        let path = Path::new("pic.gif");
+
+        let title = format_window_title(Some(path), 1, 3, SortMode::TypeAlpha, &settings);
+
+        assert_eq!(title, "pic.gif [type+alphabetical] 2 of 3");
+    }
+}

@@ -638,13 +638,6 @@ mod tests {
         assert!(all_formats.contains(&SaveFormat::Webp));
     }
 
-    #[test]
-    fn test_zoom_mode_equality() {
-        // Arrange & Act & Assert
-        assert_eq!(ZoomMode::FitToWindow, ZoomMode::FitToWindow);
-        assert_eq!(ZoomMode::OneHundredPercent, ZoomMode::OneHundredPercent);
-        assert_ne!(ZoomMode::FitToWindow, ZoomMode::OneHundredPercent);
-    }
 
     #[test]
     fn test_filter_preset_creation() {
@@ -678,5 +671,19 @@ mod tests {
         assert_eq!(config.command, "open");
         assert_eq!(config.args.len(), 2);
         assert!(config.enabled);
+    }
+
+    #[test]
+    fn test_appearance_active_background_color_light() {
+        // Arrange
+        let mut appearance = Appearance::default();
+        appearance.use_light_background = true;
+
+        // Act
+        let color = appearance.active_background_color();
+
+        // Assert — should return the light background color
+        assert_eq!(color, appearance.background_color_light);
+        assert_eq!(color, [0xe0, 0xe0, 0xe0]);
     }
 }

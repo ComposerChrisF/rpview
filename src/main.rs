@@ -1,4 +1,5 @@
 #![allow(clippy::collapsible_if)]
+#![recursion_limit = "256"]
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;

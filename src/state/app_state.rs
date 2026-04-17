@@ -397,38 +397,6 @@ mod tests {
         assert_eq!(mode, SortMode::Alphabetical);
     }
 
-    #[test]
-    fn test_sort_mode_equality() {
-        // Arrange & Act & Assert
-        assert_eq!(SortMode::Alphabetical, SortMode::Alphabetical);
-        assert_eq!(SortMode::ModifiedDate, SortMode::ModifiedDate);
-        assert_ne!(SortMode::Alphabetical, SortMode::ModifiedDate);
-    }
-
-    #[test]
-    fn test_sort_mode_clone() {
-        // Arrange
-        let mode = SortMode::ModifiedDate;
-
-        // Act
-        let cloned = mode;
-
-        // Assert
-        assert_eq!(mode, cloned);
-    }
-
-    #[test]
-    fn test_sort_mode_copy() {
-        // Arrange
-        let mode = SortMode::Alphabetical;
-
-        // Act - Copy trait allows direct assignment
-        let copied: SortMode = mode;
-
-        // Assert - both should be equal and mode still valid (Copy)
-        assert_eq!(mode, copied);
-        assert_eq!(mode, SortMode::Alphabetical);
-    }
 
     #[test]
     fn test_app_state_new_uses_default_sort_mode() {
@@ -905,5 +873,87 @@ mod tests {
 
         // Assert - cached state for removed image should be gone
         assert!(!state.image_states.contains_key(&PathBuf::from("a.png")));
+    }
+
+    // -- SortMode label tests -------------------------------------------------
+
+    #[test]
+    fn test_short_label_all_variants() {
+        assert_eq!(SortMode::Alphabetical.short_label(), "A");
+        assert_eq!(SortMode::ModifiedDate.short_label(), "M");
+        assert_eq!(SortMode::TypeAlpha.short_label(), "TA");
+        assert_eq!(SortMode::TypeModified.short_label(), "TM");
+    }
+
+    #[test]
+    fn test_long_label_all_variants() {
+        assert_eq!(SortMode::Alphabetical.long_label(), "alphabetical");
+        assert_eq!(SortMode::ModifiedDate.long_label(), "modified");
+        assert_eq!(SortMode::TypeAlpha.long_label(), "type+alphabetical");
+        assert_eq!(SortMode::TypeModified.long_label(), "type+modified");
+    }
+
+    // -- TypeModified sort mode -----------------------------------------------
+
+    #[test]
+    fn test_type_modified_sort_groups_by_type_then_mtime() {
+        use std::fs;
+        use std::time::{Duration, SystemTime};
+
+        // Arrange — create real files with distinct types and modification times
+        let dir = tempfile::tempdir().unwrap();
+
+        let png_old = dir.path().join("old.png");
+        let png_new = dir.path().join("new.png");
+        let gif_file = dir.path().join("anim.gif");
+
+        fs::write(&png_old, "a").unwrap();
+        fs::write(&png_new, "b").unwrap();
+        fs::write(&gif_file, "c").unwrap();
+
+        let now = SystemTime::now();
+        filetime::set_file_mtime(
+            &png_old,
+            filetime::FileTime::from_system_time(now - Duration::from_secs(200)),
+        )
+        .unwrap();
+        filetime::set_file_mtime(&png_new, filetime::FileTime::from_system_time(now)).unwrap();
+        filetime::set_file_mtime(
+            &gif_file,
+            filetime::FileTime::from_system_time(now - Duration::from_secs(100)),
+        )
+        .unwrap();
+
+        let paths = vec![png_old.clone(), png_new.clone(), gif_file.clone()];
+
+        // Act
+        let state =
+            AppState::new_with_settings(paths, None, SortMode::TypeModified, DEFAULT_CACHE_SIZE);
+
+        // Assert — GIF group first (alphabetically before PNG), then PNG group.
+        // Within each group, newest first.
+        assert_eq!(state.image_paths[0], gif_file); // only GIF
+        assert_eq!(state.image_paths[1], png_new);  // newest PNG
+        assert_eq!(state.image_paths[2], png_old);  // oldest PNG
+    }
+
+    // -- new_with_settings: start_path not found ------------------------------
+
+    #[test]
+    fn test_new_with_settings_start_path_not_found_defaults_to_zero() {
+        // Arrange
+        let paths = vec![PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let missing = PathBuf::from("nonexistent.png");
+
+        // Act
+        let state = AppState::new_with_settings(
+            paths,
+            Some(missing),
+            SortMode::Alphabetical,
+            DEFAULT_CACHE_SIZE,
+        );
+
+        // Assert — should default to index 0
+        assert_eq!(state.current_index, 0);
     }
 }

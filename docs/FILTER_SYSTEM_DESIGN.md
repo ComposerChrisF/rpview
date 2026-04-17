@@ -171,11 +171,15 @@ Linear addition/subtraction of pixel values.
 
 ### Contrast (-100 to +100)
 ```rust
-let factor = 1.0 + (contrast / 100.0) * 2.0; // Maps to 0.1 to 3.0
+let factor = if contrast > 0.0 {
+    1.0 + (contrast / 100.0) * 2.0  // Positive: 1.0 to 3.0
+} else {
+    1.0 + (contrast / 100.0) * 0.9  // Negative: 0.1 to 1.0
+};
 let mid = 128.0;
 new_value = clamp(mid + (old_value - mid) * factor, 0, 255)
 ```
-Factor-based scaling around middle gray.
+Factor-based scaling around middle gray. Full range: 0.1 to 3.0.
 
 ### Gamma (0.1 to 10.0)
 ```rust
@@ -277,10 +281,10 @@ Also applied to Escape key handler when closing any overlay.
 ```
 
 ### Keyboard Shortcuts
-- `Cmd/Ctrl+F`: Toggle filter panel
-- `Cmd/Ctrl+1`: Disable filters
-- `Cmd/Ctrl+2`: Enable filters (deprecated, now Cmd+1 toggles)
-- `Cmd/Ctrl+R`: Reset all filters to defaults
+- `Cmd/Ctrl+F` or `F`: Toggle filter panel
+- `1`: Disable filters (show original)
+- `2`: Enable filters (show processed)
+- `Shift+Cmd/Ctrl+R`: Reset all filters to defaults
 - `Escape`: Close filter panel (restores focus)
 
 ## Implementation Notes
