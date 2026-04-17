@@ -5,6 +5,18 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.3] - 2026-04-17
+
+### Changed
+- Extracted `format_window_title` into dedicated `window_title` module with single-pass template expansion (was 5 chained `.replace()` allocations)
+- Replaced `thread::sleep` in LRU eviction test with deterministic `Instant` backdating
+
+### Fixed
+- Strengthened cache eviction test assertion from `<=` to exact `assert_eq!`
+- Filter extreme-values test now uses actual boundary values (±100 brightness/contrast, 0.1–10.0 gamma) plus beyond-clamp inputs
+- Removed stale double blank lines left by prior test deletions
+- Added comment explaining `recursion_limit = "256"` (required by GPUI derive macros)
+
 ## [0.18.2] - 2026-04-16
 
 ### Fixed
