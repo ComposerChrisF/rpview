@@ -320,6 +320,31 @@ impl App {
         cx.notify();
     }
 
+    /// Apply current LC settings without turning on Preview.
+    /// Processes the image into the in-memory LC buffer (accessible via "2").
+    pub(crate) fn handle_apply_local_contrast(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
+        if params.is_identity() {
+            return;
+        }
+        // Auto-pause animation when LC is active.
+        if let Some(ref mut anim) = self.viewer.image_state.animation {
+            anim.is_playing = false;
+        }
+        self.viewer.update_local_contrast(params);
+        if self.viewer.is_processing_lc() {
+            self.local_contrast_controls.update(cx, |c, cx| {
+                c.set_status("Applying…", cx);
+                c.set_progress(Some(0.0), cx);
+            });
+        }
+        cx.notify();
+    }
+
     pub(crate) fn open_local_contrast_window(&mut self, cx: &mut Context<Self>) {
         if self.local_contrast_window.is_some() {
             return;
@@ -1397,11 +1422,18 @@ impl App {
         let state = self.app_state.get_current_state(default_filters);
         let filters = state.filters;
         let filters_enabled = state.filters_enabled;
+        let lc_preview = state.lc_preview_enabled;
         self.viewer.set_image_state(state); // move, no clone
 
         // Update filter controls UI to reflect the loaded filter values
         self.filter_controls.update(cx, |controls, cx| {
             controls.update_from_filters(filters, cx);
+        });
+
+        // Restore per-image LC preview state
+        self.local_contrast_controls.update(cx, |c, cx| {
+            c.preview_enabled = lc_preview;
+            cx.notify();
         });
 
         // Re-apply filters to the newly-loaded image if they're non-default.
@@ -1462,9 +1494,21 @@ impl App {
     }
 
     /// Re-trigger LC processing on the current image when the user has any
-    /// non-neutral LC knob. Called after every successful image load so the
-    /// sliders "follow" the user across images like the filter sliders do.
+    /// non-neutral LC knob and preview is enabled for this image. Called
+    /// after every successful image load so the sliders "follow" the user
+    /// across images like the filter sliders do.
     pub(crate) fn reapply_local_contrast_if_active(&mut self, cx: &mut Context<Self>) {
+        let preview = self.local_contrast_controls.read(cx).preview_enabled;
+        if !preview {
+            // Preview off for this image — don't auto-process. Set lc_enabled
+            // to false so the viewer shows the unprocessed image.
+            self.viewer.set_lc_enabled(false);
+            self.local_contrast_controls.update(cx, |c, cx| {
+                c.set_status("Preview off", cx);
+                c.set_progress(None, cx);
+            });
+            return;
+        }
         let params = self.local_contrast_controls.read(cx).get_parameters(cx);
         if params.is_identity() {
             return;
@@ -1473,6 +1517,7 @@ impl App {
         if let Some(ref mut anim) = self.viewer.image_state.animation {
             anim.is_playing = false;
         }
+        self.viewer.set_lc_enabled(true);
         self.viewer.update_local_contrast(params);
         self.local_contrast_controls.update(cx, |c, cx| {
             c.set_status("Processing…", cx);

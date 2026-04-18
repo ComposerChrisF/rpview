@@ -207,10 +207,10 @@ pub struct ImageViewer {
     /// Inner tuple: (last_mouse_x, last_mouse_y, zoom_center_x, zoom_center_y)
     #[allow(dead_code)]
     pub(crate) z_drag_state: Option<Option<(f32, f32, f32, f32)>>,
-    /// Spacebar drag pan state: outer Option = spacebar held, inner Option = actively dragging
-    /// Inner tuple: (last_mouse_x, last_mouse_y) for 1:1 pixel movement panning
+    /// Drag-to-pan state: None = not dragging, Some((last_x, last_y)) = actively dragging.
+    /// Click-and-drag pans the image with 1:1 pixel movement (no modifier key needed).
     #[allow(dead_code)]
-    pub(crate) spacebar_drag_state: Option<Option<(f32, f32)>>,
+    pub(crate) drag_pan_state: Option<(f32, f32)>,
     /// Paths to preload into GPU (for smooth navigation)
     /// These images are rendered invisibly to prime the GPU texture cache
     pub(crate) preload_paths: Vec<PathBuf>,
@@ -282,7 +282,7 @@ impl ImageViewer {
             image_state: ImageState::new(),
             viewport_size: None,
             z_drag_state: None,
-            spacebar_drag_state: None,
+            drag_pan_state: None,
             preload_paths: Vec::new(),
             loading_handle: None,
             is_loading: false,

@@ -79,9 +79,10 @@ use utils::settings_io;
 
 // Import all actions from lib.rs (they're defined there to avoid duplication)
 use rpview::{
-    BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ConfirmDelete, ContrastDown,
-    ContrastUp, DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp, NextFrame,
-    NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit,
+    ApplyLocalContrast, BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ConfirmDelete,
+    ContrastDown, ContrastUp, DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp,
+    NextFrame, NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer,
+    OpenInExternalViewerAndQuit,
     PanDown, PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
     PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, RecallSlot3,
     RecallSlot4, RecallSlot5, RecallSlot6, RecallSlot7, RecallSlot8, RecallSlot9, RequestDelete,
@@ -117,8 +118,6 @@ pub(crate) struct App {
     escape_presses: Vec<Instant>,
     /// Tracks if Z key is currently held down (for Z+drag zoom mode)
     z_key_held: bool,
-    /// Tracks if spacebar is currently held down (for spacebar+drag pan mode)
-    spacebar_held: bool,
     /// Tracks if left mouse button is currently pressed
     /// Used with MouseMoveEvent.pressed_button for robust button state tracking
     mouse_button_down: bool,
@@ -370,6 +369,9 @@ fn main() {
                                 LocalContrastControlsEvent::ParametersChanged => {
                                     let preview =
                                         this.local_contrast_controls.read(cx).preview_enabled;
+                                    // Persist preview state per-image.
+                                    this.viewer.image_state.lc_preview_enabled = preview;
+                                    this.save_current_image_state();
                                     if !preview {
                                         // Preview off: just hide the LC render via the A/B
                                         // flag, preserving the cached buffer so turning
@@ -452,7 +454,6 @@ fn main() {
                         focus_handle,
                         escape_presses: Vec::new(),
                         z_key_held: false,
-                        spacebar_held: false,
                         mouse_button_down: false,
                         show_zoom_indicator: true,
                         show_help: false,
