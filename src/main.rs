@@ -367,31 +367,28 @@ fn main() {
                                     cx.notify();
                                 }
                                 LocalContrastControlsEvent::ParametersChanged => {
-                                    let preview =
-                                        this.local_contrast_controls.read(cx).preview_enabled;
-                                    // Persist preview state per-image (only when it changes).
-                                    if this.viewer.image_state.lc_preview_enabled != preview {
-                                        this.viewer.image_state.lc_preview_enabled = preview;
+                                    let auto = this
+                                        .local_contrast_controls
+                                        .read(cx)
+                                        .auto_process;
+                                    // Persist auto-process state per-image (only when it changes).
+                                    if this.viewer.image_state.lc_auto_process != auto {
+                                        this.viewer.image_state.lc_auto_process = auto;
                                         this.save_current_image_state();
                                     }
-                                    if !preview {
-                                        // Preview off: just hide the LC render via the A/B
-                                        // flag, preserving the cached buffer so turning
-                                        // Preview back on is instantaneous when params
-                                        // haven't changed. Also cancel any in-flight job
-                                        // since its result would be thrown away anyway.
+                                    if !auto {
+                                        // Auto Process off: don't trigger processing on
+                                        // slider changes. Cancel any in-flight job. Do NOT
+                                        // change lc_enabled — keep showing whatever is
+                                        // currently displayed.
                                         this.viewer.cancel_lc_processing();
-                                        this.viewer.set_lc_enabled(false);
                                         this.local_contrast_controls.update(cx, |c, cx| {
-                                            c.set_status("Preview off", cx);
                                             c.set_progress(None, cx);
                                         });
                                         cx.notify();
                                         return;
                                     }
-                                    // Preview on: show the LC render again. If params
-                                    // match the cached ones, update_local_contrast bails
-                                    // early and we display the cached buffer instantly.
+                                    // Auto Process on: process and display the result.
                                     this.viewer.set_lc_enabled(true);
                                     // Auto-pause animation when LC is enabled.
                                     if let Some(ref mut anim) =

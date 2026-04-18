@@ -24,8 +24,8 @@ pub struct ImageState {
     /// Animation state (if applicable)
     pub animation: Option<AnimationState>,
 
-    /// Whether LC preview is enabled for this image
-    pub lc_preview_enabled: bool,
+    /// Whether LC auto-process is enabled for this image
+    pub lc_auto_process: bool,
 
     /// Whether user has chosen to override the size limit for this image
     pub override_size_limit: bool,
@@ -47,7 +47,7 @@ impl ImageState {
             filters: default_filters,
             filters_enabled: true,
             animation: None,
-            lc_preview_enabled: false,
+            lc_auto_process: false,
             override_size_limit: false,
         }
     }
@@ -127,7 +127,7 @@ mod tests {
         assert!(state.is_fit_to_window);
         assert!(state.filters_enabled);
         assert!(state.animation.is_none());
-        assert!(!state.lc_preview_enabled);
+        assert!(!state.lc_auto_process);
         assert!(!state.override_size_limit);
     }
 

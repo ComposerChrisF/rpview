@@ -39,9 +39,10 @@ pub struct LocalContrastControls {
     /// Current image dimensions, set by the app when the image changes.
     /// Used to compute the auto resize factor.
     pub image_dimensions: Option<(u32, u32)>,
-    /// When false, slider changes don't trigger processing and the viewer
-    /// shows the unprocessed image. Flipping back to true re-triggers.
-    pub preview_enabled: bool,
+    /// When true, every slider change automatically triggers LC processing
+    /// and displays the result. When false, the user must press Cmd/Ctrl+P
+    /// to apply. Turning this off does NOT hide the current LC render.
+    pub auto_process: bool,
 
     // --- Window / block sizes ------------------------------------------------
     pub cxy_window_auto: bool,
@@ -147,7 +148,7 @@ impl LocalContrastControls {
             resize_factor: 1.0,
             resize_auto: false,
             image_dimensions: None,
-            preview_enabled: false,
+            auto_process: false,
 
             cxy_window_auto: true,
             cxy_window_slider,
@@ -266,7 +267,7 @@ impl LocalContrastControls {
         let defaults = Parameters::default();
         self.resize_factor = 1.0;
         self.resize_auto = false;
-        self.preview_enabled = false;
+        self.auto_process = false;
         self.cxy_window_auto = true;
         self.cxy_block_auto = true;
         self.cxy_window_slider
@@ -752,11 +753,11 @@ impl Render for LocalContrastControls {
                     )
                     .child(resize_toggle_row(self.resize_factor, self.resize_auto, font, cx))
                     .child(checkbox_row(
-                        "Preview".to_string(),
-                        self.preview_enabled,
+                        "Auto Process".to_string(),
+                        self.auto_process,
                         font,
                         cx,
-                        |this| this.preview_enabled = !this.preview_enabled,
+                        |this| this.auto_process = !this.auto_process,
                     ))
                     .child(section_separator())
                     // Window size
