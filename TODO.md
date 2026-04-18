@@ -427,7 +427,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 - [x] Test with mixed file types
 - [x] Verify navigation list correctness
 - [x] Verify current index accuracy
-- [ ] Test on Windows with File Explorer (ready for testing)
+- [x] Test on Windows with File Explorer
 - [ ] Test on Linux with Nautilus/Dolphin (ready for testing)
 
 ## Phase 12: Cross-Platform Polish ✅
@@ -487,7 +487,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 
 ### Platform Testing
 - [x] Test on macOS (all tests passing)
-- [ ] Test on Windows (ready for testing)
+- [x] Test on Windows
 - [ ] Test on Linux (ready for testing)
 - [x] Test with various image formats (PNG, JPEG, GIF, BMP, TIFF, WEBP, ICO)
 - [ ] Test with large images (>100MB)
@@ -551,18 +551,18 @@ This document outlines the development roadmap for rpview, organized by implemen
 - [x] Usage guide (in DESIGN.md)
 - [x] Keyboard shortcuts reference (in DESIGN.md)
 - [x] CLI documentation (in CLI.md)
-- [ ] Troubleshooting guide
+- [x] Troubleshooting guide (docs/TROUBLESHOOTING.md)
 
 ### Developer Documentation
 - [x] Architecture overview (in DESIGN.md)
-- [ ] Component documentation
-- [ ] API documentation (rustdoc)
+- [x] Component documentation (docs/COMPONENTS.md)
+- [x] API documentation (rustdoc) — doc comments added to lib.rs, style.rs, lc_presets.rs
 - [x] Contribution guidelines (CONTRIBUTING.md)
 
 ### Release Preparation
 - [x] Set up semantic versioning
 - [x] Create CHANGELOG.md
-- [ ] Create release notes template
+- [x] Create release notes template (RELEASE_NOTES_TEMPLATE.md)
 - [ ] Final testing on all platforms
 - [ ] Security review
 - [ ] Create installation packages

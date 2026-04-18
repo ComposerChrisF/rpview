@@ -32,6 +32,7 @@ fn preset_path(name: &str) -> PathBuf {
     presets_dir().join(format!("{}.json", safe_name))
 }
 
+/// Return a sorted list of all saved preset names (without the `.json` extension).
 pub fn list_preset_names() -> Vec<String> {
     let dir = presets_dir();
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -54,12 +55,14 @@ pub fn list_preset_names() -> Vec<String> {
     names
 }
 
+/// Load a preset by name, returning `None` if the file doesn't exist or can't be parsed.
 pub fn load_preset(name: &str) -> Option<Parameters> {
     let path = preset_path(name);
     let data = std::fs::read_to_string(&path).ok()?;
     serde_json::from_str(&data).ok()
 }
 
+/// Save a preset to disk. Creates the presets directory if needed.
 pub fn save_preset(name: &str, params: &Parameters) -> Result<(), String> {
     let dir = presets_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("create dir: {e}"))?;
@@ -68,6 +71,7 @@ pub fn save_preset(name: &str, params: &Parameters) -> Result<(), String> {
     Ok(())
 }
 
+/// Delete a preset file. Succeeds silently if the preset doesn't exist.
 pub fn delete_preset(name: &str) -> Result<(), String> {
     let path = preset_path(name);
     if path.exists() {
