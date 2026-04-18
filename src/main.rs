@@ -369,9 +369,11 @@ fn main() {
                                 LocalContrastControlsEvent::ParametersChanged => {
                                     let preview =
                                         this.local_contrast_controls.read(cx).preview_enabled;
-                                    // Persist preview state per-image.
-                                    this.viewer.image_state.lc_preview_enabled = preview;
-                                    this.save_current_image_state();
+                                    // Persist preview state per-image (only when it changes).
+                                    if this.viewer.image_state.lc_preview_enabled != preview {
+                                        this.viewer.image_state.lc_preview_enabled = preview;
+                                        this.save_current_image_state();
+                                    }
                                     if !preview {
                                         // Preview off: just hide the LC render via the A/B
                                         // flag, preserving the cached buffer so turning

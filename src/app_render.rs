@@ -303,14 +303,16 @@ impl Render for App {
                 cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
                     this.mouse_button_down = false;
 
-                    // End drag-to-pan
-                    if this.viewer.drag_pan_state.is_some() {
-                        this.save_current_image_state();
-                        this.viewer.drag_pan_state = None;
-                        cx.notify();
+                    // End drag-to-pan (only save state if drag actually moved)
+                    if let Some(_) = this.viewer.drag_pan_state.take() {
+                        if this.viewer.drag_pan_moved {
+                            this.save_current_image_state();
+                            this.viewer.drag_pan_moved = false;
+                            cx.notify();
+                        }
                     }
                     // End Z-drag zoom (but keep Z key state active if still held)
-                    if this.viewer.z_drag_state.is_some() {
+                    else if this.viewer.z_drag_state.is_some() {
                         // Reset to held-but-not-dragging
                         this.viewer.z_drag_state = Some(None);
                         cx.notify();
@@ -327,6 +329,7 @@ impl Render for App {
                     // End drag-to-pan if active
                     if this.viewer.drag_pan_state.is_some() {
                         this.viewer.drag_pan_state = None;
+                        this.viewer.drag_pan_moved = false;
                     }
                     // End Z-drag zoom if active
                     if this.viewer.z_drag_state.is_some() {
@@ -346,6 +349,7 @@ impl Render for App {
 
                         // Apply pan directly (1:1 pixel movement)
                         this.viewer.pan(delta_x, delta_y);
+                        this.viewer.drag_pan_moved = true;
 
                         // Update last position for next delta calculation
                         this.viewer.drag_pan_state = Some((current_x, current_y));
