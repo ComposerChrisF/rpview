@@ -504,6 +504,113 @@ fn main() {
             });
         }
 
+        // Register global action handlers so keyboard shortcuts work even
+        // when a floating window (Filter, Local Contrast) has focus. When
+        // the main window is focused its per-element handlers take priority
+        // and these don't fire. When a floating window is focused and has
+        // no handler for the action, it bubbles here.
+        macro_rules! forward {
+            ($action:ty, $method:ident) => {
+                cx.on_action({
+                    let wh = main_window;
+                    move |_: &$action, cx| {
+                        let _ = wh.update(cx, |app, window, cx| app.$method(window, cx));
+                    }
+                });
+            };
+        }
+        macro_rules! forward_slot {
+            ($action:ty, $method:ident, $slot:expr) => {
+                cx.on_action({
+                    let wh = main_window;
+                    move |_: &$action, cx| {
+                        let _ = wh.update(cx, |app, window, cx| app.$method($slot, window, cx));
+                    }
+                });
+            };
+        }
+        // Navigation
+        forward!(NextImage, handle_next_image);
+        forward!(PreviousImage, handle_previous_image);
+        // Animation
+        forward!(ToggleAnimationPlayPause, handle_toggle_animation);
+        forward!(NextFrame, handle_next_frame);
+        forward!(PreviousFrame, handle_previous_frame);
+        // Sort
+        forward!(SortAlphabetical, handle_sort_alphabetical);
+        forward!(SortByModified, handle_sort_by_modified);
+        forward!(SortByTypeToggle, handle_sort_by_type_toggle);
+        // Local Contrast
+        forward!(ToggleLocalContrast, handle_toggle_local_contrast);
+        forward!(ApplyLocalContrast, handle_apply_local_contrast);
+        forward!(ResetLocalContrast, handle_reset_local_contrast);
+        // Zoom
+        forward!(ZoomIn, handle_zoom_in);
+        forward!(ZoomOut, handle_zoom_out);
+        forward!(ZoomReset, handle_zoom_reset);
+        forward!(ZoomResetAndCenter, handle_zoom_reset_and_center);
+        forward!(ZoomInFast, handle_zoom_in_fast);
+        forward!(ZoomOutFast, handle_zoom_out_fast);
+        forward!(ZoomInSlow, handle_zoom_in_slow);
+        forward!(ZoomOutSlow, handle_zoom_out_slow);
+        forward!(ZoomInIncremental, handle_zoom_in_incremental);
+        forward!(ZoomOutIncremental, handle_zoom_out_incremental);
+        // Pan
+        forward!(PanUp, handle_pan_up);
+        forward!(PanDown, handle_pan_down);
+        forward!(PanLeft, handle_pan_left);
+        forward!(PanRight, handle_pan_right);
+        forward!(PanUpFast, handle_pan_up_fast);
+        forward!(PanDownFast, handle_pan_down_fast);
+        forward!(PanLeftFast, handle_pan_left_fast);
+        forward!(PanRightFast, handle_pan_right_fast);
+        forward!(PanUpSlow, handle_pan_up_slow);
+        forward!(PanDownSlow, handle_pan_down_slow);
+        forward!(PanLeftSlow, handle_pan_left_slow);
+        forward!(PanRightSlow, handle_pan_right_slow);
+        // View toggles
+        forward!(ToggleHelp, handle_toggle_help);
+        forward!(ToggleDebug, handle_toggle_debug);
+        forward!(ToggleZoomIndicator, handle_toggle_zoom_indicator);
+        forward!(ToggleBackground, handle_toggle_background);
+        forward!(ToggleSettings, handle_toggle_settings);
+        // Filters
+        forward!(ToggleFilters, handle_toggle_filters);
+        forward!(DisableFilters, handle_disable_filters);
+        forward!(EnableFilters, handle_enable_filters);
+        forward!(ResetFilters, handle_reset_filters);
+        forward!(BrightnessUp, handle_brightness_up);
+        forward!(BrightnessDown, handle_brightness_down);
+        forward!(ContrastUp, handle_contrast_up);
+        forward!(ContrastDown, handle_contrast_down);
+        forward!(GammaUp, handle_gamma_up);
+        forward!(GammaDown, handle_gamma_down);
+        // Slots
+        forward_slot!(RecallSlot3, handle_recall_slot, 3);
+        forward_slot!(RecallSlot4, handle_recall_slot, 4);
+        forward_slot!(RecallSlot5, handle_recall_slot, 5);
+        forward_slot!(RecallSlot6, handle_recall_slot, 6);
+        forward_slot!(RecallSlot7, handle_recall_slot, 7);
+        forward_slot!(RecallSlot8, handle_recall_slot, 8);
+        forward_slot!(RecallSlot9, handle_recall_slot, 9);
+        forward_slot!(StoreSlot3, handle_store_slot, 3);
+        forward_slot!(StoreSlot4, handle_store_slot, 4);
+        forward_slot!(StoreSlot5, handle_store_slot, 5);
+        forward_slot!(StoreSlot6, handle_store_slot, 6);
+        forward_slot!(StoreSlot7, handle_store_slot, 7);
+        forward_slot!(StoreSlot8, handle_store_slot, 8);
+        forward_slot!(StoreSlot9, handle_store_slot, 9);
+        // File operations
+        forward!(OpenFile, handle_open_file);
+        forward!(SaveFile, handle_save_file);
+        forward!(SaveFileToDownloads, handle_save_file_to_downloads);
+        forward!(OpenInExternalViewer, handle_open_in_external_viewer);
+        forward!(OpenInExternalViewerAndQuit, handle_open_in_external_viewer_and_quit);
+        forward!(OpenInExternalEditor, handle_open_in_external_editor);
+        forward!(RevealInFinder, handle_reveal_in_finder);
+        forward!(RequestDelete, handle_request_delete);
+        forward!(RequestPermanentDelete, handle_request_permanent_delete);
+
         // Check for pending open paths from macOS "Open With" events
         // Use defer to ensure the window is fully set up first
         cx.defer(|cx| {
