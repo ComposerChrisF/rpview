@@ -211,6 +211,9 @@ pub struct ImageViewer {
     /// Click-and-drag pans the image with 1:1 pixel movement (no modifier key needed).
     #[allow(dead_code)]
     pub(crate) drag_pan_state: Option<(f32, f32)>,
+    /// Whether a drag-to-pan actually moved (avoids unnecessary state saves on plain clicks).
+    #[allow(dead_code)]
+    pub(crate) drag_pan_moved: bool,
     /// Paths to preload into GPU (for smooth navigation)
     /// These images are rendered invisibly to prime the GPU texture cache
     pub(crate) preload_paths: Vec<PathBuf>,
@@ -283,6 +286,7 @@ impl ImageViewer {
             viewport_size: None,
             z_drag_state: None,
             drag_pan_state: None,
+            drag_pan_moved: false,
             preload_paths: Vec::new(),
             loading_handle: None,
             is_loading: false,
@@ -291,7 +295,7 @@ impl ImageViewer {
             lc_job: None,
             pending_lc_params: None,
             lc_batch_job: None,
-            lc_enabled: true,
+            lc_enabled: false,
             saved_slots: Default::default(),
             active_slot: None,
             svg_reraster_path: None,

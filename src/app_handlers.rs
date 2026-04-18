@@ -321,7 +321,9 @@ impl App {
     }
 
     /// Apply current LC settings without turning on Preview.
-    /// Processes the image into the in-memory LC buffer (accessible via "2").
+    /// Processes the image into the in-memory LC buffer. The result is not
+    /// shown immediately — the user must press "2" (EnableFilters) which
+    /// sets `lc_enabled = true` and displays the LC render.
     pub(crate) fn handle_apply_local_contrast(
         &mut self,
         _window: &mut Window,

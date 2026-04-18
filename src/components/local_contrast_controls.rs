@@ -199,7 +199,6 @@ impl LocalContrastControls {
             return 1.0;
         }
         let target = 3840.0_f32;
-        let ideal = target / largest;
         // Pick the largest RESIZE_CHOICES value that doesn't exceed 4K,
         // falling back to the smallest if even 0.25x exceeds 4K.
         let mut best = RESIZE_CHOICES[0];
@@ -208,9 +207,6 @@ impl LocalContrastControls {
                 best = factor;
             }
         }
-        // If ideal is larger than best but still <=4x, we could use best.
-        // But we only allow the fixed snap-points.
-        let _ = ideal; // used only for the design doc
         best
     }
 
