@@ -63,14 +63,15 @@ impl Render for App {
                     }
                 }
 
-                // Tell the LC controls whether this image is animated (for batch UI).
-                let is_animated = self
+                // Tell the LC controls about the new image (for batch UI + auto resize).
+                let (is_animated, dims) = self
                     .viewer
                     .current_image
                     .as_ref()
-                    .map(|img| img.animation_data.is_some())
-                    .unwrap_or(false);
+                    .map(|img| (img.animation_data.is_some(), Some((img.width, img.height))))
+                    .unwrap_or((false, None));
                 self.local_contrast_controls.update(cx, |c, cx| {
+                    c.set_image_dimensions(dims);
                     c.set_is_animated(is_animated, cx);
                     c.set_batch_progress(None, cx);
                 });
@@ -255,12 +256,7 @@ impl Render for App {
             self.viewer.z_drag_state = None;
         }
 
-        // Update spacebar-drag state based on spacebar_held
-        if self.spacebar_held && self.viewer.spacebar_drag_state.is_none() {
-            self.viewer.spacebar_drag_state = Some(None);
-        } else if !self.spacebar_held && self.viewer.spacebar_drag_state.is_some() {
-            self.viewer.spacebar_drag_state = None;
-        }
+        // (Spacebar-drag removed: click-and-drag pans directly now.)
 
         // Calculate background color once
         let active_bg = self.settings.appearance.active_background_color();
@@ -286,20 +282,18 @@ impl Render for App {
                     #[cfg(not(target_os = "macos"))]
                     this.menu_bar.update(cx, |mb, cx| mb.close_menu(cx));
 
-                    // Start spacebar-drag pan if spacebar is being held
-                    if this.viewer.spacebar_drag_state.is_some() {
-                        let x: f32 = event.position.x.into();
-                        let y: f32 = event.position.y.into();
-                        // Store: (last_x, last_y) for 1:1 pixel movement
-                        this.viewer.spacebar_drag_state = Some(Some((x, y)));
-                        cx.notify();
-                    }
-                    // Start Z-drag zoom if Z key is being held (and spacebar is not)
-                    else if this.viewer.z_drag_state.is_some() {
+                    // Start Z-drag zoom if Z key is being held
+                    if this.viewer.z_drag_state.is_some() {
                         let y: f32 = event.position.y.into();
                         let x: f32 = event.position.x.into();
                         // Store: (last_x, last_y, center_x, center_y) for zoom centering
                         this.viewer.z_drag_state = Some(Some((x, y, x, y)));
+                        cx.notify();
+                    } else {
+                        // Start drag-to-pan (no modifier key needed)
+                        let x: f32 = event.position.x.into();
+                        let y: f32 = event.position.y.into();
+                        this.viewer.drag_pan_state = Some((x, y));
                         cx.notify();
                     }
                 }),
@@ -309,16 +303,14 @@ impl Render for App {
                 cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
                     this.mouse_button_down = false;
 
-                    // End spacebar-drag pan (but keep spacebar state active if still held)
-                    if this.viewer.spacebar_drag_state.is_some() {
-                        // Save state after panning
+                    // End drag-to-pan
+                    if this.viewer.drag_pan_state.is_some() {
                         this.save_current_image_state();
-                        // Reset to held-but-not-dragging
-                        this.viewer.spacebar_drag_state = Some(None);
+                        this.viewer.drag_pan_state = None;
                         cx.notify();
                     }
                     // End Z-drag zoom (but keep Z key state active if still held)
-                    else if this.viewer.z_drag_state.is_some() {
+                    if this.viewer.z_drag_state.is_some() {
                         // Reset to held-but-not-dragging
                         this.viewer.z_drag_state = Some(None);
                         cx.notify();
@@ -332,9 +324,9 @@ impl Render for App {
                 // If we think the button is down but the event says it's not, correct our state
                 if this.mouse_button_down && !button_actually_pressed {
                     this.mouse_button_down = false;
-                    // End spacebar-drag pan if active
-                    if this.viewer.spacebar_drag_state.is_some() {
-                        this.viewer.spacebar_drag_state = Some(None);
+                    // End drag-to-pan if active
+                    if this.viewer.drag_pan_state.is_some() {
+                        this.viewer.drag_pan_state = None;
                     }
                     // End Z-drag zoom if active
                     if this.viewer.z_drag_state.is_some() {
@@ -342,9 +334,9 @@ impl Render for App {
                     }
                 }
 
-                // Handle spacebar-drag pan (only if mouse button is down and we have valid drag data)
+                // Handle drag-to-pan (only if mouse button is down and we have valid drag data)
                 if this.mouse_button_down && button_actually_pressed {
-                    if let Some(Some((last_x, last_y))) = this.viewer.spacebar_drag_state {
+                    if let Some((last_x, last_y)) = this.viewer.drag_pan_state {
                         let current_x: f32 = event.position.x.into();
                         let current_y: f32 = event.position.y.into();
 
@@ -356,11 +348,11 @@ impl Render for App {
                         this.viewer.pan(delta_x, delta_y);
 
                         // Update last position for next delta calculation
-                        this.viewer.spacebar_drag_state = Some(Some((current_x, current_y)));
+                        this.viewer.drag_pan_state = Some((current_x, current_y));
 
                         this.viewer.notify_svg_zoom_pan_changed();
                         cx.notify();
-                        return; // Don't process Z-drag if we're spacebar-dragging
+                        return; // Don't process Z-drag if we're panning
                     }
                 }
 
@@ -639,26 +631,15 @@ impl Render for App {
                 }
             })
             .child(content)
-            // Key handlers for Space/Z drag modes - must be on focused element
+            // Key handler for Z-drag zoom mode - must be on focused element
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 // Don't process keyboard events if modal overlays are open
                 if this.is_modal_open() {
                     return;
                 }
 
-                // Check for spacebar press (without modifiers)
-                if event.keystroke.key.as_str() == "space"
-                    && !event.keystroke.modifiers.shift
-                    && !event.keystroke.modifiers.control
-                    && !event.keystroke.modifiers.platform
-                    && !event.keystroke.modifiers.alt
-                {
-                    // Enable spacebar-drag pan mode
-                    this.spacebar_held = true;
-                    cx.notify();
-                }
                 // Check for Z key press (without modifiers)
-                else if event.keystroke.key.as_str() == "z"
+                if event.keystroke.key.as_str() == "z"
                     && !event.keystroke.modifiers.shift
                     && !event.keystroke.modifiers.control
                     && !event.keystroke.modifiers.platform
@@ -670,17 +651,8 @@ impl Render for App {
                 }
             }))
             .on_key_up(cx.listener(|this, event: &KeyUpEvent, _window, cx| {
-                // Check for spacebar release
-                if event.keystroke.key.as_str() == "space" {
-                    // Disable spacebar-drag pan mode and save state
-                    if this.spacebar_held {
-                        this.spacebar_held = false;
-                        this.save_current_image_state();
-                        cx.notify();
-                    }
-                }
                 // Check for Z key release
-                else if event.keystroke.key.as_str() == "z" {
+                if event.keystroke.key.as_str() == "z" {
                     // Disable Z-drag zoom mode and save state
                     if this.z_key_held {
                         this.z_key_held = false;
@@ -724,6 +696,9 @@ impl Render for App {
             }))
             .on_action(cx.listener(|this, _: &ToggleLocalContrast, window, cx| {
                 this.handle_toggle_local_contrast(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ApplyLocalContrast, window, cx| {
+                this.handle_apply_local_contrast(window, cx);
             }))
             .on_action(cx.listener(|this, _: &ResetLocalContrast, window, cx| {
                 this.handle_reset_local_contrast(window, cx);

@@ -5,6 +5,17 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-04-17
+
+### Changed
+- Click-and-drag now pans the image directly (spacebar no longer required)
+- Local Contrast Preview defaults to OFF (use Cmd/Ctrl+P to apply, "2" to view)
+
+### Added
+- Cmd+P / Ctrl+P global shortcut to apply current LC settings without turning on Preview; result is accessible via the "2" key
+- "Auto" resize option in LC panel: picks the factor (0.25x-4x) that brings the largest axis closest to 4K without exceeding it
+- Per-image LC Preview on/off state: each image remembers whether Preview was enabled, restored when navigating back
+
 ## [0.19.0] - 2026-04-17
 
 ### Added

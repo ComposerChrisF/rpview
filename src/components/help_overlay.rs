@@ -151,7 +151,7 @@ impl HelpOverlay {
             )
             .into_any_element(),
             self.render_shortcut(
-                "Space + Drag".to_string(),
+                "Click + Drag".to_string(),
                 "Pan with mouse (1:1 movement)".to_string(),
             )
             .into_any_element(),
@@ -204,6 +204,11 @@ impl HelpOverlay {
             self.render_shortcut(
                 format_shortcut("L", true, false),
                 "Show/hide Local Contrast dialog".to_string(),
+            )
+            .into_any_element(),
+            self.render_shortcut(
+                format_shortcut("P", false, false),
+                "Apply Local Contrast (process to buffer)".to_string(),
             )
             .into_any_element(),
             // File Operations section

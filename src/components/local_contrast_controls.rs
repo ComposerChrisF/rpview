@@ -32,8 +32,13 @@ pub struct LocalContrastControls {
     /// Progress 0.0..=1.0 while processing, else None (caller controls).
     pub progress: Option<f32>,
 
-    /// Currently-selected value from `RESIZE_CHOICES`.
+    /// Currently-selected value from `RESIZE_CHOICES` (ignored when `resize_auto` is true).
     pub resize_factor: f32,
+    /// When true, resize factor is auto-computed to target ~4K on the largest axis.
+    pub resize_auto: bool,
+    /// Current image dimensions, set by the app when the image changes.
+    /// Used to compute the auto resize factor.
+    pub image_dimensions: Option<(u32, u32)>,
     /// When false, slider changes don't trigger processing and the viewer
     /// shows the unprocessed image. Flipping back to true re-triggers.
     pub preview_enabled: bool,
@@ -140,7 +145,9 @@ impl LocalContrastControls {
             status: String::new(),
             progress: None,
             resize_factor: 1.0,
-            preview_enabled: true,
+            resize_auto: false,
+            image_dimensions: None,
+            preview_enabled: false,
 
             cxy_window_auto: true,
             cxy_window_slider,
@@ -170,6 +177,41 @@ impl LocalContrastControls {
             is_animated: false,
             batch_progress: None,
         }
+    }
+
+    /// Update the current image dimensions (used for auto resize factor).
+    pub fn set_image_dimensions(&mut self, dims: Option<(u32, u32)>) {
+        self.image_dimensions = dims;
+    }
+
+    /// Compute the effective resize factor. In auto mode, picks the factor
+    /// from `RESIZE_CHOICES` (0.25x–4x) that brings the largest axis as
+    /// close to 4K (3840px) as possible without exceeding it.
+    pub fn effective_resize_factor(&self) -> f32 {
+        if !self.resize_auto {
+            return self.resize_factor;
+        }
+        let Some((w, h)) = self.image_dimensions else {
+            return 1.0;
+        };
+        let largest = w.max(h) as f32;
+        if largest < 1.0 {
+            return 1.0;
+        }
+        let target = 3840.0_f32;
+        let ideal = target / largest;
+        // Pick the largest RESIZE_CHOICES value that doesn't exceed 4K,
+        // falling back to the smallest if even 0.25x exceeds 4K.
+        let mut best = RESIZE_CHOICES[0];
+        for &factor in &RESIZE_CHOICES {
+            if largest * factor <= target + 0.5 {
+                best = factor;
+            }
+        }
+        // If ideal is larger than best but still <=4x, we could use best.
+        // But we only allow the fixed snap-points.
+        let _ = ideal; // used only for the design doc
+        best
     }
 
     /// Set whether the current image is animated (controls batch UI visibility).
@@ -217,7 +259,7 @@ impl LocalContrastControls {
             contrast: self.contrast_slider.read(cx).value() as f32,
             lighten_shadows: self.lighten_shadows_slider.read(cx).value() as f32,
             darken_highlights: self.darken_highlights_slider.read(cx).value() as f32,
-            resize_factor: self.resize_factor,
+            resize_factor: self.effective_resize_factor(),
             ..Default::default()
         }
     }
@@ -227,7 +269,8 @@ impl LocalContrastControls {
     pub fn reset_sliders(&mut self, cx: &mut Context<Self>) {
         let defaults = Parameters::default();
         self.resize_factor = 1.0;
-        self.preview_enabled = true;
+        self.resize_auto = false;
+        self.preview_enabled = false;
         self.cxy_window_auto = true;
         self.cxy_block_auto = true;
         self.cxy_window_slider
@@ -306,6 +349,7 @@ impl LocalContrastControls {
 
     fn apply_parameters(&mut self, p: &Parameters, cx: &mut Context<Self>) {
         self.resize_factor = p.resize_factor;
+        self.resize_auto = false;
         self.cxy_window_auto = p.cxy_window == 0;
         if !self.cxy_window_auto {
             self.cxy_window_slider
@@ -456,18 +500,20 @@ where
         )
 }
 
-/// 5-way toggle row for the resize factor. Each cell is clickable; the
-/// currently-selected factor is highlighted. Click sets `resize_factor` and
-/// emits `ParametersChanged`.
+/// 6-way toggle row for the resize factor: 5 fixed snap-points plus Auto.
+/// Each cell is clickable; the currently-selected factor (or Auto) is
+/// highlighted. Click sets `resize_factor` / `resize_auto` and emits
+/// `ParametersChanged`.
 fn resize_toggle_row(
     current: f32,
+    is_auto: bool,
     font_scale: f32,
     cx: &mut Context<LocalContrastControls>,
 ) -> impl IntoElement {
     let labels = ["¼×", "½×", "1×", "2×", "4×"];
     let mut row = div().flex().gap(px(4.0));
     for (i, factor) in RESIZE_CHOICES.iter().copied().enumerate() {
-        let selected = (current - factor).abs() < 1e-4;
+        let selected = !is_auto && (current - factor).abs() < 1e-4;
         let bg = if selected {
             rgba(0x4A9E_FFFF)
         } else {
@@ -494,7 +540,8 @@ fn resize_toggle_row(
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, _evt, _window, cx| {
-                    if (this.resize_factor - factor).abs() > 1e-4 {
+                    if this.resize_auto || (this.resize_factor - factor).abs() > 1e-4 {
+                        this.resize_auto = false;
                         this.resize_factor = factor;
                         cx.emit(LocalContrastControlsEvent::ParametersChanged);
                         cx.notify();
@@ -504,6 +551,42 @@ fn resize_toggle_row(
             .child(labels[i]);
         row = row.child(cell);
     }
+    // Auto button
+    let auto_bg = if is_auto {
+        rgba(0x4A9E_FFFF)
+    } else {
+        rgba(0x2A_2A_2A_FF)
+    };
+    let auto_fg = if is_auto {
+        Colors::text()
+    } else {
+        rgb(0xCCCCCC).into()
+    };
+    let auto_cell = div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .flex_grow()
+        .py(px(4.0))
+        .rounded(px(3.0))
+        .border_1()
+        .border_color(rgba(0x55_55_55_FF))
+        .bg(auto_bg)
+        .cursor_pointer()
+        .text_size(scaled_text_size(11.0, font_scale))
+        .text_color(auto_fg)
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|this, _evt, _window, cx| {
+                if !this.resize_auto {
+                    this.resize_auto = true;
+                    cx.emit(LocalContrastControlsEvent::ParametersChanged);
+                    cx.notify();
+                }
+            }),
+        )
+        .child("Auto");
+    row = row.child(auto_cell);
     row
 }
 
@@ -671,7 +754,7 @@ impl Render for LocalContrastControls {
                             .text_color(Colors::text())
                             .child("Resize input"),
                     )
-                    .child(resize_toggle_row(self.resize_factor, font, cx))
+                    .child(resize_toggle_row(self.resize_factor, self.resize_auto, font, cx))
                     .child(checkbox_row(
                         "Preview".to_string(),
                         self.preview_enabled,
