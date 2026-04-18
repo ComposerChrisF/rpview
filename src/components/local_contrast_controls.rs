@@ -19,6 +19,8 @@ pub enum LocalContrastControlsEvent {
     ParametersChanged,
     ResetRequested,
     CancelRequested,
+    /// User clicked "Process All Frames" for animated images.
+    ProcessAllFramesRequested,
 }
 
 /// Five fixed snap-points for the resize-factor toggle.
@@ -67,6 +69,13 @@ pub struct LocalContrastControls {
     pub preset_name_input: Entity<TextInput>,
     /// The currently-loaded preset name (None = custom / unsaved).
     pub current_preset: Option<String>,
+
+    // --- Animation batch processing -------------------------------------------
+    /// Whether the current image is animated (controls visibility of batch UI).
+    pub is_animated: bool,
+    /// Batch processing progress: `(current_frame_0based, total_frames)`.
+    /// `None` when no batch is running.
+    pub batch_progress: Option<(usize, usize)>,
 }
 
 impl EventEmitter<LocalContrastControlsEvent> for LocalContrastControls {}
@@ -157,7 +166,29 @@ impl LocalContrastControls {
             preset_dropdown,
             preset_name_input,
             current_preset: None,
+
+            is_animated: false,
+            batch_progress: None,
         }
+    }
+
+    /// Set whether the current image is animated (controls batch UI visibility).
+    pub fn set_is_animated(&mut self, animated: bool, cx: &mut Context<Self>) {
+        self.is_animated = animated;
+        if !animated {
+            self.batch_progress = None;
+        }
+        cx.notify();
+    }
+
+    /// Update batch processing progress. `None` = not running.
+    pub fn set_batch_progress(
+        &mut self,
+        progress: Option<(usize, usize)>,
+        cx: &mut Context<Self>,
+    ) {
+        self.batch_progress = progress;
+        cx.notify();
     }
 
     pub fn get_parameters(&self, cx: &App) -> Parameters {
@@ -795,6 +826,65 @@ impl Render for LocalContrastControls {
                                 .child(div().flex_grow().child(progress_bar(frac)))
                                 .child(cancel_button),
                         )
+                    })
+                    // Batch processing UI for animated images.
+                    .when(self.is_animated, |el| {
+                        let batch_running = self.batch_progress.is_some();
+                        let batch_label = if let Some((current, total)) = self.batch_progress {
+                            format!("Processing frame {}/{}…", current + 1, total)
+                        } else {
+                            String::new()
+                        };
+                        el.child(section_separator())
+                            .when(batch_running, |el| {
+                                let (current, total) = self.batch_progress.unwrap();
+                                let frac = if total > 0 {
+                                    (current as f32 + 1.0) / total as f32
+                                } else {
+                                    0.0
+                                };
+                                el.child(
+                                    div()
+                                        .text_size(scaled_text_size(11.0, font))
+                                        .text_color(rgb(0xAAAAAA))
+                                        .child(batch_label),
+                                )
+                                .child(progress_bar(frac))
+                            })
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .mt(px(4.0))
+                                    .px(px(12.0))
+                                    .py(px(4.0))
+                                    .rounded(px(4.0))
+                                    .border_1()
+                                    .border_color(rgba(0x66_66_66_FF))
+                                    .cursor_pointer()
+                                    .text_size(scaled_text_size(11.0, font))
+                                    .text_color(Colors::text())
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|_this, _evt, _window, cx| {
+                                            if _this.batch_progress.is_some() {
+                                                cx.emit(
+                                                    LocalContrastControlsEvent::CancelRequested,
+                                                );
+                                            } else {
+                                                cx.emit(
+                                                    LocalContrastControlsEvent::ProcessAllFramesRequested,
+                                                );
+                                            }
+                                        }),
+                                    )
+                                    .child(if batch_running {
+                                        "Cancel Batch"
+                                    } else {
+                                        "Process All Frames"
+                                    }),
+                            )
                     })
                     .child(div().flex().justify_end().mt(px(4.0)).child(reset_button)),
             )

@@ -62,6 +62,18 @@ impl Render for App {
                         self.last_frame_update = Instant::now();
                     }
                 }
+
+                // Tell the LC controls whether this image is animated (for batch UI).
+                let is_animated = self
+                    .viewer
+                    .current_image
+                    .as_ref()
+                    .map(|img| img.animation_data.is_some())
+                    .unwrap_or(false);
+                self.local_contrast_controls.update(cx, |c, cx| {
+                    c.set_is_animated(is_animated, cx);
+                    c.set_batch_progress(None, cx);
+                });
             }
 
             // Request re-render to show the loaded image
@@ -91,6 +103,43 @@ impl Render for App {
                     c.set_progress(Some(pct / 100.0), cx);
                 });
             }
+            window.request_animation_frame();
+        }
+
+        // Poll batch LC processing (all animation frames).
+        if let Some((current, total)) = self.viewer.check_lc_batch_processing() {
+            self.local_contrast_controls.update(cx, |c, cx| {
+                c.set_batch_progress(Some((current, total)), cx);
+                c.set_status(format!("Processing frame {}/{}…", current + 1, total), cx);
+            });
+            window.request_animation_frame();
+            cx.notify();
+        } else if self.viewer.lc_batch_job.is_none() {
+            // Batch just finished (or was never running). Clear progress
+            // if the controls still show a batch in progress.
+            let was_batching = self
+                .local_contrast_controls
+                .read(cx)
+                .batch_progress
+                .is_some();
+            if was_batching {
+                let all_done = self.viewer.all_frames_lc_processed();
+                self.local_contrast_controls.update(cx, |c, cx| {
+                    c.set_batch_progress(None, cx);
+                    c.set_status(
+                        if all_done {
+                            "All frames processed"
+                        } else {
+                            "Batch cancelled"
+                        },
+                        cx,
+                    );
+                });
+                cx.notify();
+            }
+        }
+        // Keep render loop alive during batch.
+        if self.viewer.lc_batch_job.is_some() {
             window.request_animation_frame();
         }
 
@@ -147,14 +196,16 @@ impl Render for App {
             self.viewer.preload_paths.push(prev_path.clone());
         }
 
-        // Update animation frame if playing (GPUI's suggested pattern)
+        // Update animation frame if playing (GPUI's suggested pattern).
+        // Block playback while LC is active unless all frames are processed.
         let should_update_animation = self
             .viewer
             .image_state
             .animation
             .as_ref()
             .map(|a| a.is_playing && a.frame_count > 0)
-            .unwrap_or(false);
+            .unwrap_or(false)
+            && (!self.viewer.lc_enabled || self.viewer.all_frames_lc_processed());
 
         if should_update_animation {
             // Progressive frame caching: cache next 3 frames ahead of playback

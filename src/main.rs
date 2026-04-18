@@ -338,19 +338,33 @@ fn main() {
                                         c.reset_sliders(cx);
                                         c.set_status("", cx);
                                         c.set_progress(None, cx);
+                                        c.set_batch_progress(None, cx);
                                     });
+                                    this.viewer.cancel_lc_batch();
                                     if let Some(loaded) = this.viewer.current_image.as_mut() {
                                         loaded.lc_render = None;
                                         loaded.cached_lc_params = None;
+                                        loaded
+                                            .lc_frame_renders
+                                            .iter_mut()
+                                            .for_each(|s| *s = None);
                                     }
                                     cx.notify();
                                 }
                                 LocalContrastControlsEvent::CancelRequested => {
                                     this.viewer.cancel_lc_processing();
+                                    this.viewer.cancel_lc_batch();
                                     this.local_contrast_controls.update(cx, |c, cx| {
                                         c.set_status("Cancelled", cx);
                                         c.set_progress(None, cx);
+                                        c.set_batch_progress(None, cx);
                                     });
+                                    cx.notify();
+                                }
+                                LocalContrastControlsEvent::ProcessAllFramesRequested => {
+                                    let params =
+                                        this.local_contrast_controls.read(cx).get_parameters(cx);
+                                    this.viewer.spawn_lc_batch(params);
                                     cx.notify();
                                 }
                                 LocalContrastControlsEvent::ParametersChanged => {
@@ -375,6 +389,12 @@ fn main() {
                                     // match the cached ones, update_local_contrast bails
                                     // early and we display the cached buffer instantly.
                                     this.viewer.set_lc_enabled(true);
+                                    // Auto-pause animation when LC is enabled.
+                                    if let Some(ref mut anim) =
+                                        this.viewer.image_state.animation
+                                    {
+                                        anim.is_playing = false;
+                                    }
                                     let params =
                                         this.local_contrast_controls.read(cx).get_parameters(cx);
                                     this.viewer.update_local_contrast(params);
