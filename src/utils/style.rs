@@ -120,52 +120,62 @@ impl Colors {
     }
 }
 
-/// Common spacing values (in pixels)
+/// Common spacing values (in pixels) used for consistent layout across components.
 pub struct Spacing;
 
 impl Spacing {
+    /// Extra-small spacing: 4px.
     pub fn xs() -> Pixels {
         px(4.0)
     }
 
+    /// Small spacing: 8px.
     pub fn sm() -> Pixels {
         px(8.0)
     }
 
+    /// Medium spacing: 16px.
     pub fn md() -> Pixels {
         px(16.0)
     }
 
+    /// Large spacing: 24px.
     pub fn lg() -> Pixels {
         px(24.0)
     }
 
+    /// Extra-large spacing: 32px.
     pub fn xl() -> Pixels {
         px(32.0)
     }
 }
 
-/// Common text sizes
+/// Common text sizes used for consistent typography across components.
 pub struct TextSize;
 
 impl TextSize {
+    /// Small text: 12px.
     pub fn sm() -> Pixels {
         px(12.0)
     }
 
+    /// Medium text: 14px (default body text).
     pub fn md() -> Pixels {
         px(14.0)
     }
 
+    /// Large text: 16px.
     pub fn lg() -> Pixels {
         px(16.0)
     }
 
+    /// Extra-large text: 20px.
     pub fn xl() -> Pixels {
         px(20.0)
     }
 
     #[allow(dead_code)]
+    /// Extra-extra-large text: 24px.
     pub fn xxl() -> Pixels {
         px(24.0)
     }

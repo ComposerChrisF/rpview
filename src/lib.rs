@@ -1,4 +1,12 @@
-// Library modules for rpview
+//! rpview — a GPU-accelerated image viewer built on GPUI.
+//!
+//! # Module structure
+//!
+//! - [`cli`] — Command-line argument parsing (clap).
+//! - [`components`] — GPUI UI components (viewer, overlays, settings, floating panels).
+//! - [`error`] — Application error types ([`error::AppError`], [`error::AppResult`]).
+//! - [`state`] — Application and per-image state, settings.
+//! - [`utils`] — Image loading, filters, color math, SVG, zoom, file scanning, and more.
 
 pub mod cli;
 pub mod components;
