@@ -666,8 +666,8 @@ impl Render for App {
                 }
             }))
             // Action handlers - registered on focused element so menu items work
-            .on_action(|_: &CloseWindow, window, _| {
-                window.remove_window();
+            .on_action(|_: &CloseWindow, _window, cx| {
+                cx.quit();
             })
             .on_action(cx.listener(|this, _: &EscapePressed, window, cx| {
                 this.handle_escape(window, cx);
