@@ -1119,6 +1119,25 @@ impl App {
         if self.is_modal_open() {
             return;
         }
+        // Check LC gating before borrowing animation state mutably.
+        let is_paused = self
+            .viewer
+            .image_state
+            .animation
+            .as_ref()
+            .map(|a| !a.is_playing)
+            .unwrap_or(false);
+        if is_paused && self.viewer.lc_enabled && !self.viewer.all_frames_lc_processed() {
+            // Can't resume playback until all frames are LC-processed.
+            self.toast = Some(ToastState {
+                message: "Process all frames first to play with LC".into(),
+                detail: None,
+                is_error: false,
+                created_at: Instant::now(),
+            });
+            cx.notify();
+            return;
+        }
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
             anim_state.is_playing = !anim_state.is_playing;
             if anim_state.is_playing {
@@ -1137,8 +1156,12 @@ impl App {
             // Pause animation when manually navigating frames
             anim_state.is_playing = false;
             anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
-            cx.notify();
         }
+        // If LC is active, reprocess the new frame.
+        if self.viewer.lc_enabled {
+            self.reapply_local_contrast_for_current_frame(cx);
+        }
+        cx.notify();
     }
 
     pub(crate) fn handle_previous_frame(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -1153,8 +1176,12 @@ impl App {
             } else {
                 anim_state.current_frame -= 1;
             }
-            cx.notify();
         }
+        // If LC is active, reprocess the new frame.
+        if self.viewer.lc_enabled {
+            self.reapply_local_contrast_for_current_frame(cx);
+        }
+        cx.notify();
     }
 
     pub(crate) fn handle_sort_alphabetical(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1395,6 +1422,45 @@ impl App {
         // finishes.
     }
 
+    /// Trigger LC processing for the current animation frame, using the
+    /// per-frame cache when available. Called when the user steps through
+    /// frames while LC is active.
+    fn reapply_local_contrast_for_current_frame(&mut self, cx: &mut Context<Self>) {
+        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
+        if params.is_identity() {
+            return;
+        }
+
+        // Check per-frame cache first.
+        if let Some(ref loaded) = self.viewer.current_image {
+            if let Some(ref anim) = self.viewer.image_state.animation {
+                let idx = anim.current_frame;
+                if loaded.cached_lc_params.as_ref() == Some(&params)
+                    && idx < loaded.lc_frame_renders.len()
+                    && loaded.lc_frame_renders[idx].is_some()
+                {
+                    // Cache hit — install directly.
+                    let (render, size) = loaded.lc_frame_renders[idx].clone().unwrap();
+                    if let Some(loaded_mut) = self.viewer.current_image.as_mut() {
+                        loaded_mut.lc_render = Some(render);
+                        loaded_mut.lc_render_size = Some(size);
+                    }
+                    cx.notify();
+                    return;
+                }
+            }
+        }
+
+        // Cache miss — kick off processing.
+        self.viewer.update_local_contrast(params);
+        if self.viewer.is_processing_lc() {
+            self.local_contrast_controls.update(cx, |c, cx| {
+                c.set_status("Processing…", cx);
+                c.set_progress(Some(0.0), cx);
+            });
+        }
+    }
+
     /// Re-trigger LC processing on the current image when the user has any
     /// non-neutral LC knob. Called after every successful image load so the
     /// sliders "follow" the user across images like the filter sliders do.
@@ -1402,6 +1468,10 @@ impl App {
         let params = self.local_contrast_controls.read(cx).get_parameters(cx);
         if params.is_identity() {
             return;
+        }
+        // Auto-pause animation when LC is active.
+        if let Some(ref mut anim) = self.viewer.image_state.animation {
+            anim.is_playing = false;
         }
         self.viewer.update_local_contrast(params);
         self.local_contrast_controls.update(cx, |c, cx| {
