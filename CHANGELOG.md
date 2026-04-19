@@ -5,6 +5,16 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.5] - 2026-04-18
+
+### Security
+- Replaced predictable temp file names (PID+timestamp) with `tempfile::NamedTempFile` for secure, atomic creation with random names — eliminates TOCTOU race in SVG rasterization and animation frame caching
+- Image saves (Cmd+S) now use atomic write-to-temp-then-rename, preventing file corruption on crash mid-write
+
+### Changed
+- Moved `tempfile` crate from dev-dependencies to main dependencies
+- Updated TODO.md: marked completed Settings UI items (Steps 2–4, 6, 9–10) and Reveal in Finder
+
 ## [0.20.4] - 2026-04-18
 
 ### Fixed
