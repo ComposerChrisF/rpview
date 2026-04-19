@@ -434,7 +434,9 @@ fn main() {
                             current_path: None,
                             current_index: 0,
                             total_images: 0,
-                            image_state: state::ImageState::new(),
+                            zoom: 1.0,
+                            pan: (0.0, 0.0),
+                            is_fit_to_window: true,
                             image_dimensions: None,
                             viewport_size: None,
                             sort_mode: app_state.sort_mode,
@@ -614,8 +616,10 @@ fn main() {
             check_and_process_pending_paths(cx);
         });
 
-        // Set up a recurring timer to check for pending open paths
-        // This handles the case where files are opened while the app is already running
+        // Poll for pending open paths from on_open_urls / macOS open handler.
+        // GPUI lacks a cross-thread wake mechanism, so the OS callbacks write to
+        // a static Mutex and this loop checks it. 250ms latency is imperceptible
+        // for file-open events.
         let executor = cx.background_executor().clone();
         cx.spawn(async move |cx| {
             loop {

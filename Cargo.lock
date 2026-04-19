@@ -4568,7 +4568,7 @@ dependencies = [
 
 [[package]]
 name = "rpview"
-version = "0.20.3"
+version = "0.20.4"
 dependencies = [
  "block2",
  "ccf-gpui-widgets",
@@ -4588,6 +4588,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "tempfile",
+ "thiserror 2.0.17",
  "trash",
  "windows 0.61.3",
  "winresource",

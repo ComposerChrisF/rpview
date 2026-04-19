@@ -1471,16 +1471,16 @@ impl App {
                 let idx = anim.current_frame;
                 if loaded.cached_lc_params.as_ref() == Some(&params)
                     && idx < loaded.lc_frame_renders.len()
-                    && loaded.lc_frame_renders[idx].is_some()
                 {
-                    // Cache hit — install directly.
-                    let (render, size) = loaded.lc_frame_renders[idx].clone().unwrap();
-                    if let Some(loaded_mut) = self.viewer.current_image.as_mut() {
-                        loaded_mut.lc_render = Some(render);
-                        loaded_mut.lc_render_size = Some(size);
+                    if let Some((render, size)) = loaded.lc_frame_renders[idx].clone() {
+                        // Cache hit — install directly.
+                        if let Some(loaded_mut) = self.viewer.current_image.as_mut() {
+                            loaded_mut.lc_render = Some(render);
+                            loaded_mut.lc_render_size = Some(size);
+                        }
+                        cx.notify();
+                        return;
                     }
-                    cx.notify();
-                    return;
                 }
             }
         }

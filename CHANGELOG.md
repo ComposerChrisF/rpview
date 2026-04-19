@@ -5,6 +5,21 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.4] - 2026-04-18
+
+### Fixed
+- Window title template expansion now handles multi-byte UTF-8 characters correctly (was treating all characters as single-byte)
+
+### Changed
+- Replaced hand-rolled `Display`/`Error`/`From` impls on `AppError` with `thiserror` derive macros (-38 lines)
+- Extracted duplicated LUT-building logic in `apply_filters` into shared `build_filter_lut` function
+- Replaced `ImageState` clone in `DebugOverlayConfig` with 3 scalar field copies (avoids cloning `Vec<u32>` frame durations on every render tick)
+- Replaced `.is_some()` + `.unwrap()` patterns with idiomatic `if let Some(...)` in LC cache-hit paths
+- Replaced `.expect()` panics with `let-else` early returns + debug logging in filter/LC worker setup
+- Moved filter and single-frame LC workers from `std::thread::spawn` to `rayon::spawn` (batch LC worker stays on a dedicated thread to avoid pool starvation)
+- Added `LcBatchResult` and `LcResult` type aliases for LC worker channel types
+- Added section comments to `LoadedImage` and `ImageViewer` structs for navigation
+
 ## [0.20.3] - 2026-04-18
 
 ### Changed

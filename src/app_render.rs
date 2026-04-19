@@ -304,7 +304,7 @@ impl Render for App {
                     this.mouse_button_down = false;
 
                     // End drag-to-pan (only save state if drag actually moved)
-                    if let Some(_) = this.viewer.drag_pan_state.take() {
+                    if this.viewer.drag_pan_state.take().is_some() {
                         if this.viewer.drag_pan_moved {
                             this.save_current_image_state();
                             this.viewer.drag_pan_moved = false;
@@ -462,7 +462,9 @@ impl Render for App {
                         current_path: self.app_state.current_image().cloned(),
                         current_index: self.app_state.current_index,
                         total_images: self.app_state.image_paths.len(),
-                        image_state: self.viewer.image_state.clone(),
+                        zoom: self.viewer.image_state.zoom,
+                        pan: self.viewer.image_state.pan,
+                        is_fit_to_window: self.viewer.image_state.is_fit_to_window,
                         image_dimensions,
                         viewport_size: self.viewer.viewport_size,
                         sort_mode: self.app_state.sort_mode,

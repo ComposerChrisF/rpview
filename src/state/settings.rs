@@ -675,8 +675,10 @@ mod tests {
     #[test]
     fn test_appearance_active_background_color_light() {
         // Arrange
-        let mut appearance = Appearance::default();
-        appearance.use_light_background = true;
+        let appearance = Appearance {
+            use_light_background: true,
+            ..Appearance::default()
+        };
 
         // Act
         let color = appearance.active_background_color();
