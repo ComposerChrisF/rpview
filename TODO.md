@@ -596,7 +596,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 ### Phase 16.2: Settings Window UI ✅
 
-**⚠️ Note:** Settings window is currently **READ-ONLY (display-only)**. UI controls show current values but are not interactive. To change settings, users must manually edit `settings.json`. See Phase 16.7 for tasks to make the UI interactive.
+**Note:** Settings window is fully interactive (Phase 16.7 mostly complete). All controls update settings in real-time. External Viewer List Editor remains display-only (edit via `settings.json`).
 
 - [x] Create SettingsWindow component (src/components/settings_window.rs)
 - [x] Define SettingsWindow struct with working/original settings copies
@@ -604,7 +604,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [x] Design basic overlay layout (full-screen semi-transparent background)
 - [x] Implement section sidebar navigation
 - [x] Create Apply/Cancel/Reset to Defaults buttons
-- [x] Implement section rendering methods (display-only):
+- [x] Implement section rendering methods:
   - [x] render_viewer_behavior() - radio buttons, checkboxes, numeric inputs
   - [x] render_performance() - checkboxes, numeric inputs
   - [x] render_keyboard_mouse() - numeric inputs for all sensitivity settings
@@ -631,7 +631,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [x] Create OpenInExternalEditor action
 - [x] Add keybinding for external editor (Cmd+E)
 - [x] Implement handler using settings.external_tools.external_editor
-- [ ] Add "Show in Finder/Explorer" action (optional - deferred)
+- [x] Add "Reveal in Finder/Explorer" action (Cmd+R / Ctrl+R)
 - [x] Test external viewer configuration on macOS
 
 ### Phase 16.4: Apply Settings Throughout App ✅
@@ -868,29 +868,20 @@ div()
   - [x] Green theme for checked state with black checkmark
   - [x] All 10 boolean settings converted: remember_per_image_state, animation_auto_play, preload_adjacent_images, spacebar_pan_accelerated, auto_save_filtered_cache, remember_last_directory, remember_filter_state, wrap_navigation, show_image_counter, file_manager_integration
 
-- [ ] **Step 2: Interactive Radio Buttons / Toggle Groups**
-  - [ ] Update radio button divs with on_mouse_up handlers
-  - [ ] Update enum values in working_settings on click
-  - [ ] Update visual selection state (border color, background)
-  - [ ] Call cx.notify() after state change
-  - [ ] Affected settings: default_zoom_mode, default_sort_mode, default_save_format
+- [x] **Step 2: Interactive Radio Buttons / Toggle Groups** ✅ COMPLETE
+  - [x] Implemented via SegmentedControl components with change handlers
+  - [x] Default zoom mode, pan direction, sort mode, save format, save location all interactive
+  - [x] Updates working_settings and calls cx.notify() on change
 
-- [ ] **Step 3: Interactive Numeric Inputs with +/- Buttons**
-  - [ ] Check if adabraka-ui or GPUI provides NumberInput/Spinner
-  - [ ] If yes: use that component
-  - [ ] If no: Build custom using TextInput + Button components
-  - [ ] Layout: `[-] [text_input] [+]` in horizontal flex
-  - [ ] Add increment/decrement handlers
-  - [ ] Add direct text input with parsing and validation
-  - [ ] Validate min/max ranges (cache_size > 0, dimensions reasonable)
-  - [ ] Show validation errors visually (red border, error message)
-  - [ ] Affected settings: pan speeds, cache sizes, sensitivities, dimensions
+- [x] **Step 3: Interactive Numeric Inputs with +/- Buttons** ✅ COMPLETE
+  - [x] Using ccf-gpui-widgets NumberStepper component
+  - [x] 13 numeric steppers with min/max/step ranges
+  - [x] Pan speeds, zoom sensitivities, cache sizes, filter defaults, overlay transparency, font scale
+  - [x] Range clamping automatic via NumberStepper component
 
-- [ ] **Step 4: Text Input Fields**
-  - [ ] Import text input component from adabraka-ui
-  - [ ] Replace static divs with interactive TextInput
-  - [ ] Update working_settings on text change
-  - [ ] Affected settings: window_title_format, external viewer command/args
+- [x] **Step 4: Text Input Fields** ✅ COMPLETE
+  - [x] Window title format uses TextInput component
+  - [x] Listens to TextInputEvent::Change and updates working_settings in real-time
 
 - [x] **Step 5: SegmentedControl for Enum Selections** ✅ COMPLETE
   - [x] Use ccf-gpui-widgets SegmentedControl for all enum settings
@@ -900,12 +891,10 @@ div()
   - [x] Full keyboard navigation with Left/Right arrows
   - [x] Context-aware bindings prevent image navigation in settings
 
-- [ ] **Step 6: Directory Picker**
-  - [ ] Add "Browse..." button click handler
-  - [ ] Use GPUI's native file dialog (or rfd crate)
-  - [ ] Open directory picker dialog
-  - [ ] Update working_settings.default_save_directory with selected path
-  - [ ] Update display to show new path
+- [x] **Step 6: Directory Picker** ✅ COMPLETE
+  - [x] Using ccf-gpui-widgets DirectoryPicker component
+  - [x] Enabled/disabled based on save location mode selection
+  - [x] Updates working_settings.file_operations.default_save_directory on change
 
 - [x] **Step 7: Color Picker** ✅ COMPLETE
   - [x] Using ccf-gpui-widgets ColorSwatch component
@@ -922,24 +911,16 @@ div()
   - [ ] Support {path} placeholder in args
   - [ ] Update working_settings.external_tools.external_viewers vec
 
-- [ ] **Step 9: Wire Up Apply/Cancel/Reset Buttons**
-  - [ ] Add on_mouse_up handler to Apply button
-  - [ ] Send event to parent (main.rs) with working_settings
-  - [ ] main.rs calls save_settings() with working_settings
-  - [ ] Close settings window after Apply
-  - [ ] Add on_mouse_up handler to Cancel button
-  - [ ] Revert working_settings to original_settings
-  - [ ] Close settings window
-  - [ ] Add on_mouse_up handler to Reset button
-  - [ ] Set working_settings = AppSettings::default()
-  - [ ] Keep window open to review defaults
+- [x] **Step 9: Wire Up Apply/Cancel/Reset Buttons** ✅ COMPLETE
+  - [x] Close button saves working_settings via CloseSettings action → save_settings()
+  - [x] Reset button resets all UI and working_settings to defaults, keeps window open
+  - [x] Esc and Cmd+Enter also close and save
 
-- [ ] **Step 10: Input Validation & Error Handling**
-  - [ ] Add validation for numeric ranges (cache_size > 0, dimensions < 100000)
-  - [ ] Add validation for file paths (directory exists)
-  - [ ] Show error messages below invalid inputs (red text)
-  - [ ] Disable Apply button when validation fails
-  - [ ] Add visual error state (red border on invalid inputs)
+- [x] **Step 10: Input Validation & Error Handling** (partial)
+  - [x] Numeric range validation via NumberStepper min/max constraints
+  - [x] Color picker validates hex format before parsing
+  - [ ] Error messages below invalid inputs (not implemented)
+  - [ ] Disable Apply button on validation failure (not implemented)
 
 - [ ] **Step 11: Live Preview** (optional, nice-to-have)
   - [ ] Apply appearance settings (background_color) immediately to main window
@@ -947,11 +928,9 @@ div()
   - [ ] Update window title format in real-time as user types
 
 **Implementation Notes:**
-- Current render methods in `src/components/settings_window.rs` show values but have no event handlers
-- `working_settings` field exists and is designed to track edits before Apply (perfect!)
-- `handle_apply_settings()` in `src/main.rs` already calls `save_settings()` - just needs working_settings to be updated
-- We already use `adabraka-ui` (see import at settings_window.rs:47) - leverage this!
-- Sidebar navigation already works (proof that event handlers work correctly)
+- All interactive controls use ccf-gpui-widgets (NumberStepper, SegmentedControl, Checkbox, ColorSwatch, DirectoryPicker, TextInput)
+- Settings use working copy pattern: changes made to working_settings, auto-saved on close
+- Remaining: External Viewer List Editor (Step 8) still display-only, Live Preview (Step 11) not started
 
 **Estimated Effort:**
 - Steps 0-2 (checkboxes, radio buttons): 2-3 hours

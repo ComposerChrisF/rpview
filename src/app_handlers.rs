@@ -692,11 +692,19 @@ impl App {
                         Err("No image loaded".to_string())
                     }
                 } else {
-                    // Save original image without filters
+                    // Save original image without filters (atomic: copy to temp, then rename)
                     if let Some(loaded_image) = &self.viewer.current_image {
-                        std::fs::copy(&loaded_image.path, &save_path)
-                            .map(|_| ())
-                            .map_err(|e| format!("Failed to copy image: {}", e))
+                        let parent = save_path.parent().unwrap_or(&save_path);
+                        tempfile::NamedTempFile::new_in(parent)
+                            .map_err(|e| format!("Failed to create temp file: {}", e))
+                            .and_then(|temp_file| {
+                                std::fs::copy(&loaded_image.path, temp_file.path())
+                                    .map_err(|e| format!("Failed to copy image: {}", e))?;
+                                temp_file
+                                    .persist(&save_path)
+                                    .map(|_| ())
+                                    .map_err(|e| format!("Failed to finalize save: {}", e))
+                            })
                     } else {
                         Err("No image loaded".to_string())
                     }
@@ -722,6 +730,11 @@ impl App {
         image_data: &image::DynamicImage,
         save_path: &Path,
     ) -> Result<(), String> {
+        let parent = save_path.parent().unwrap_or(save_path);
+        let temp_file = tempfile::NamedTempFile::new_in(parent)
+            .map_err(|e| format!("Failed to create temp file: {}", e))?;
+        let temp_path = temp_file.path().to_path_buf();
+
         // Determine output format from file extension
         let extension = save_path
             .extension()
@@ -730,22 +743,28 @@ impl App {
             .to_lowercase();
 
         let save_result = match extension.as_str() {
-            "png" => image_data.save_with_format(save_path, image::ImageFormat::Png),
+            "png" => image_data.save_with_format(&temp_path, image::ImageFormat::Png),
             "jpg" | "jpeg" => {
                 // Convert to RGB for JPEG (no alpha channel)
                 let rgb_image = image_data.to_rgb8();
-                rgb_image.save_with_format(save_path, image::ImageFormat::Jpeg)
+                rgb_image.save_with_format(&temp_path, image::ImageFormat::Jpeg)
             }
-            "bmp" => image_data.save_with_format(save_path, image::ImageFormat::Bmp),
-            "tiff" | "tif" => image_data.save_with_format(save_path, image::ImageFormat::Tiff),
-            "webp" => image_data.save_with_format(save_path, image::ImageFormat::WebP),
+            "bmp" => image_data.save_with_format(&temp_path, image::ImageFormat::Bmp),
+            "tiff" | "tif" => image_data.save_with_format(&temp_path, image::ImageFormat::Tiff),
+            "webp" => image_data.save_with_format(&temp_path, image::ImageFormat::WebP),
             _ => {
                 // Default to PNG for unknown extensions
-                image_data.save_with_format(save_path, image::ImageFormat::Png)
+                image_data.save_with_format(&temp_path, image::ImageFormat::Png)
             }
         };
 
-        save_result.map_err(|e| format!("Failed to save image: {}", e))
+        save_result.map_err(|e| format!("Failed to save image: {}", e))?;
+
+        // Atomic rename to final destination
+        temp_file
+            .persist(save_path)
+            .map(|_| ())
+            .map_err(|e| format!("Failed to finalize save: {}", e))
     }
 
     pub(crate) fn handle_open_in_external_viewer(

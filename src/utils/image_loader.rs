@@ -137,39 +137,55 @@ pub fn load_image_async(
         // Cache first 3 frames for animated images
         let mut initial_frame_paths = Vec::new();
         if let Some(ref anim_data) = animation_data {
-            if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
-                let base_name = format!(
-                    "rpview_{}_{}",
-                    std::process::id(),
-                    path.file_name().and_then(|n| n.to_str()).unwrap_or("anim")
-                );
+            let initial_cache_count = std::cmp::min(3, anim_data.frames.len());
+            debug_eprintln!(
+                "[ASYNC LOAD] Caching first {} frames...",
+                initial_cache_count
+            );
 
-                let initial_cache_count = std::cmp::min(3, anim_data.frames.len());
-                debug_eprintln!(
-                    "[ASYNC LOAD] Caching first {} frames...",
-                    initial_cache_count
-                );
+            for i in 0..initial_cache_count {
+                // Check cancellation during frame caching
+                if is_cancelled(&cancel_flag_clone) {
+                    return;
+                }
 
-                for i in 0..initial_cache_count {
-                    // Check cancellation during frame caching
-                    if is_cancelled(&cancel_flag_clone) {
-                        return;
+                match tempfile::Builder::new()
+                    .prefix("rpview_frame_")
+                    .suffix(".png")
+                    .tempfile()
+                {
+                    Ok(temp_file) => {
+                        match anim_data.frames[i].image.save(temp_file.path()) {
+                            Ok(_) => {
+                                match temp_file.into_temp_path().keep() {
+                                    Ok(kept) => {
+                                        debug_eprintln!("[ASYNC LOAD] Cached frame {}", i);
+                                        initial_frame_paths.push(kept);
+                                    }
+                                    Err(_e) => {
+                                        debug_eprintln!(
+                                            "[ASYNC LOAD ERROR] Failed to persist frame {}: {}",
+                                            i, _e
+                                        );
+                                        initial_frame_paths.push(PathBuf::new());
+                                    }
+                                }
+                            }
+                            Err(_e) => {
+                                debug_eprintln!(
+                                    "[ASYNC LOAD ERROR] Failed to cache frame {}: {}",
+                                    i, _e
+                                );
+                                initial_frame_paths.push(PathBuf::new());
+                            }
+                        }
                     }
-
-                    let temp_path = temp_dir.join(format!("{}_{}.png", base_name, i));
-                    match anim_data.frames[i].image.save(&temp_path) {
-                        Ok(_) => {
-                            debug_eprintln!("[ASYNC LOAD] Cached frame {}", i);
-                            initial_frame_paths.push(temp_path);
-                        }
-                        Err(_e) => {
-                            debug_eprintln!(
-                                "[ASYNC LOAD ERROR] Failed to cache frame {}: {}",
-                                i,
-                                _e
-                            );
-                            initial_frame_paths.push(PathBuf::new());
-                        }
+                    Err(_e) => {
+                        debug_eprintln!(
+                            "[ASYNC LOAD ERROR] Failed to create temp file for frame {}: {}",
+                            i, _e
+                        );
+                        initial_frame_paths.push(PathBuf::new());
                     }
                 }
             }

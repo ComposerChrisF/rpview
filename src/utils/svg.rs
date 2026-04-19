@@ -1,10 +1,7 @@
 use super::debug_eprintln;
 use crate::error::{AppError, AppResult};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
-
-static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Cached font database loaded once and reused for all SVG operations.
 /// System font discovery is slow (~50-100ms), so we only do it once.
@@ -49,25 +46,13 @@ pub struct SvgRerasterRegion {
     pub svg_h: f32,
 }
 
-/// Generate a unique temp file path with the given prefix.
-fn svg_temp_path(prefix: &str) -> Result<PathBuf, String> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
-    let temp_dir = std::env::temp_dir()
-        .canonicalize()
-        .map_err(|e| format!("Failed to resolve temp dir: {}", e))?;
-
-    Ok(temp_dir.join(format!(
-        "rpview_{}_{}_{}_{}.png",
-        prefix,
-        std::process::id(),
-        timestamp,
-        TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
-    )))
+/// Create a secure temp file with an unpredictable name (no TOCTOU race).
+fn secure_temp_file(prefix: &str) -> Result<tempfile::NamedTempFile, String> {
+    tempfile::Builder::new()
+        .prefix(prefix)
+        .suffix(".png")
+        .tempfile()
+        .map_err(|e| format!("Failed to create temp file: {}", e))
 }
 
 /// Parse an SVG file into a usvg::Tree. The tree is self-contained after parsing
@@ -108,20 +93,24 @@ pub fn rerasterize_svg_full(tree: &resvg::usvg::Tree, scale: f32) -> Result<Path
     let transform = resvg::tiny_skia::Transform::from_scale(scale, scale);
     resvg::render(tree, transform, &mut pixmap.as_mut());
 
-    let temp_path = svg_temp_path("svg_reraster")?;
+    let temp_file = secure_temp_file("rpview_svg_reraster_")?;
     pixmap
-        .save_png(&temp_path)
+        .save_png(temp_file.path())
         .map_err(|e| format!("Failed to save rasterized SVG: {}", e))?;
+    let kept_path = temp_file
+        .into_temp_path()
+        .keep()
+        .map_err(|e| format!("Failed to persist temp file: {}", e))?;
 
     debug_eprintln!(
         "[SVG] Full re-raster at {:.1}x -> {} ({}x{})",
         scale,
-        temp_path.display(),
+        kept_path.display(),
         scaled_w,
         scaled_h
     );
 
-    Ok(temp_path)
+    Ok(kept_path)
 }
 
 /// Render only the visible region of an SVG tree (plus padding) to a temp PNG.
@@ -174,10 +163,14 @@ pub fn rerasterize_svg_viewport(
         resvg::tiny_skia::Transform::from_scale(scale, scale).pre_translate(-region_x, -region_y);
     resvg::render(tree, transform, &mut pixmap.as_mut());
 
-    let temp_path = svg_temp_path("svg_viewport")?;
+    let temp_file = secure_temp_file("rpview_svg_viewport_")?;
     pixmap
-        .save_png(&temp_path)
+        .save_png(temp_file.path())
         .map_err(|e| format!("Failed to save viewport raster: {}", e))?;
+    let kept_path = temp_file
+        .into_temp_path()
+        .keep()
+        .map_err(|e| format!("Failed to persist temp file: {}", e))?;
 
     let region = SvgRerasterRegion {
         svg_x: region_x,
@@ -193,12 +186,12 @@ pub fn rerasterize_svg_viewport(
         region_y,
         region_w as u32,
         region_h as u32,
-        temp_path.display(),
+        kept_path.display(),
         pixel_w,
         pixel_h
     );
 
-    Ok((temp_path, region))
+    Ok((kept_path, region))
 }
 
 /// Get the intrinsic dimensions of an SVG file

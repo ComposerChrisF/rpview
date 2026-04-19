@@ -1863,28 +1863,37 @@ impl ImageViewer {
 
         // Cache the frame
         if frame_index < anim_data.frames.len() {
-            if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
-                let base_name = match loaded.path.file_name() {
-                    Some(name) => {
-                        format!("rpview_{}_{}", std::process::id(), name.to_string_lossy())
-                    }
-                    None => return false,
-                };
-                let temp_path = temp_dir.join(format!("{}_{}.png", base_name, frame_index));
-
-                // Save frame to disk
-                match anim_data.frames[frame_index].image.save(&temp_path) {
-                    Ok(_) => {
-                        debug_eprintln!("[CACHE] Cached frame {} on-demand", frame_index);
-                        // Update the cache path
-                        if frame_index < loaded.frame_cache_paths.len() {
-                            loaded.frame_cache_paths[frame_index] = temp_path;
-                        }
-                        return true;
-                    }
-                    Err(_e) => {
+            match tempfile::Builder::new()
+                .prefix("rpview_frame_")
+                .suffix(".png")
+                .tempfile()
+            {
+                Ok(temp_file) => {
+                    if let Err(_e) = anim_data.frames[frame_index].image.save(temp_file.path()) {
                         debug_eprintln!("[ERROR] Failed to cache frame {}: {}", frame_index, _e);
+                        return false;
                     }
+                    match temp_file.into_temp_path().keep() {
+                        Ok(kept) => {
+                            debug_eprintln!("[CACHE] Cached frame {} on-demand", frame_index);
+                            if frame_index < loaded.frame_cache_paths.len() {
+                                loaded.frame_cache_paths[frame_index] = kept;
+                            }
+                            return true;
+                        }
+                        Err(_e) => {
+                            debug_eprintln!(
+                                "[ERROR] Failed to persist frame {}: {}",
+                                frame_index, _e
+                            );
+                        }
+                    }
+                }
+                Err(_e) => {
+                    debug_eprintln!(
+                        "[ERROR] Failed to create temp file for frame {}: {}",
+                        frame_index, _e
+                    );
                 }
             }
         }
