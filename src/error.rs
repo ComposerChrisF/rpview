@@ -1,61 +1,23 @@
-use std::fmt;
 use std::io;
 use std::path::PathBuf;
 
 /// Application-wide error type
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    /// I/O error
-    Io(io::Error),
-    /// File not found
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+    #[error("File not found: {}", .0.display())]
     FileNotFound(PathBuf),
-    /// Invalid file format
+    #[error("Invalid format for {}: {}", .0.display(), .1)]
     InvalidFormat(PathBuf, String),
-    /// No images found in directory
+    #[error("No images found in directory: {}", .0.display())]
     NoImagesFound(PathBuf),
-    /// Permission denied
+    #[error("Permission denied: {}", .0.display())]
     PermissionDenied(PathBuf),
-    /// Image loading error
+    #[error("Failed to load image {}: {}", .0.display(), .1)]
     ImageLoadError(PathBuf, String),
-    /// Generic error with message
+    #[error("{0}")]
     Generic(String),
-}
-
-impl fmt::Display for AppError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AppError::Io(err) => write!(f, "I/O error: {}", err),
-            AppError::FileNotFound(path) => write!(f, "File not found: {}", path.display()),
-            AppError::InvalidFormat(path, msg) => {
-                write!(f, "Invalid format for {}: {}", path.display(), msg)
-            }
-            AppError::NoImagesFound(path) => {
-                write!(f, "No images found in directory: {}", path.display())
-            }
-            AppError::PermissionDenied(path) => {
-                write!(f, "Permission denied: {}", path.display())
-            }
-            AppError::ImageLoadError(path, msg) => {
-                write!(f, "Failed to load image {}: {}", path.display(), msg)
-            }
-            AppError::Generic(msg) => write!(f, "{}", msg),
-        }
-    }
-}
-
-impl std::error::Error for AppError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            AppError::Io(err) => Some(err),
-            _ => None,
-        }
-    }
-}
-
-impl From<io::Error> for AppError {
-    fn from(err: io::Error) -> Self {
-        AppError::Io(err)
-    }
 }
 
 /// Result type for application operations

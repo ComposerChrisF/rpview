@@ -1,4 +1,3 @@
-use crate::state::ImageState;
 use crate::state::app_state::SortMode;
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
 use gpui::*;
@@ -10,7 +9,9 @@ pub struct DebugOverlayConfig {
     pub current_path: Option<PathBuf>,
     pub current_index: usize,
     pub total_images: usize,
-    pub image_state: ImageState,
+    pub zoom: f32,
+    pub pan: (f32, f32),
+    pub is_fit_to_window: bool,
     pub image_dimensions: Option<(u32, u32)>,
     pub viewport_size: Option<Size<Pixels>>,
     pub sort_mode: SortMode,
@@ -110,8 +111,8 @@ impl Render for DebugOverlay {
 
         let zoom_str = format!(
             "{:.2}% ({})",
-            self.config.image_state.zoom * 100.0,
-            if self.config.image_state.is_fit_to_window {
+            self.config.zoom * 100.0,
+            if self.config.is_fit_to_window {
                 "fit"
             } else {
                 "manual"
@@ -120,7 +121,7 @@ impl Render for DebugOverlay {
 
         let pan_str = format!(
             "({:.1}, {:.1})",
-            self.config.image_state.pan.0, self.config.image_state.pan.1
+            self.config.pan.0, self.config.pan.1
         );
 
         let image_dims_str = if let Some((w, h)) = self.config.image_dimensions {

@@ -41,6 +41,9 @@ pub(crate) struct SavedSlot {
 /// the user picked a non-1× resize factor).
 pub(crate) type LcResult = Option<(Arc<gpui::RenderImage>, (u32, u32))>;
 
+/// Single frame result from the batch LC worker: `(frame_index, render, dimensions)`.
+pub(crate) type LcBatchResult = Option<(usize, Arc<gpui::RenderImage>, (u32, u32))>;
+
 /// Convert an RGBA image to a BGRA-ordered `RenderImage` suitable for GPUI.
 fn rgba_to_bgra_render_image(rgba: &image::RgbaImage) -> Arc<gpui::RenderImage> {
     let mut bgra = rgba.clone();
@@ -86,7 +89,7 @@ pub(crate) struct LcJob {
 pub(crate) struct LcBatchJob {
     /// Channel receiving `Some((frame_index, render, size))` per completed
     /// frame, or `None` as a sentinel when the batch finishes (or is cancelled).
-    pub handle: std::sync::mpsc::Receiver<Option<(usize, Arc<gpui::RenderImage>, (u32, u32))>>,
+    pub handle: std::sync::mpsc::Receiver<LcBatchResult>,
     /// Cancel flag shared with the worker thread; checked between frames.
     pub cancel: Arc<std::sync::atomic::AtomicBool>,
     /// Index of the frame currently being processed (updated atomically by worker).
@@ -140,9 +143,12 @@ impl LcJob {
 /// - Smooth playback after first loop (all frames cached)
 #[derive(Clone)]
 pub struct LoadedImage {
+    // --- Core image metadata ---
     pub path: PathBuf,
     pub width: u32,
     pub height: u32,
+
+    // --- Filter state ---
     /// Decoded RGBA source, cached in memory so the filter thread doesn't have to
     /// reload and re-decode from disk on every slider tick. Populated lazily on
     /// the first filter application.
@@ -152,6 +158,8 @@ pub struct LoadedImage {
     pub filtered_render: Option<Arc<gpui::RenderImage>>,
     /// Filter settings used to produce `filtered_render` (for change detection).
     pub cached_filter_settings: Option<FilterSettings>,
+
+    // --- Local contrast state ---
     /// Planar-float copy of `decoded_rgba8` cached for the local-contrast
     /// worker. Avoids re-doing the f32/255 conversion (6–20ms for a large
     /// RGBA image) on every slider tick. Populated lazily on the first LC
@@ -169,12 +177,16 @@ pub struct LoadedImage {
     /// Per-frame LC renders for animated images, indexed by frame number.
     /// `None` at an index means that frame hasn't been LC-processed yet.
     /// Empty vec for static images.
-    pub lc_frame_renders: Vec<Option<(Arc<gpui::RenderImage>, (u32, u32))>>,
+    pub lc_frame_renders: Vec<LcResult>,
+
+    // --- Animation ---
     /// Animation data (if this is an animated image)
     pub animation_data: Option<AnimationData>,
     /// Cached paths for each animation frame (disk cache)
     /// Empty PathBuf means frame not yet cached (will be cached on-demand)
     pub frame_cache_paths: Vec<PathBuf>,
+
+    // --- SVG rasterization ---
     /// Rasterized temp PNG path (for SVG files)
     pub rasterized_path: Option<PathBuf>,
     /// Parsed SVG tree for dynamic re-rendering at different zoom levels
@@ -185,6 +197,7 @@ pub struct LoadedImage {
 
 /// Component for viewing images
 pub struct ImageViewer {
+    // --- Image loading / errors ---
     /// Currently loaded image
     pub(crate) current_image: Option<LoadedImage>,
     /// Error message if image failed to load
@@ -195,6 +208,8 @@ pub struct ImageViewer {
     pub(crate) no_images_path: Option<PathBuf>,
     /// Oversized image warning: (path, width, height, max_dimension)
     pub(crate) oversized_image: Option<(PathBuf, u32, u32, u32)>,
+
+    // --- Viewport / interaction state ---
     /// Focus handle for keyboard events
     pub(crate) focus_handle: FocusHandle,
     /// Current image state (zoom, pan, etc.)
@@ -214,6 +229,8 @@ pub struct ImageViewer {
     /// Whether a drag-to-pan actually moved (avoids unnecessary state saves on plain clicks).
     #[allow(dead_code)]
     pub(crate) drag_pan_moved: bool,
+
+    // --- Async image loading ---
     /// Paths to preload into GPU (for smooth navigation)
     /// These images are rendered invisibly to prime the GPU texture cache
     pub(crate) preload_paths: Vec<PathBuf>,
@@ -221,12 +238,15 @@ pub struct ImageViewer {
     pub(crate) loading_handle: Option<image_loader::LoaderHandle>,
     /// Loading state indicator
     pub(crate) is_loading: bool,
+
+    // --- Filter processing ---
     /// Filter processing state
     pub(crate) is_processing_filters: bool,
     /// Handle for async filter processing — returns the filtered image in memory.
     pub(crate) filter_processing_handle:
         Option<std::sync::mpsc::Receiver<Result<Arc<gpui::RenderImage>, String>>>,
 
+    // --- Local contrast processing ---
     /// In-flight local-contrast job (cancel flag, progress counter, result
     /// channel). `None` when no worker thread is running.
     pub(crate) lc_job: Option<LcJob>,
@@ -241,13 +261,15 @@ pub struct ImageViewer {
     /// Session-wide toggle for the LC output (so the `1`/`2` keys can A/B
     /// the processed image against the un-processed one).
     pub(crate) lc_enabled: bool,
+
+    // --- Saved snapshots ---
     /// User-saved image snapshots: indices 0..6 correspond to keys 3..9.
     pub(crate) saved_slots: [Option<SavedSlot>; 7],
     /// Which saved slot is currently being displayed (3..9), or `None` for
     /// the normal display path (raw / filtered / LC).
     pub(crate) active_slot: Option<u8>,
 
-    // --- SVG dynamic re-rasterization state ---
+    // --- SVG re-rasterization ---
     /// Active sharp re-raster path (replaces blurry base raster when zoomed in)
     pub(crate) svg_reraster_path: Option<PathBuf>,
     /// Region info if this is a viewport-only re-raster (None = full render)
@@ -896,17 +918,16 @@ impl ImageViewer {
                 }
             }
         }
-        let source = loaded
-            .decoded_rgba8
-            .as_ref()
-            .expect("decoded source just populated")
-            .clone();
+        let Some(source) = loaded.decoded_rgba8.clone() else {
+            debug_eprintln!("[BUG] decoded_rgba8 is None after successful load");
+            return;
+        };
 
         self.is_processing_filters = true;
         let (sender, receiver) = std::sync::mpsc::channel();
         self.filter_processing_handle = Some(receiver);
 
-        std::thread::spawn(move || {
+        rayon::spawn(move || {
             debug_eprintln!("[FILTER_THREAD] LUT pass starting");
             let bgra = filters::apply_filters_to_bgra(
                 &source,
@@ -987,12 +1008,12 @@ impl ImageViewer {
             // Per-frame cache hit.
             if loaded.cached_lc_params.as_ref() == Some(&params)
                 && frame_idx < loaded.lc_frame_renders.len()
-                && loaded.lc_frame_renders[frame_idx].is_some()
             {
-                let (render, size) = loaded.lc_frame_renders[frame_idx].clone().unwrap();
-                loaded.lc_render = Some(render);
-                loaded.lc_render_size = Some(size);
-                return;
+                if let Some((render, size)) = loaded.lc_frame_renders[frame_idx].clone() {
+                    loaded.lc_render = Some(render);
+                    loaded.lc_render_size = Some(size);
+                    return;
+                }
             }
 
             // If a worker is already running, stash pending and let it finish.
@@ -1052,19 +1073,18 @@ impl ImageViewer {
             }
         }
         if loaded.lc_source_fmap.is_none() {
-            let rgba = loaded
-                .decoded_rgba8
-                .as_ref()
-                .expect("decoded source just populated");
+            let Some(rgba) = loaded.decoded_rgba8.as_ref() else {
+                debug_eprintln!("[BUG] decoded_rgba8 is None after successful load");
+                return;
+            };
             loaded.lc_source_fmap = Some(Arc::new(crate::utils::float_map::FloatMap::from_rgba8(
                 rgba,
             )));
         }
-        let fmap = loaded
-            .lc_source_fmap
-            .as_ref()
-            .expect("float map just populated")
-            .clone();
+        let Some(fmap) = loaded.lc_source_fmap.clone() else {
+            debug_eprintln!("[BUG] lc_source_fmap is None after assignment");
+            return;
+        };
 
         let cancel = Arc::new(AtomicBool::new(false));
         let cancel_for_thread = cancel.clone();
@@ -1080,7 +1100,7 @@ impl ImageViewer {
             params,
         });
 
-        std::thread::spawn(move || {
+        rayon::spawn(move || {
             use crate::utils::local_contrast::FeedbackFn;
             debug_eprintln!("[LC_THREAD] start");
             let cancel_watch = cancel_for_thread.clone();
@@ -1148,7 +1168,7 @@ impl ImageViewer {
             params,
         });
 
-        std::thread::spawn(move || {
+        rayon::spawn(move || {
             use crate::utils::local_contrast::FeedbackFn;
             debug_eprintln!("[LC_THREAD] start (frame {})", frame_idx);
             let cancel_watch = cancel_for_thread.clone();
@@ -1498,7 +1518,9 @@ impl ImageViewer {
         // Take ownership of the job so we can move its `params` into the
         // cache key. The worker thread has already exited (it's what sent
         // us the result through the channel).
-        let completed_job = self.lc_job.take().expect("just matched .as_ref()");
+        let Some(completed_job) = self.lc_job.take() else {
+            return false;
+        };
         let installed = match result {
             Some((render_image, size)) => {
                 let old_eff = self.display_dimensions();

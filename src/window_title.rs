@@ -41,11 +41,11 @@ fn expand_template(
     sort_mode: SortMode,
 ) -> String {
     let mut result = String::with_capacity(template.len() + filename.len());
-    let bytes = template.as_bytes();
     let mut i = 0;
 
-    while i < bytes.len() {
-        if bytes[i] == b'{' {
+    while i < template.len() {
+        if template.as_bytes()[i] == b'{' {
+            // `i` is always a valid char boundary (ASCII '{')
             if let Some(end) = template[i..].find('}') {
                 let key = &template[i + 1..i + end];
                 match key {
@@ -65,8 +65,10 @@ fn expand_template(
                 i += 1;
             }
         } else {
-            result.push(bytes[i] as char);
-            i += 1;
+            // Decode one full UTF-8 character at byte offset `i`.
+            let ch = template[i..].chars().next().unwrap();
+            result.push(ch);
+            i += ch.len_utf8();
         }
     }
 

@@ -116,58 +116,9 @@ pub fn apply_filters(
     contrast: f32,
     gamma: f32,
 ) -> DynamicImage {
-    // Short-circuit if no filters are applied
-    let has_brightness = brightness.abs() >= 0.001;
-    let has_contrast = contrast.abs() >= 0.001;
-    let has_gamma = (gamma - 1.0).abs() >= 0.001;
-
-    if !has_brightness && !has_contrast && !has_gamma {
+    let Some(lut) = build_filter_lut(brightness, contrast, gamma) else {
         return img.clone();
-    }
-
-    // Clamp input values
-    let brightness = brightness.clamp(-100.0, 100.0);
-    let contrast = contrast.clamp(-100.0, 100.0);
-    let gamma = gamma.clamp(0.1, 10.0);
-
-    // Pre-calculate combined lookup table for all filters
-    // This applies brightness -> contrast -> gamma in order
-    let mut lut = [0u8; 256];
-
-    // Pre-calculate contrast factor
-    let contrast_factor = if contrast > 0.0 {
-        1.0 + (contrast / 100.0) * 2.0 // 1.0 to 3.0
-    } else {
-        1.0 + (contrast / 100.0) * 0.9 // 0.1 to 1.0
     };
-
-    // Brightness adjustment (maps -100..100 to -255..255)
-    let brightness_adjustment = brightness * 2.55;
-
-    for (i, lut_entry) in lut.iter_mut().enumerate() {
-        let mut value = i as f32;
-
-        // Step 1: Apply brightness
-        if has_brightness {
-            value = (value + brightness_adjustment).clamp(0.0, 255.0);
-        }
-
-        // Step 2: Apply contrast
-        if has_contrast {
-            let normalized = value / 255.0;
-            value = ((normalized - 0.5) * contrast_factor + 0.5) * 255.0;
-            value = value.clamp(0.0, 255.0);
-        }
-
-        // Step 3: Apply gamma
-        if has_gamma {
-            let normalized = value / 255.0;
-            let corrected = normalized.powf(1.0 / gamma);
-            value = corrected * 255.0;
-        }
-
-        *lut_entry = value.clamp(0.0, 255.0) as u8;
-    }
 
     // Apply combined LUT in a single pass using direct slice access
     let owned;
