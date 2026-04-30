@@ -20,6 +20,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 - **Phase 13** (Performance): ✅ Complete
 - **Phase 14** (Testing & Quality): ✅ Complete
 - **Phase 15**: ⏳ Planned
+- **Phase 17** (Persistent Frame Cache): ✅ Complete
 
 ## Phase 1: Project Foundation & Basic Structure ✅
 
@@ -89,9 +90,9 @@ This document outlines the development roadmap for rpview, organized by implemen
 
 ### Error Display
 - [x] Create basic error message display
-- [x] Show "file not found" errors
-- [x] Show "unsupported format" errors
-- [x] Show "no images found" message
+- [x] Show “file not found” errors
+- [x] Show “unsupported format” errors
+- [x] Show “no images found” message
 - [x] Show image loading errors
 
 ## Phase 3: Navigation & Sorting ✅
@@ -119,7 +120,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 
 ### Window Title
 - [x] Update window title with current image name
-- [x] Show position in list (e.g., "image.png (3/10)")
+- [x] Show position in list (e.g., “image.png (3/10)”)
 - [x] Update title on navigation
 
 ### Additional Image Formats
@@ -153,7 +154,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 - [x] Create zoom indicator component (src/components/zoom_indicator.rs)
 - [x] Position in bottom-right corner
 - [x] Show current zoom percentage
-- [x] Show "Fit" when at fit-to-window size
+- [x] Show “Fit” when at fit-to-window size
 
 ### Basic Pan
 - [x] Add pan position (x, y) to per-image state
@@ -512,7 +513,7 @@ This document outlines the development roadmap for rpview, organized by implemen
   - Deduplicated cli.rs with file_scanner, delegated Render::render() to render_view()
 - [x] Code review round 2 (v0.7.8): 11 items — bug fixes, deduplication, module split, macOS glyphs
   - Fixed drag sentinel value bug at (0,0) using nested Option<Option<T>> pattern
-  - Fixed format_shortcut("Cmd") producing "Cmd+Cmd" on macOS
+  - Fixed format_shortcut(“Cmd”) producing “Cmd+Cmd” on macOS
   - Fixed mutex unwrap panic in macos_open_handler with let-else pattern
   - Simplified From<io::Error> to preserve io::Error context instead of empty PathBuf
   - Gated animation eprintln with #[cfg(debug_assertions)] to avoid render-loop log spam
@@ -570,7 +571,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 
 ## Phase 16: Settings System
 
-This phase implements a comprehensive settings system allowing users to customize rpview's behavior, appearance, and external tool integration. See `docs/SETTINGS_DESIGN.md` for detailed design documentation.
+This phase implements a comprehensive settings system allowing users to customize rpview’s behavior, appearance, and external tool integration.  See `docs/SETTINGS_DESIGN.md` for detailed design documentation.
 
 ### Phase 16.1: Foundation ✅
 - [x] Create settings module structure (src/state/settings.rs)
@@ -596,7 +597,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 ### Phase 16.2: Settings Window UI ✅
 
-**Note:** Settings window is fully interactive (Phase 16.7 mostly complete). All controls update settings in real-time. External Viewer List Editor remains display-only (edit via `settings.json`).
+**Note:** Settings window is fully interactive (Phase 16.7 mostly complete).  All controls update settings in real-time.  External Viewer List Editor remains display-only (edit via `settings.json`).
 
 - [x] Create SettingsWindow component (src/components/settings_window.rs)
 - [x] Define SettingsWindow struct with working/original settings copies
@@ -631,7 +632,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 - [x] Create OpenInExternalEditor action
 - [x] Add keybinding for external editor (Cmd+E)
 - [x] Implement handler using settings.external_tools.external_editor
-- [x] Add "Reveal in Finder/Explorer" action (Cmd+R / Ctrl+R)
+- [x] Add “Reveal in Finder/Explorer” action (Cmd+R / Ctrl+R)
 - [x] Test external viewer configuration on macOS
 
 ### Phase 16.4: Apply Settings Throughout App ✅
@@ -668,7 +669,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 ### Phase 16.5: Testing & Polish ✅ COMPLETE
 
-**Status:** All testing and polish tasks completed. Settings system is fully tested, documented, and production-ready.
+**Status:** All testing and polish tasks completed.  Settings system is fully tested, documented, and production-ready.
 
 - [x] **Settings Persistence Testing**
   - [x] Test settings save on quit - ✅ Working (auto-save on apply)
@@ -751,7 +752,7 @@ This phase implements a comprehensive settings system allowing users to customiz
 - Apply button (Cmd+Enter) saves changes to disk
 - Cancel button (Esc) discards changes
 - Reset to Defaults button restores all settings to default values
-- **Per-setting reset buttons** ✅ — small "↺" icon next to each setting, grayed when at default, green hover when changed, resets individual setting on click (~31 settings)
+- **Per-setting reset buttons** ✅ — small “↺” icon next to each setting, grayed when at default, green hover when changed, resets individual setting on click (~31 settings)
 
 ⏳ **Optional Enhancements (Low Priority - rarely changed settings):**
 - Text input fields (window title format, file paths)
@@ -769,15 +770,15 @@ This phase implements a comprehensive settings system allowing users to customiz
 
 ### UI Components to Use
 
-Based on research of Zed editor's Settings dialog implementation, we should use the following patterns:
+Based on research of Zed editor’s Settings dialog implementation, we should use the following patterns:
 
-**1. Checkboxes:**
+**1.  Checkboxes:**
 - Use `adabraka-ui` checkbox components (we already depend on this crate)
 - Zed uses dedicated `Checkbox` component from their UI crate
 - Pattern: `.on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, cx| { ... }))`
 - Toggle boolean in `working_settings` and call `cx.notify()` to trigger re-render
 
-**2. Numeric Inputs (Spinner/NumberInput):**
+**2.  Numeric Inputs (Spinner/NumberInput):**
 - Widget with text input field + increment/decrement buttons
 - Layout: `[-] [value] [+]`
 - Components needed:
@@ -788,24 +789,24 @@ Based on research of Zed editor's Settings dialog implementation, we should use 
 - Check if `adabraka-ui` or GPUI provides NumberInput component
 - If not, compose from: TextInput + Button components
 
-**3. Text Inputs:**
-- Use GPUI's `TextInput` or `adabraka-ui` input components
+**3.  Text Inputs:**
+- Use GPUI’s `TextInput` or `adabraka-ui` input components
 - For strings like window_title_format, file paths, etc.
 
-**4. Radio Buttons / Toggle Groups:**
+**4.  Radio Buttons / Toggle Groups:**
 - For enum selections (ZoomMode, SortMode, SaveFormat)
 - Zed uses radio button groups with visual selection state
 - Pattern: Horizontal flex row with clickable divs
 - Highlight selected option with border/background color
 
-**5. Dropdowns/Select:**
+**5.  Dropdowns/Select:**
 - For enum options and format selections
 - Check `adabraka-ui` for Select component
 - Alternative: implement custom dropdown with click-to-expand
 
-### Zed's Architecture Pattern
+### Zed’s Architecture Pattern
 
-Zed's Settings UI uses:
+Zed’s Settings UI uses:
 ```
 SettingField<T>         - Type-safe wrapper for read/write operations
 SettingFieldRenderer    - Maps setting types to UI controls
@@ -834,19 +835,19 @@ div()
 ```
 
 **Key Points:**
-- Mouse handlers don't require focus
+- Mouse handlers don’t require focus
 - `cx.notify()` signals state change and triggers re-render
-- State lives directly in the component (like React's `useState`)
+- State lives directly in the component (like React’s `useState`)
 - Use `cx.listener()` to create event handlers with access to `self`
 
 ### Resources for Implementation
 
 **Dependencies:**
 - `adabraka-ui`: Already in use (provides 73+ GPUI components)
-- Check what's available: Checkbox, Input, Button, Select, NumberInput
+- Check what’s available: Checkbox, Input, Button, Select, NumberInput
 
 **Learning Resources:**
-- Zed's Settings UI blog: https://zed.dev/blog/settings-ui
+- Zed’s Settings UI blog: https://zed.dev/blog/settings-ui
 - GPUI Interactivity guide: https://blog.0xshadow.dev/posts/learning-gpui/gpui-interactivity/
 - GPUI Component Library: https://longbridge.github.io/gpui-component/docs/components/
 - adabraka-ui repo: https://github.com/Augani/adabraka-ui
@@ -864,7 +865,7 @@ div()
   - [x] Import Checkbox component from ccf-gpui-widgets
   - [x] Replace `render_checkbox()` static divs with interactive Checkbox widget
   - [x] Add event handlers to toggle boolean values in working_settings
-  - [x] Dynamic labels show "Enabled"/"Disabled" state
+  - [x] Dynamic labels show “Enabled”/“Disabled” state
   - [x] Green theme for checked state with black checkmark
   - [x] All 10 boolean settings converted: remember_per_image_state, animation_auto_play, preload_adjacent_images, spacebar_pan_accelerated, auto_save_filtered_cache, remember_last_directory, remember_filter_state, wrap_navigation, show_image_counter, file_manager_integration
 
@@ -903,7 +904,7 @@ div()
   - [x] Updates background_color setting in real-time
 
 - [ ] **Step 8: External Viewer List Editor** (Most complex)
-  - [ ] Add "Add Viewer" button with click handler
+  - [ ] Add “Add Viewer” button with click handler
   - [ ] Add delete button (X) for each viewer with index tracking
   - [ ] Add up/down reorder buttons with vec swap logic
   - [ ] Add text inputs for name, command, args (editable)
@@ -940,6 +941,33 @@ div()
 - Steps 9-11 (buttons, validation, preview): 2-3 hours
 - **Total: 11-16 hours** (more than initial estimate due to research and polish)
 
+## Phase 17: Persistent Frame Cache ✅
+
+### Cache Infrastructure
+- [x] `src/utils/frame_cache.rs`: stable on-disk cache under `dirs::cache_dir()/rpview/cache/`
+- [x] FNV-1a 64-bit hashing (path identity, parameter identity) — stable across compiler versions
+- [x] Image key = `{path_fnv16}_{mtime}` so file replacement invalidates the cache
+- [x] LC parameter hash = 8 hex digits via `serde_json` canonical form
+
+### Cache Integration
+- [x] Migrate raw frame caching from `/tmp` (`tempfile().keep()`) to the persistent cache
+- [x] Persist LC outputs to disk inside the batch worker
+- [x] Disk-cache-hit short-circuit on `spawn_lc_batch` (skip recomputation when complete cache exists)
+
+### Display & Playback
+- [x] Atomic-swap rebuild path: prior LC view stays visible until new param-set fully reprocesses (no flicker on re-process)
+- [x] Streaming first-process path: unfilled slots fall back to unprocessed source so playback can begin immediately
+- [x] Remove playback block when LC is mid-batch — playback runs regardless
+
+### UI
+- [x] “Clear Cache for This Image” button in LC controls (`purge_image(image_key)`)
+- [x] “Clear All Cached Frames” button in LC controls (`purge_all()`)
+- [x] `Shift+Cmd+P` / `Shift+Ctrl+P` shortcut + View menu item: process all frames if animated, single-frame otherwise
+
+### Open
+- [ ] Warn the user when cache directory exceeds a size threshold (~5 GB?).  No automatic eviction yet — `total_size()` helper exists for this
+- [ ] Confirmation dialog for “Clear All Cached Frames” (currently fires immediately)
+
 ## Future Enhancements (Post-1.0)
 
 ### Advanced Features
@@ -972,48 +1000,48 @@ div()
 ---
 
 ### Phase 1 Summary
-Phase 1 of rpview has been successfully completed! This phase established the foundation and basic structure for the image viewer application.
+Phase 1 of rpview has been successfully completed!  This phase established the foundation and basic structure for the image viewer application.
 
 **What Was Implemented:**
 
-**1. Project Setup ✅**
+**1.  Project Setup ✅**
 - Cargo.toml configured with GPUI 0.2.2 and clap 4.5 dependencies
 - Basic GPUI app with window management
 - Window controls: Cmd/Ctrl+W to close, Cmd/Ctrl+Q to quit, triple-escape quit (3x within 2 seconds)
 - Dark theme with consistent color scheme (background: #1e1e1e)
 
-**2. Error Handling ✅**
+**2.  Error Handling ✅**
 - Comprehensive AppError enum covering I/O, file not found, invalid format, no images found, permission denied, image loading, and generic errors
 - AppResult<T> type alias for consistent error handling
 - Proper Display and Error trait implementations
 - Automatic conversion from io::Error
 
-**3. State Management Architecture ✅**
+**3.  State Management Architecture ✅**
 - AppState with image file paths, current index, sort mode, and LRU cache (max 1000 items)
 - Navigation methods: next_image(), previous_image()
 - State persistence: get_current_state(), save_current_state()
 - Automatic cache eviction for memory management
 - ImageState with zoom level (0.1-20.0), pan position, fit-to-window flag, last accessed timestamp, filter settings, and animation state
 
-**4. Styling Framework ✅**
+**4.  Styling Framework ✅**
 - Reusable colors: background (#1e1e1e), text (#ffffff), error (#ff5555), info (#50fa7b), overlay background (85% opacity), border (#444444)
 - Spacing constants: XS (4px), SM (8px), MD (16px), LG (24px), XL (32px)
 - Text sizes: SM (12px), MD (14px), LG (16px), XL (20px), XXL (24px)
 
-**5. CLI Argument Parsing ✅**
+**5.  CLI Argument Parsing ✅**
 - Supports no arguments (defaults to current directory), single file, multiple files, directory, and mixed inputs
 - Supported formats: PNG, JPEG, BMP, GIF, TIFF, ICO, WEBP
 - Automatic filtering by extension (case-insensitive)
 - Alphabetical sorting by default
 - Comprehensive error messages for file not found, unsupported format, no images, and permission denied
 
-**6. Module Organization ✅**
+**6.  Module Organization ✅**
 - Clean project structure: main.rs, lib.rs, error.rs, cli.rs
 - components/ directory (UI components for future phases)
 - state/ directory (app_state.rs, image_state.rs)
 - utils/ directory (style.rs for styling utilities)
 
-**7. Documentation ✅**
+**7.  Documentation ✅**
 - DESIGN.md (architecture and design decisions)
 - CLI.md (command-line interface documentation)
 - TODO.md (15-phase development roadmap)
@@ -1042,12 +1070,12 @@ Phase 1 of rpview has been successfully completed! This phase established the fo
 - ~15MB debug binary size
 
 ### Phase 3 Summary
-Phase 3 has been successfully completed! The application now:
+Phase 3 has been successfully completed!  The application now:
 - Supports arrow key navigation (← → to navigate between images)
 - Implements wrap-around navigation (loops from last to first image)
 - Provides two sort modes: Alphabetical (case-insensitive) and Modified Date (newest first)
 - Allows switching sort modes with keyboard shortcuts (Shift+Cmd+A and Shift+Cmd+M)
-- Updates window title dynamically with current image name and position (e.g., "banana.png (2/7)")
+- Updates window title dynamically with current image name and position (e.g., “banana.png (2/7)”)
 - Maintains current image context when switching sort modes
 - Supports additional image formats: TIFF, ICO, WEBP, and GIF (all formats supported by the image crate)
 - Re-sorts image list when sort mode changes
@@ -1061,23 +1089,23 @@ Key implementation details:
 - Image format support expanded in Cargo.toml with explicit feature flags
 
 ### Phase 2 Summary
-Phase 2 has been successfully completed! The application now:
-- Loads and displays images using GPUI's `img()` function
+Phase 2 has been successfully completed!  The application now:
+- Loads and displays images using GPUI’s `img()` function
 - Automatically handles format conversion (RGBA to BGRA for GPU)
 - Displays images with fit-to-window scaling using `ObjectFit::Contain`
 - Loads the first image automatically on startup
 - Handles errors gracefully with informative error messages
 
-The implementation uses the recommended Approach 1 from the research documentation, leveraging GPUI's built-in image loading, caching, and format conversion.
+The implementation uses the recommended Approach 1 from the research documentation, leveraging GPUI’s built-in image loading, caching, and format conversion.
 
 ### Phase 4 Summary
-Phase 4 has been successfully completed! The application now:
+Phase 4 has been successfully completed!  The application now:
 - Implements comprehensive zoom functionality with 10%-2000% range
 - Uses fit-to-window zoom as the initial state for all images
 - Provides keyboard zoom controls: `=` (zoom in), `-` (zoom out), `0` (toggle fit/100%)
 - Uses logarithmic stepping (1.2x per step) for smooth zoom transitions
 - Keeps the image center stationary during zoom operations (not the viewport center)
-- Displays zoom level in bottom-right corner showing percentage and "Fit" indicator
+- Displays zoom level in bottom-right corner showing percentage and “Fit” indicator
 - Implements full pan functionality with WASD and IJKL keyboard controls
 - Provides pan speed modifiers: Shift (30px), Cmd/Ctrl (1px), base (10px)
 - Accounts for UI elements when calculating viewport size
@@ -1095,7 +1123,7 @@ Key implementation details:
 - CLI updated to support directory scanning for single files (src/cli.rs:40)
 
 ### Phase 5 Summary
-Phase 5 has been successfully completed! The application now:
+Phase 5 has been successfully completed!  The application now:
 - Implements per-image state persistence using LRU cache
 - Preserves zoom level, pan position, and fit-to-window flag for each image
 - Maintains state when navigating between images
@@ -1113,7 +1141,7 @@ Key implementation details:
 - Default trait implementation for initial fit-to-window state
 
 ### Phase 6 Summary
-Phase 6 has been successfully completed! The application now:
+Phase 6 has been successfully completed!  The application now:
 - Implements mouse wheel zoom with Ctrl/Cmd modifier for cursor-centered zooming
 - Uses 1.1x zoom factor per scroll notch for smooth scrolling
 - Provides keyboard zoom modifiers for different zoom speeds:
@@ -1144,7 +1172,7 @@ Key implementation details:
 
 
 ### Phase 7 Summary
-Phase 7 has been successfully completed! The application now:
+Phase 7 has been successfully completed!  The application now:
 - Implements spacebar+mouse drag panning with 1:1 pixel movement for intuitive direct manipulation
 - Provides WASD and IJKL keyboard panning controls (10px base speed)
 - Supports pan speed modifiers:
@@ -1171,7 +1199,7 @@ Key implementation details:
 
 
 ### Phase 8 Summary
-Phase 8 has been successfully completed! The application now:
+Phase 8 has been successfully completed!  The application now:
 - Provides an interactive help overlay showing all keyboard shortcuts
 - Includes a debug overlay displaying real-time system information
 - Supports multiple key bindings for help (H, ?, F1) and debug (F12)
@@ -1198,7 +1226,7 @@ Key implementation details:
 - Escape handler (src/main.rs:66-80) prioritizes closing overlays before counting toward quit
 - Conditional rendering (src/main.rs:523-535) using `.when()` for proper z-order
 - FluentBuilder trait import (src/main.rs:1) required for `.when()` method
-- Platform-aware keyboard shortcut display using cfg!(target_os = "macos") detection
+- Platform-aware keyboard shortcut display using cfg!(target_os = “macos”) detection
 - Removed info panel showing filename and dimensions for cleaner UI
 - Viewport calculation uses window.viewport_size() for accurate content area sizing (src/main.rs:312)
 
@@ -1208,10 +1236,10 @@ Key implementation details:
 3. Fixed fit-to-window viewport calculation to use `window.viewport_size()` instead of `window.bounds()`, which correctly excludes the title bar and provides accurate content area dimensions
 
 ### Phase 9 Summary
-Phase 9 has been successfully completed! The application now:
+Phase 9 has been successfully completed!  The application now:
 - Implements comprehensive CPU-based image filtering system
 - Provides three adjustable filters: brightness (-100 to +100), contrast (-100 to +100), and gamma (0.1 to 10.0)
-- Features **fully interactive** filter sliders using adabraka-ui's Slider components
+- Features **fully interactive** filter sliders using adabraka-ui’s Slider components
 - Displays real-time visual feedback with slider values and smooth dragging
 - Caches filtered images to temporary files for performance optimization
 - Supports per-image filter state persistence across navigation
@@ -1224,7 +1252,7 @@ Phase 9 has been successfully completed! The application now:
 - Integrates seamlessly with existing per-image state management system
 - Automatically cleans up temporary filtered image files when filters change or are disabled
 - Updates help overlay with filter keyboard shortcuts
-- Renders filtered images using GPUI's img() function with cached PNG files
+- Renders filtered images using GPUI’s img() function with cached PNG files
 - **Properly restores focus** when dismissing filter panel (keyboard shortcuts work immediately)
 - **Solves GPUI image caching** with unique timestamped filenames for each filtered image
 
@@ -1266,18 +1294,18 @@ Key implementation details:
 
 **Architecture Decision - Polling vs Callbacks**:
 - Initial callback approach failed due to stale closures and borrowing conflicts
-- Polling in render() is the correct pattern for GPUI's reactive model
+- Polling in render() is the correct pattern for GPUI’s reactive model
 - No performance concern - render already runs on every frame
 - Clean separation: FilterControls manages sliders, App detects changes
 
 
 ### Phase 10 Summary
-Phase 10 has been successfully completed! The application now:
+Phase 10 has been successfully completed!  The application now:
 - Provides native file dialog support for opening images using Cmd/Ctrl+O
 - Supports multi-file selection in the open dialog
 - Replaces the current navigation list when opening new files
 - Implements save functionality with Cmd/Ctrl+S
-- Automatically suggests filenames with "_filtered" suffix when filters are enabled
+- Automatically suggests filenames with “_filtered” suffix when filters are enabled
 - Supports saving to multiple formats: PNG, JPEG, BMP, TIFF, and WEBP
 - Applies current filters to saved images when filters are enabled
 - Uses efficient file copying for unfiltered images (no re-encoding)
@@ -1303,10 +1331,10 @@ Key implementation details:
 - Filtered saves use cached PNG files when available (performance optimization)
 - Dynamic filter application on save if cache is missing (ensures correctness)
 - JPEG conversion properly handles alpha channel removal (prevents errors)
-- Suggested filename includes "_filtered" suffix for clarity when filters are applied
+- Suggested filename includes “_filtered” suffix for clarity when filters are applied
 
 ### Phase 11 Summary
-Phase 11 has been successfully completed! The application now:
+Phase 11 has been successfully completed!  The application now:
 - Automatically detects and loads animated GIF and WEBP files
 - Extracts all animation frames with proper timing information
 - Displays animations with automatic frame playback based on frame duration
@@ -1357,7 +1385,7 @@ Key implementation details:
   - **Phase 1 (Initial Load):** Cache first 3 frames immediately (~100-200ms)
     - User sees frame 0 instantly (fast UI feedback)
     - UI remains responsive even for large GIFs
-    - No "frozen on previous image" perception
+    - No “frozen on previous image” perception
   - **Phase 2 (Playback):** Look-ahead caching of next 3 frames during animation
     - Frames cached just before needed (non-blocking)
     - After first loop, all frames cached (perfectly smooth)
@@ -1371,18 +1399,18 @@ Key implementation details:
 - Documentation: Comprehensive 3-phase caching strategy in ANIMATION_IMPLEMENTATION.md
 
 ### Phase 11.5 Summary
-Phase 11.5 has been successfully completed! The application now supports drag-and-drop file operations with full directory integration.
+Phase 11.5 has been successfully completed!  The application now supports drag-and-drop file operations with full directory integration.
 
 **What Was Implemented:**
 
-**1. Core Drag-Drop Functionality ✅**
+**1.  Core Drag-Drop Functionality ✅**
 - Added .on_drop() event handler to main application div (src/main.rs:1003-1007)
 - Implemented handle_dropped_files() method for processing dropped paths (src/main.rs:383-440)
 - Supports dropping single files, multiple files, and directories
 - Automatically determines file vs directory and scans accordingly
 - Processes ExternalPaths event type from GPUI
 
-**2. Reusable File Scanner Module ✅**
+**2.  Reusable File Scanner Module ✅**
 - Created utils/file_scanner.rs module with reusable scanning utilities
 - Extracted directory scanning logic from CLI for code reuse
 - Implemented process_dropped_path() for smart file/directory handling
@@ -1391,7 +1419,7 @@ Phase 11.5 has been successfully completed! The application now supports drag-an
 - Handles file: scans parent directory and finds index
 - Handles directory: scans directory and starts at index 0
 
-**3. Navigation Integration ✅**
+**3.  Navigation Integration ✅**
 - Updates app_state.image_paths with scanned results from dropped files
 - Sets app_state.current_index to the dropped file (or 0 for directories)
 - Calls update_viewer() to load the dropped image immediately
@@ -1399,14 +1427,14 @@ Phase 11.5 has been successfully completed! The application now supports drag-an
 - Preserves per-image state cache for existing images (zoom, pan, filters)
 - Loads fit-to-window state for newly opened images
 
-**4. Visual Feedback ✅**
+**4.  Visual Feedback ✅**
 - Added drag_over state tracking to App struct (src/main.rs:88)
 - Implemented .on_drag_move() handler to detect drag-over events (src/main.rs:1000-1006)
 - Shows green border highlight (4px, #50fa7b) when dragging files over window
 - Clears drag-over state automatically when files are dropped
 - Provides clear visual indication that files can be dropped
 
-**5. Error Handling ✅**
+**5.  Error Handling ✅**
 - Handles empty directories gracefully with AppError::NoImagesFound
 - Handles non-image file drops with error logging via eprintln
 - Handles permission errors through AppError::PermissionDenied
@@ -1414,16 +1442,16 @@ Phase 11.5 has been successfully completed! The application now supports drag-an
 - Continues processing when one of multiple dropped files fails
 - Removes duplicates from final image list
 
-**6. Help Documentation ✅**
-- Updated help overlay to include "Drag & Drop" entry (src/components/help_overlay.rs:114)
-- Shows "Drop files/folders to open" in File Operations section
+**6.  Help Documentation ✅**
+- Updated help overlay to include “Drag & Drop” entry (src/components/help_overlay.rs:114)
+- Shows “Drop files/folders to open” in File Operations section
 - Accessible via H, ?, or F1 keys
 
 Key implementation details:
 - File scanner module (src/utils/file_scanner.rs) provides process_dropped_path(), scan_directory(), and is_supported_image()
 - Drag-drop handler processes multiple paths, deduplicates, and re-sorts according to active sort mode
 - Visual feedback using .when() conditional styling and border_color(rgb(0x50fa7b))
-- GPUI's ExternalPaths event provides paths from OS file manager (Finder, Explorer, etc.)
+- GPUI’s ExternalPaths event provides paths from OS file manager (Finder, Explorer, etc.)
 - Smart index calculation: finds dropped file in sorted list or uses 0 for directories
 - Supports all image formats: PNG, JPEG, BMP, GIF, TIFF, ICO, WEBP
 
@@ -1431,7 +1459,7 @@ Key implementation details:
 - Reused existing directory scanning logic from CLI for consistency
 - Drag-drop replaces entire image list (same behavior as Cmd+O file dialog)
 - Sort mode applied to dropped/opened files (respects current sort mode setting)
-- Green border chosen for visual feedback (matches app's success/info color scheme)
+- Green border chosen for visual feedback (matches app’s success/info color scheme)
 - Error logging to console via eprintln (future: could show toast notifications)
 - State preservation ensures zoom/pan/filters persist across drag-drop operations
 
@@ -1440,19 +1468,19 @@ Key implementation details:
 - Tested and working on macOS with Finder
 - Ready for testing on Windows (File Explorer) and Linux (Nautilus/Dolphin)
 
-**macOS "Open With" Support** (added after Phase 11.5):
-- **Problem**: Right-click → "Open With" → RPView.app didn't load the selected image
-- **Root Cause**: macOS sends `application:openFiles:` delegate method for "Open With", but GPUI only implements `application:openURLs:` (for URL schemes)
+**macOS “Open With” Support** (added after Phase 11.5):
+- **Problem**: Right-click → “Open With” → RPView.app didn’t load the selected image
+- **Root Cause**: macOS sends `application:openFiles:` delegate method for “Open With”, but GPUI only implements `application:openURLs:` (for URL schemes)
 - **Solution**: Two-pronged approach implemented in src/macos_open_handler.rs:
-  1. Hook into GPUI's `on_open_urls` callback which receives file:// URLs on modern macOS
-  2. Use Objective-C runtime to add `application:openFiles:` method to GPUI's delegate class as fallback
+  1. Hook into GPUI’s `on_open_urls` callback which receives file:// URLs on modern macOS
+  2. Use Objective-C runtime to add `application:openFiles:` method to GPUI’s delegate class as fallback
 - **URL Decoding**: Implemented proper UTF-8 URL decoding for filenames with special characters
 - **Polling Timer**: Added 250ms polling loop to process pending file open requests
-- **Result**: "Open With" now works correctly, loading the selected image and scanning its directory for navigation
+- **Result**: “Open With” now works correctly, loading the selected image and scanning its directory for navigation
 
 **Critical GPUI Image Rendering Fix**:
 - **Problem**: Dropped images would load successfully but not display on screen until navigation
-- **Root Cause**: GPUI's `img()` component caches based on component position in the UI tree, not image path
+- **Root Cause**: GPUI’s `img()` component caches based on component position in the UI tree, not image path
 - **Symptom**: `ImageViewer::render()` was being called with correct image data, but GPUI showed blank/cached content
 - **Solution**: Add unique ElementId based on image path to force GPUI to recognize path changes:
   ```rust
@@ -1475,34 +1503,34 @@ Key implementation details:
 
 
 ### Phase 12 Summary
-Phase 12 has been successfully completed! The application now has comprehensive cross-platform support with native integration on macOS, Windows, and Linux.
+Phase 12 has been successfully completed!  The application now has comprehensive cross-platform support with native integration on macOS, Windows, and Linux.
 
 **What Was Implemented:**
 
-**1. Platform-Specific Keyboard Handling ✅**
+**1.  Platform-Specific Keyboard Handling ✅**
 - Verified GPUI automatically handles platform modifiers (Cmd on macOS, Ctrl on Windows/Linux)
-- All keyboard bindings use "cmd" which GPUI translates to platform-appropriate modifier
+- All keyboard bindings use “cmd” which GPUI translates to platform-appropriate modifier
 - Help overlay displays correct modifier key for current platform (Cmd/Ctrl)
 - Platform-aware utilities in src/utils/style.rs (modifier_key(), format_shortcut())
 - No separate key bindings needed - GPUI handles translation internally
 
-**2. Platform-Specific Build Configurations ✅**
+**2.  Platform-Specific Build Configurations ✅**
 - Enhanced Cargo.toml with package metadata and platform-specific sections
 - Created build.rs for platform-specific build configuration
 - Added release profile optimization (LTO, single codegen unit, strip)
-- Binary renamed to "rpview" for better CLI experience
+- Binary renamed to “rpview” for better CLI experience
 - Platform detection sets TARGET_PLATFORM environment variable
 
-**3. Native File Associations ✅**
+**3.  Native File Associations ✅**
 - **macOS**: Created Info.plist (packaging/macos/Info.plist)
   - Declares file type associations for PNG, JPEG, GIF, BMP, TIFF, ICO, WEBP
-  - CFBundleDocumentTypes configuration for "Open With" menu
+  - CFBundleDocumentTypes configuration for “Open With” menu
   - UTExportedTypeDeclarations for WebP format
   - High-DPI capable flag (NSHighResolutionCapable)
   
 - **Windows**: Created Inno Setup installer script (packaging/windows/rpview.iss)
   - Registry entries for all supported image formats
-  - "Open With" context menu integration
+  - “Open With” context menu integration
   - Optional file association during installation
   - Windows subsystem configuration (no console window) — scoped to bins only (`rustc-link-arg-bins`) so test binaries retain console output
   
@@ -1512,7 +1540,7 @@ Phase 12 has been successfully completed! The application now has comprehensive 
   - Application menu integration
   - Installation script (packaging/linux/install.sh)
 
-**4. Platform-Specific Icon Documentation ✅**
+**4.  Platform-Specific Icon Documentation ✅**
 - Created ICONS.md with comprehensive icon requirements
 - **macOS**: .icns format requirements (16x to 1024x for Retina)
 - **Windows**: .ico format requirements with embedding instructions
@@ -1520,7 +1548,7 @@ Phase 12 has been successfully completed! The application now has comprehensive 
 - Icon creation commands and tools documented
 - Future: Actual icon asset creation deferred
 
-**5. Native Menu Integration ✅**
+**5.  Native Menu Integration ✅**
 - Implemented setup_menus() function (src/main.rs:1265-1310)
 - **RPView Menu** (Application menu on macOS): Quit
 - **File Menu**: Open, Save, Save to Downloads, Close Window
@@ -1530,7 +1558,7 @@ Phase 12 has been successfully completed! The application now has comprehensive 
 - Works on all platforms (macOS: application menu + menu bar, Windows/Linux: window menus)
 - Menu items trigger existing actions (no code duplication)
 
-**6. High-DPI Display Support ✅**
+**6.  High-DPI Display Support ✅**
 - Verified GPUI automatically handles high-DPI/Retina displays
 - No WindowOptions configuration needed
 - Uses Pixels type for measurements, GPUI applies scale factor
@@ -1539,7 +1567,7 @@ Phase 12 has been successfully completed! The application now has comprehensive 
 - **Linux**: Fractional scaling support (X11 and Wayland)
 - Scale factor retrieved from platform and updated when moving between displays
 
-**7. Cross-Platform Documentation ✅**
+**7.  Cross-Platform Documentation ✅**
 - Created comprehensive CROSS_PLATFORM.md documentation
 - **Keyboard Shortcuts**: Platform-specific modifier detection explained
 - **Native Menus**: Menu integration on all platforms
@@ -1551,7 +1579,7 @@ Phase 12 has been successfully completed! The application now has comprehensive 
 - **Troubleshooting**: Common issues and solutions
 - **Performance**: GPU acceleration details for each platform
 
-**8. Platform Integration Files Created ✅**
+**8.  Platform Integration Files Created ✅**
 - `packaging/macos/Info.plist` - macOS app bundle configuration
 - `packaging/windows/rpview.iss` - Windows installer script
 - `packaging/linux/rpview.desktop` - Linux desktop entry
@@ -1695,7 +1723,7 @@ pub fn modifier_key() -> &'static str {
 
 **Conclusion:**
 
-Phase 12 successfully adds comprehensive cross-platform support to RPView. The application now:
+Phase 12 successfully adds comprehensive cross-platform support to RPView.  The application now:
 - Works seamlessly on macOS, Windows, and Linux
 - Uses native keyboard shortcuts for each platform
 - Provides native menu integration
@@ -1704,7 +1732,7 @@ Phase 12 successfully adds comprehensive cross-platform support to RPView. The a
 - Is ready for distribution with provided installers/scripts
 - Has comprehensive documentation for users and developers
 
-The implementation demonstrates GPUI's excellent cross-platform capabilities, requiring minimal platform-specific code while providing native integration on all platforms.
+The implementation demonstrates GPUI’s excellent cross-platform capabilities, requiring minimal platform-specific code while providing native integration on all platforms.
 
 
 ### Phase 13 Summary
@@ -1712,40 +1740,40 @@ Phase 13 performance optimization has begun with successful implementation of GP
 
 **What Was Implemented:**
 
-**1. GPU Texture Preloading System ✅**
+**1.  GPU Texture Preloading System ✅**
 - Eliminated black flash when navigating between images
 - Continuous preloading of next/previous images during render loop
 - Uses same technique as successful animation frame preloading
 - Seamless, instant transitions between images
 
-**2. AppState Helper Methods ✅**
+**2.  AppState Helper Methods ✅**
 - Added `next_image_path()` to get path of next image in navigation list (src/state/app_state.rs:67-77)
 - Added `previous_image_path()` to get path of previous image (src/state/app_state.rs:79-89)
 - Properly handles wraparound for first/last images
 - Returns None for empty image lists
 
-**3. ImageViewer Preload Support ✅**
+**3.  ImageViewer Preload Support ✅**
 - Added `preload_paths: Vec<PathBuf>` field to track images to preload (src/components/image_viewer.rs:85)
 - Implemented `set_preload_paths()` method to update preload list (src/components/image_viewer.rs:101-104)
 - Render loop renders preload images invisibly off-screen (src/components/image_viewer.rs:673-696)
 - Uses full zoomed dimensions to force complete texture load
 - Positioned at -10000px with opacity 0 for invisibility
 
-**4. Render Loop Integration ✅**
+**4.  Render Loop Integration ✅**
 - Preload setup moved to `App::render()` for continuous operation (src/main.rs:752-762)
 - Runs every frame, ensuring adjacent images are always preloaded
 - Happens BEFORE navigation, not during navigation
 - Automatically updates if image list changes
 - Zero user-visible overhead
 
-**5. Technical Implementation Details ✅**
+**5.  Technical Implementation Details ✅**
 - Off-screen rendering: `left(px(-10000.0))` positions images outside viewport
 - Invisible rendering: `opacity(0.0)` makes preload images transparent
-- Full-size rendering: Uses current image's zoomed dimensions to ensure GPU loads full texture
+- Full-size rendering: Uses current image’s zoomed dimensions to ensure GPU loads full texture
 - Unique element IDs: Each preload gets `ElementId::Name(format!("preload-{}", path))`
 - Minimal memory: Only 2 textures (next + previous) in GPU memory at any time
 
-**6. Documentation ✅**
+**6.  Documentation ✅**
 - Created comprehensive GPU_TEXTURE_PRELOADING.md document
 - Explains problem, solution, implementation details, and performance characteristics
 - Compares to animation frame preloading technique
@@ -1789,7 +1817,7 @@ Phase 13 performance optimization has begun with successful implementation of GP
 
 This phase focused on performance optimization to eliminate UI blocking and visual artifacts during image loading and navigation.
 
-**1. Async Image Loading (Non-Blocking UI)**
+**1.  Async Image Loading (Non-Blocking UI)**
 - Created `utils/image_loader.rs` module with background thread loading
 - `load_image_async()` returns `LoaderHandle` for non-blocking operation
 - Cancellable loading operations (cancel previous load on navigation)
@@ -1797,7 +1825,7 @@ This phase focused on performance optimization to eliminate UI blocking and visu
 - Main thread checks for completion in render loop
 - UI remains responsive during large image loads
 
-**2. GPU Texture Preloading (Eliminates Black Flash)**
+**2.  GPU Texture Preloading (Eliminates Black Flash)**
 - Preloads next/previous images into GPU cache during render loop
 - Off-screen rendering at `left(-10000px)` with `opacity(0.0)`
 - Forces GPUI to load textures before navigation occurs
@@ -1805,7 +1833,7 @@ This phase focused on performance optimization to eliminate UI blocking and visu
 - Same technique used for animation frame preloading
 - Only 2 additional GPU textures in memory at any time
 
-**3. Progressive Animation Frame Caching (Fast + Smooth)**
+**3.  Progressive Animation Frame Caching (Fast + Smooth)**
 - **Phase 1**: Cache first 3 frames immediately (~100-200ms)
 - **Phase 2**: Look-ahead caching of next 3 frames during playback
 - **Phase 3**: GPU preloading of next frame to prevent black flash
@@ -1823,7 +1851,7 @@ This phase focused on performance optimization to eliminate UI blocking and visu
 - Navigation: Instant with no black flash
 - Animation: Smooth after first loop, fast initial display
 
-**What's Next:**
+**What’s Next:**
 Future Phase 13 work could include:
 - Memory usage monitoring and profiling
 - Advanced image cache eviction strategies
@@ -1832,11 +1860,11 @@ Future Phase 13 work could include:
 
 
 ### Phase 14 Summary
-Phase 14 has been successfully completed! The application now has comprehensive test coverage with 129 tests covering all critical functionality.
+Phase 14 has been successfully completed!  The application now has comprehensive test coverage with 129 tests covering all critical functionality.
 
 **What Was Implemented:**
 
-**1. Unit Tests (93 tests total) ✅**
+**1.  Unit Tests (93 tests total) ✅**
 - **File Operations Tests (13 tests)** - tests/file_operations_test.rs
   - Image format detection (PNG, JPEG, GIF, BMP, TIFF, ICO, WEBP)
   - Directory scanning with filtering
@@ -1873,7 +1901,7 @@ Phase 14 has been successfully completed! The application now has comprehensive 
   - Edge case handling (black, white, midtones)
   - Lookup table optimization
 
-**2. Integration Tests (36 tests total) ✅**
+**2.  Integration Tests (36 tests total) ✅**
 - **CLI Workflow Tests** - tests/integration_test.rs
   - Empty directory handling
   - Directory with images
@@ -1898,7 +1926,7 @@ Phase 14 has been successfully completed! The application now has comprehensive 
   - Pan with various zoom levels
   - Complete end-to-end workflows
 
-**3. Test Infrastructure ✅**
+**3.  Test Infrastructure ✅**
 - Added tempfile dependency for temporary test directories
 - Comprehensive test organization in `tests/` directory
 - All tests passing on macOS
@@ -1943,7 +1971,7 @@ Phase 14 has been successfully completed! The application now has comprehensive 
 - ⏳ Windows: Ready for testing (cross-platform code)
 - ⏳ Linux: Ready for testing (cross-platform code)
 
-**What's Next:**
+**What’s Next:**
 Phase 15 (Documentation & Release) will focus on:
 - API documentation (rustdoc)
 - Troubleshooting guide
@@ -1964,11 +1992,11 @@ Phase 15 (Documentation & Release) will focus on:
 - Proper cleanup after each test
 
 ### Phase 16.1 Summary
-Phase 16.1 (Settings Foundation) has been successfully completed! The application now has a comprehensive settings system with persistent storage.
+Phase 16.1 (Settings Foundation) has been successfully completed!  The application now has a comprehensive settings system with persistent storage.
 
 **What Was Implemented:**
 
-**1. Settings Data Structures ✅**
+**1.  Settings Data Structures ✅**
 - **AppSettings struct** (src/state/settings.rs:14) - Main settings container with 8 sub-categories
 - **ViewerBehavior** - Default zoom mode, per-image state persistence, cache size, animation auto-play
 - **Performance** - Adjacent image preloading, filter processing threads, max image dimensions
@@ -1981,7 +2009,7 @@ Phase 16.1 (Settings Foundation) has been successfully completed! The applicatio
 - All structs implement Default trait with sensible defaults
 - All structs implement Serialize/Deserialize for JSON persistence
 
-**2. Settings Persistence ✅**
+**2.  Settings Persistence ✅**
 - **Settings I/O module** (src/utils/settings_io.rs) for load/save operations
 - **Platform-specific config paths** using dirs crate:
   - macOS: `~/Library/Application Support/rpview/settings.json`
@@ -1992,14 +2020,14 @@ Phase 16.1 (Settings Foundation) has been successfully completed! The applicatio
 - **Pretty-printed JSON** format for human readability and manual editing
 - **Immediate save on load** - creates settings file with defaults if missing (prevents loss on crash)
 
-**3. Application Integration ✅**
+**3.  Application Integration ✅**
 - **Settings field** added to App struct (src/main.rs:91)
 - **Load on startup** in main() before window creation (src/main.rs:1426)
 - **Immediate save-on-load** - settings file created with defaults on first launch
 - **No save-on-quit** - settings saved when changed (Phase 16.2+), not on app exit
 - Settings available throughout application for future use
 
-**4. Dependencies Added ✅**
+**4.  Dependencies Added ✅**
 - **serde** (v1.0) with derive feature for struct serialization
 - **serde_json** (v1.0) for JSON file format
 
@@ -2057,7 +2085,7 @@ Phase 16.1 (Settings Foundation) has been successfully completed! The applicatio
 - Default values tested for all settings categories
 - Cross-platform paths verified
 
-**What's Next:**
+**What’s Next:**
 Phase 16.2 (Settings Window UI) will implement:
 - Interactive settings editor with tabbed/sectioned layout
 - UI controls for all settings (sliders, checkboxes, text inputs, dropdowns)
@@ -2086,11 +2114,11 @@ Phase 16.2 (Settings Window UI) will implement:
 - Ready for Phase 16.2 (Settings UI)
 
 ### Phase 16.3 Summary
-Phase 16.3 (External Viewer Integration) has been successfully completed! The application now supports configurable external viewers and editors through the settings system.
+Phase 16.3 (External Viewer Integration) has been successfully completed!  The application now supports configurable external viewers and editors through the settings system.
 
 **What Was Implemented:**
 
-**1. Settings-Based External Viewer System ✅**
+**1.  Settings-Based External Viewer System ✅**
 - **Updated open_in_system_viewer()** (src/main.rs:489) to read from settings.external_tools.external_viewers
 - **Sequential viewer trial** - Loops through enabled viewers in order until one succeeds
 - **{path} placeholder replacement** - Replaces {path} in command arguments with actual image path
@@ -2099,7 +2127,7 @@ Phase 16.3 (External Viewer Integration) has been successfully completed! The ap
 - **Platform defaults fallback** - Falls back to xdg-open/open/start if all configured viewers fail
 - **Success logging** - Reports which viewer successfully opened the image
 
-**2. External Editor Support ✅**
+**2.  External Editor Support ✅**
 - **OpenInExternalEditor action** (src/main.rs:67) - New action for opening in external editor
 - **open_in_external_editor() method** (src/main.rs:554) - Reads settings.external_tools.external_editor
 - **handle_open_in_external_editor()** (src/main.rs:479) - Action handler implementation
@@ -2107,12 +2135,12 @@ Phase 16.3 (External Viewer Integration) has been successfully completed! The ap
 - **Clear error messages** - Prompts user to configure editor in settings if none configured
 - **Enabled check** - Verifies editor is enabled before attempting to launch
 
-**3. Help Overlay Updates ✅**
-- **External editor shortcut** (src/components/help_overlay.rs:116) - Added "Cmd+E - Open in external editor"
+**3.  Help Overlay Updates ✅**
+- **External editor shortcut** (src/components/help_overlay.rs:116) - Added “Cmd+E - Open in external editor”
 - **Existing viewer shortcuts** - Cmd+Opt+F and Shift+Cmd+Opt+F already documented
 - **Consistent formatting** - Matches existing help overlay style
 
-**4. Implementation Architecture ✅**
+**4.  Implementation Architecture ✅**
 - **Viewer iteration** - for loop over filtered enabled viewers
 - **Command construction** - Replaces placeholders in args before spawning process
 - **Error propagation** - Result<(), String> return type with descriptive errors
@@ -2185,15 +2213,15 @@ Phase 16.3 (External Viewer Integration) has been successfully completed! The ap
 - Phase 16.6: Advanced features (settings profiles, import/export)
 
 **Deferred Tasks:**
-- "Show in Finder/Explorer" action - Optional feature, can be added in Phase 16.6
+- “Show in Finder/Explorer” action - Optional feature, can be added in Phase 16.6
 - Cross-platform testing - Tested on macOS, Windows/Linux testing pending in Phase 16.5
 
 ### Phase 16.4 Summary
-Phase 16.4 (Apply Settings Throughout App) has been successfully completed! Settings are now integrated throughout the application, controlling viewer behavior, input sensitivity, appearance, file operations, filters, and navigation.
+Phase 16.4 (Apply Settings Throughout App) has been successfully completed!  Settings are now integrated throughout the application, controlling viewer behavior, input sensitivity, appearance, file operations, filters, and navigation.
 
 **What Was Implemented:**
 
-**1. Viewer Behavior Settings ✅**
+**1.  Viewer Behavior Settings ✅**
 - **Default zoom mode** (src/main.rs:910-923) - Applied when loading new images
   - FitToWindow: Calls viewer.fit_to_window()
   - OneHundredPercent: Sets zoom to 1.0 with centered pan
@@ -2205,9 +2233,9 @@ Phase 16.4 (Apply Settings Throughout App) has been successfully completed! Sett
   - LRU eviction respects configured size limit
 - **Animation auto-play** (src/main.rs:926-933) - Controls initial playback state
   - New animated images use animation_auto_play setting
-  - Cached state preserves user's play/pause choice
+  - Cached state preserves user’s play/pause choice
 
-**2. Keyboard & Mouse Settings ✅**
+**2.  Keyboard & Mouse Settings ✅**
 - **Pan speeds** (src/main.rs:783-866) - All pan handlers use settings values
   - pan_speed_normal: Replaces hardcoded 10px
   - pan_speed_fast: Replaces hardcoded 30px
@@ -2219,20 +2247,20 @@ Phase 16.4 (Apply Settings Throughout App) has been successfully completed! Sett
   - Proportional to current zoom level for dynamic sensitivity
 - **Spacebar pan acceleration** - Setting exists but not yet implemented (placeholder for future)
 
-**3. Appearance Settings ✅**
+**3.  Appearance Settings ✅**
 - **Window title format** (src/main.rs:907-917) - Template-based title generation
   - Supports {filename}, {index}, {total}, {sm}, {sortmode} placeholders
-  - {sm} = short sort mode label ("A" or "M"), {sortmode} = long label ("alphabetical" or "modified")
+  - {sm} = short sort mode label (“A” or “M”), {sortmode} = long label (“alphabetical” or “modified”)
   - Respects show_image_counter setting
-  - Default: "{filename} ({sm}, {index}/{total})"
+  - Default: “{filename} ({sm}, {index}/{total})”
 - **Background color** - Uses Colors::background() constant (not yet configurable)
 - **Overlay transparency** - Uses default overlay background (deferred to Phase 16.5)
 - **Font size scale** - Uses TextSize constants (deferred to Phase 16.5)
 
-**4. File Operations Settings ✅**
+**4.  File Operations Settings ✅**
 - **Default save directory** (src/main.rs:387-393) - Applied to file dialogs
   - Uses settings.file_operations.default_save_directory if set
-  - Falls back to current image's parent directory
+  - Falls back to current image’s parent directory
 - **Default save format** (src/main.rs:348-362) - Used for filtered image saves
   - Applies to images with filters enabled
   - Supports PNG, JPEG, BMP, TIFF, WEBP
@@ -2240,7 +2268,7 @@ Phase 16.4 (Apply Settings Throughout App) has been successfully completed! Sett
 - **Remember last directory** - Placeholder (deferred to Phase 16.5)
 - **Auto-save filtered cache** - Placeholder (deferred to Phase 16.5)
 
-**5. Filter Settings ✅**
+**5.  Filter Settings ✅**
 - **Default filter values** (src/main.rs:241-248) - Applied on Cmd+R reset
   - Uses settings.filters.default_brightness (default: 0.0)
   - Uses settings.filters.default_contrast (default: 0.0)
@@ -2249,7 +2277,7 @@ Phase 16.4 (Apply Settings Throughout App) has been successfully completed! Sett
 - **Remember filter state** - Currently always enabled (deferred to Phase 16.5)
 - **Filter presets** - Setting structure exists (deferred to Phase 16.6)
 
-**6. Sort & Navigation Settings ✅**
+**6.  Sort & Navigation Settings ✅**
 - **Default sort mode** (src/main.rs:1614) - Applied at application startup
   - AppState initialized with default_sort_mode from settings
   - Supports Alphabetical and ModifiedDate
@@ -2259,8 +2287,8 @@ Phase 16.4 (Apply Settings Throughout App) has been successfully completed! Sett
   - When enabled: Last → First, First → Last
   - When disabled: Stops at boundaries
 - **Show image counter** (src/main.rs:907) - Controls title format
-  - Shown when enabled: "image.png (3/10)"
-  - Hidden when disabled: "image.png"
+  - Shown when enabled: “image.png (3/10)”
+  - Hidden when disabled: “image.png”
 
 **Key Implementation Details:**
 
@@ -2331,7 +2359,7 @@ fn save_current_image_state(&mut self) {
 *spacebar_pan_accelerated deferred (not implemented)  
 **Some settings deferred to Phase 16.5/16.6
 
-**What's Working:**
+**What’s Working:**
 - ✅ Images load with configured default zoom mode
 - ✅ Per-image state saved/loaded based on setting
 - ✅ Cache respects size limit from settings
@@ -2345,7 +2373,7 @@ fn save_current_image_state(&mut self) {
 - ✅ Navigation wraparound controllable
 - ✅ Image counter can be hidden from title
 
-**What's Deferred:**
+**What’s Deferred:**
 - Background color, overlay transparency, font scaling (advanced UI customization)
 - Remember last directory, auto-save filtered cache (Phase 16.5)
 - Filter presets save/load/apply (Phase 16.6)
@@ -2362,11 +2390,11 @@ fn save_current_image_state(&mut self) {
 - Phase 16.6: Advanced features (profiles, import/export, keyboard shortcuts)
 
 ### Phase 16.5 Summary
-Phase 16.5 (Testing & Polish) has been successfully completed! The settings system has been thoroughly tested, documented, and is production-ready.
+Phase 16.5 (Testing & Polish) has been successfully completed!  The settings system has been thoroughly tested, documented, and is production-ready.
 
 **What Was Implemented:**
 
-**1. Settings Persistence Testing ✅**
+**1.  Settings Persistence Testing ✅**
 - **Save on quit**: Settings are auto-saved when Apply button is clicked
 - **Load on startup**: Settings loaded from JSON file at application start (main.rs:1623)
 - **Survive app restart**: Verified settings persist across multiple app launches
@@ -2374,7 +2402,7 @@ Phase 16.5 (Testing & Polish) has been successfully completed! The settings syst
 - **Missing file handling**: Auto-creates settings.json with default values on first run
 - Implementation in src/utils/settings_io.rs:47-95 handles all edge cases gracefully
 
-**2. UI Control Testing ✅**
+**2.  UI Control Testing ✅**
 - **Numeric inputs (15+ settings)**: All working with increment/decrement buttons
   - Pan speeds: normal (10px), fast (30px), slow (3px)
   - Zoom sensitivities: scroll wheel (1.1x), Z-drag (0.01)
@@ -2398,7 +2426,7 @@ Phase 16.5 (Testing & Polish) has been successfully completed! The settings syst
   - File browser for default_save_directory
   - External viewer list editor (add/remove/reorder)
 
-**3. Settings Actions Testing ✅**
+**3.  Settings Actions Testing ✅**
 - **Apply button**: Dispatches ApplySettings action, saves to disk, closes window
 - **Cancel button**: Dispatches CancelSettings action, reverts to original_settings, closes window
 - **Reset to Defaults**: Dispatches ResetSettingsToDefaults, sets working_settings to defaults
@@ -2406,7 +2434,7 @@ Phase 16.5 (Testing & Polish) has been successfully completed! The settings syst
 - **Escape key**: Closes settings window via CancelSettings action
 - All actions verified in src/components/settings_window.rs:1166-1200
 
-**4. External Viewer Integration Testing ✅**
+**4.  External Viewer Integration Testing ✅**
 - **{path} placeholder replacement**: Verified in main.rs:487 - replaces {path} with actual image path
 - **Fallback behavior**: When all configured viewers fail, falls back to platform defaults
   - macOS: Uses `open` command (main.rs:512)
@@ -2416,7 +2444,7 @@ Phase 16.5 (Testing & Polish) has been successfully completed! The settings syst
 - **Error messages**: Logs viewer failures to console for debugging
 - **Tested on macOS**: ✅ Working, Windows/Linux ready for testing
 
-**5. Documentation ✅**
+**5.  Documentation ✅**
 - **Help overlay**: Cmd+, shortcut already documented (help_overlay.rs:121)
 - **Settings.json format**: Created comprehensive docs/SETTINGS.md (800+ lines)
   - Complete reference for all 40+ settings
@@ -2432,7 +2460,7 @@ Phase 16.5 (Testing & Polish) has been successfully completed! The settings syst
   - Link to full documentation
 - **Settings file location**: Documented for all platforms (macOS/Linux/Windows)
 
-**6. Error Handling ✅**
+**6.  Error Handling ✅**
 - **Missing settings file**: Auto-creates with defaults, no crash
 - **Corrupt JSON**: Creates backup, logs error, loads defaults, overwrites corrupt file
 - **Numeric validation**: Range clamping implemented in settings window UI
@@ -2534,7 +2562,7 @@ fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
 
 **Total: 25/32 tests passing, 7 deferred (low-priority features)**
 
-**What's Working:**
+**What’s Working:**
 - ✅ Settings persist across app restarts
 - ✅ Corrupt settings automatically backed up and replaced
 - ✅ Missing settings file auto-created with defaults
@@ -2549,7 +2577,7 @@ fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
 - ✅ Help overlay includes settings shortcut
 - ✅ README includes settings section
 
-**What's Deferred (Low Priority):**
+**What’s Deferred (Low Priority):**
 - Text input fields (window_title_format, file paths) - use JSON editing
 - Color picker for background_color - use JSON editing
 - ✅ File browser for default_save_directory - DirectoryPicker with segmented control

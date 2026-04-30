@@ -347,6 +347,31 @@ impl App {
         cx.notify();
     }
 
+    /// Shift+Cmd+P / Shift+Ctrl+P: process all frames if the image is
+    /// animated; otherwise behave like the single-frame Apply.
+    pub(crate) fn handle_apply_local_contrast_all(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
+        if params.is_identity() {
+            return;
+        }
+        let is_animated = self.viewer.image_state.animation.is_some();
+        if !is_animated {
+            // Static image — single Apply path.
+            self.handle_apply_local_contrast(window, cx);
+            return;
+        }
+        if let Some(ref mut anim) = self.viewer.image_state.animation {
+            anim.is_playing = false;
+        }
+        self.viewer.set_lc_enabled(true);
+        self.viewer.spawn_lc_batch(params);
+        cx.notify();
+    }
+
     pub(crate) fn open_local_contrast_window(&mut self, cx: &mut Context<Self>) {
         if self.local_contrast_window.is_some() {
             return;
@@ -1165,25 +1190,8 @@ impl App {
         if self.is_modal_open() {
             return;
         }
-        // Check LC gating before borrowing animation state mutably.
-        let is_paused = self
-            .viewer
-            .image_state
-            .animation
-            .as_ref()
-            .map(|a| !a.is_playing)
-            .unwrap_or(false);
-        if is_paused && self.viewer.lc_enabled && !self.viewer.all_frames_lc_processed() {
-            // Can't resume playback until all frames are LC-processed.
-            self.toast = Some(ToastState {
-                message: "Process all frames first to play with LC".into(),
-                detail: None,
-                is_error: false,
-                created_at: Instant::now(),
-            });
-            cx.notify();
-            return;
-        }
+        // Playback runs regardless of LC batch progress; unfilled frames
+        // fall back to the unprocessed source.
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
             anim_state.is_playing = !anim_state.is_playing;
             if anim_state.is_playing {

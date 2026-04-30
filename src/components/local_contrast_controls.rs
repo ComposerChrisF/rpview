@@ -21,6 +21,11 @@ pub enum LocalContrastControlsEvent {
     CancelRequested,
     /// User clicked "Process All Frames" for animated images.
     ProcessAllFramesRequested,
+    /// User clicked "Clear Cache for This Image" — purge cached frames
+    /// (raw + every LC param-set) for the currently-loaded image.
+    ClearCacheForCurrentImageRequested,
+    /// User clicked "Clear All Cached Frames" — wipe the entire cache dir.
+    ClearAllCachesRequested,
 }
 
 /// Five fixed snap-points for the resize-factor toggle.
@@ -966,6 +971,67 @@ impl Render for LocalContrastControls {
                                     }),
                             )
                     })
+                    // Cache management — applies to all animated images.
+                    .child(section_separator())
+                    .child(
+                        div()
+                            .text_size(scaled_text_size(10.0, font))
+                            .text_color(rgb(0x888888))
+                            .child("Cache"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.0))
+                            .mt(px(4.0))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .px(px(12.0))
+                                    .py(px(4.0))
+                                    .rounded(px(4.0))
+                                    .border_1()
+                                    .border_color(rgba(0x66_66_66_FF))
+                                    .cursor_pointer()
+                                    .text_size(scaled_text_size(11.0, font))
+                                    .text_color(Colors::text())
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|_this, _evt, _window, cx| {
+                                            cx.emit(
+                                                LocalContrastControlsEvent::ClearCacheForCurrentImageRequested,
+                                            );
+                                        }),
+                                    )
+                                    .child("Clear Cache for This Image"),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .px(px(12.0))
+                                    .py(px(4.0))
+                                    .rounded(px(4.0))
+                                    .border_1()
+                                    .border_color(rgba(0x66_66_66_FF))
+                                    .cursor_pointer()
+                                    .text_size(scaled_text_size(11.0, font))
+                                    .text_color(Colors::text())
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|_this, _evt, _window, cx| {
+                                            cx.emit(
+                                                LocalContrastControlsEvent::ClearAllCachesRequested,
+                                            );
+                                        }),
+                                    )
+                                    .child("Clear All Cached Frames"),
+                            ),
+                    )
                     .child(div().flex().justify_end().mt(px(4.0)).child(reset_button)),
             )
     }

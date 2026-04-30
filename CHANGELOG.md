@@ -5,6 +5,25 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-04-30
+
+### Added
+- Persistent on-disk frame cache for animated images at `dirs::cache_dir()/rpview/cache/` (`~/Library/Caches/rpview/cache/` on macOS, `%LOCALAPPDATA%\rpview\cache\` on Windows).  Both unprocessed decoded frames and Local Contrast (LC) outputs are cached and reused across sessions
+- New `src/utils/frame_cache.rs` module: stable FNV-1a hashing for image identity (`{path_fnv16}_{mtime}`) and parameter identity (8 hex digits via canonical serde_json), plus `purge_image`/`purge_all`/`total_size` helpers
+- Disk-cache-hit short-circuit in `spawn_lc_batch`: when every frame’s LC PNG already exists on disk for the requested params, results stream back from disk without recomputation
+- LC outputs are persisted inside the batch worker — saved as RGBA PNGs keyed by image and parameter hash
+- Atomic-swap rebuild for re-processing: when a previously-complete LC cache is being rebuilt with new params, results stream into a pending buffer and only swap into the visible view when fully complete (no frame-by-frame flicker)
+- `Shift+Cmd+P` / `Shift+Ctrl+P` shortcut and “Apply Local Contrast (All Frames)” View menu item: processes all frames if the image is animated, falls back to single-frame `Apply` otherwise
+- “Clear Cache for This Image” and “Clear All Cached Frames” buttons in the Local Contrast controls window.  Toast confirms bytes freed
+- 4 unit tests in `frame_cache.rs` covering FNV-1a stability, parameter hash determinism, and missing-file behavior
+
+### Changed
+- Animation playback no longer blocks while LC is mid-batch; unfilled frames fall back to the unprocessed source so the user sees motion immediately while processing continues.  Removes the prior “Process all frames first to play with LC” gating toast
+- First-time LC batch streaming displays processed frames as they arrive (slots without a result yet show the unprocessed source — visible “flash” at the boundary, but the user sees progress immediately rather than waiting for the entire batch)
+
+### Fixed
+- Disk leak: per-frame raw PNGs were previously written via `tempfile::Builder::tempfile().keep()` to `/tmp` and never deleted, accumulating across sessions.  They now live in the proper platform cache directory and are deletable via the new Clear Cache buttons
+
 ## [0.20.6] - 2026-04-30
 
 ### Changed

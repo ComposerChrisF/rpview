@@ -198,15 +198,15 @@ impl Render for App {
         }
 
         // Update animation frame if playing (GPUI's suggested pattern).
-        // Block playback while LC is active unless all frames are processed.
+        // Playback runs even when LC is mid-batch; unfilled frames fall back
+        // to the unprocessed source so the user sees motion immediately.
         let should_update_animation = self
             .viewer
             .image_state
             .animation
             .as_ref()
             .map(|a| a.is_playing && a.frame_count > 0)
-            .unwrap_or(false)
-            && (!self.viewer.lc_enabled || self.viewer.all_frames_lc_processed());
+            .unwrap_or(false);
 
         if should_update_animation {
             // Progressive frame caching: cache next 3 frames ahead of playback

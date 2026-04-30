@@ -98,6 +98,12 @@ pub(crate) struct LcBatchJob {
     pub total_frames: usize,
     /// Parameters this batch was launched with (for invalidation detection).
     pub params: crate::utils::local_contrast::Parameters,
+    /// When `true`, results stream into `lc_pending_frame_renders` and only
+    /// swap into `lc_frame_renders` when the batch fully completes — keeping
+    /// the prior LC view stable during the rebuild (no flicker). When
+    /// `false`, results stream directly into `lc_frame_renders` (first-time
+    /// processing, fallback to unprocessed for unfilled frames).
+    pub atomic_swap_on_complete: bool,
 }
 
 impl LcJob {
@@ -178,6 +184,11 @@ pub struct LoadedImage {
     /// `None` at an index means that frame hasn't been LC-processed yet.
     /// Empty vec for static images.
     pub lc_frame_renders: Vec<LcResult>,
+    /// Pending per-frame LC renders during an atomic-swap rebuild. When
+    /// `Some`, the active batch job is writing here instead of into
+    /// `lc_frame_renders`; the swap happens only once every slot is filled.
+    /// `None` when no atomic-swap rebuild is in progress.
+    pub lc_pending_frame_renders: Option<Vec<LcResult>>,
 
     // --- Animation ---
     /// Animation data (if this is an animated image)
@@ -185,6 +196,10 @@ pub struct LoadedImage {
     /// Cached paths for each animation frame (disk cache)
     /// Empty PathBuf means frame not yet cached (will be cached on-demand)
     pub frame_cache_paths: Vec<PathBuf>,
+    /// Persistent cache key for this image (`{path_fnv}_{mtime}`), or `None`
+    /// if the image is uncacheable. Used to look up raw and LC-processed
+    /// frames in `~/Library/Caches/rpview/cache/`.
+    pub image_key: Option<String>,
 
     // --- SVG rasterization ---
     /// Rasterized temp PNG path (for SVG files)
@@ -620,45 +635,59 @@ impl ImageViewer {
                     .ok()
                     .flatten();
 
+                // Compute the persistent cache key (path + mtime).
+                let image_key = crate::utils::frame_cache::image_key(&path);
+
                 // Cache first 3 frames immediately for instant display, rest will load in background
                 let mut frame_cache_paths = Vec::new();
-                if let Some(ref anim_data) = animation_data {
-                    if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
-                        let base_name = format!(
-                            "rpview_{}_{}",
-                            std::process::id(),
-                            path.file_name().and_then(|n| n.to_str()).unwrap_or("anim")
-                        );
-
-                        // Cache first 3 frames for immediate display (gives UI time to show)
-                        let initial_cache_count = std::cmp::min(3, anim_data.frames.len());
-                        debug_eprintln!(
-                            "[LOAD] Caching first {} frames for immediate display...",
-                            initial_cache_count
-                        );
-                        for i in 0..initial_cache_count {
-                            let temp_path = temp_dir.join(format!("{}_{}.png", base_name, i));
-                            match anim_data.frames[i].image.save(&temp_path) {
-                                Ok(_) => {
-                                    debug_eprintln!("[LOAD] Cached frame {}", i);
-                                    frame_cache_paths.push(temp_path);
-                                }
-                                Err(_e) => {
-                                    debug_eprintln!("[ERROR] Failed to cache frame {}: {}", i, _e);
-                                    frame_cache_paths.push(PathBuf::new());
-                                }
+                if let (Some(anim_data), Some(key)) = (animation_data.as_ref(), image_key.as_ref()) {
+                    let initial_cache_count = std::cmp::min(3, anim_data.frames.len());
+                    debug_eprintln!(
+                        "[LOAD] Caching first {} frames for immediate display...",
+                        initial_cache_count
+                    );
+                    for i in 0..initial_cache_count {
+                        let dest = match crate::utils::frame_cache::raw_frame_path(key, i) {
+                            Ok(p) => p,
+                            Err(_e) => {
+                                debug_eprintln!(
+                                    "[ERROR] Failed to resolve cache path for frame {}: {}",
+                                    i, _e
+                                );
+                                frame_cache_paths.push(PathBuf::new());
+                                continue;
+                            }
+                        };
+                        if dest.exists() {
+                            debug_eprintln!("[LOAD] Frame {} already cached on disk", i);
+                            frame_cache_paths.push(dest);
+                            continue;
+                        }
+                        match anim_data.frames[i].image.save(&dest) {
+                            Ok(_) => {
+                                debug_eprintln!("[LOAD] Cached frame {}", i);
+                                frame_cache_paths.push(dest);
+                            }
+                            Err(_e) => {
+                                debug_eprintln!("[ERROR] Failed to cache frame {}: {}", i, _e);
+                                frame_cache_paths.push(PathBuf::new());
                             }
                         }
+                    }
 
-                        // Pre-allocate paths for remaining frames (will be filled on-demand)
-                        for _ in initial_cache_count..anim_data.frames.len() {
-                            frame_cache_paths.push(PathBuf::new());
-                        }
-                        debug_eprintln!(
-                            "[LOAD] Initial caching complete: {}/{} frames ready",
-                            initial_cache_count,
-                            anim_data.frames.len()
-                        );
+                    // Pre-allocate paths for remaining frames (will be filled on-demand)
+                    for _ in initial_cache_count..anim_data.frames.len() {
+                        frame_cache_paths.push(PathBuf::new());
+                    }
+                    debug_eprintln!(
+                        "[LOAD] Initial caching complete: {}/{} frames ready",
+                        initial_cache_count,
+                        anim_data.frames.len()
+                    );
+                } else if let Some(ref anim_data) = animation_data {
+                    // No image_key (uncacheable image) — pre-allocate empty slots only.
+                    for _ in 0..anim_data.frames.len() {
+                        frame_cache_paths.push(PathBuf::new());
                     }
                 }
 
@@ -695,8 +724,10 @@ impl ImageViewer {
                     lc_render_size: None,
                     cached_lc_params: None,
                     lc_frame_renders: vec![None; lc_frame_count],
+                    lc_pending_frame_renders: None,
                     animation_data,
                     frame_cache_paths,
+                    image_key,
                     rasterized_path: None,
                     svg_tree: None,
                     svg_base_scale: 2.0,
@@ -803,8 +834,10 @@ impl ImageViewer {
                             lc_render_size: None,
                             cached_lc_params: None,
                             lc_frame_renders: vec![None; lc_frame_count],
+                            lc_pending_frame_renders: None,
                             animation_data: data.animation_data,
                             frame_cache_paths,
+                            image_key: data.image_key,
                             rasterized_path: data.rasterized_path,
                             svg_tree: data.svg_tree,
                             svg_base_scale: 2.0,
@@ -985,6 +1018,7 @@ impl ImageViewer {
             loaded.lc_render_size = None;
             loaded.cached_lc_params = None;
             loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
+            loaded.lc_pending_frame_renders = None;
             if let Some(batch) = self.lc_batch_job.take() {
                 batch
                     .cancel
@@ -998,6 +1032,7 @@ impl ImageViewer {
             // Invalidate per-frame cache if params changed.
             if loaded.cached_lc_params.as_ref() != Some(&params) {
                 loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
+                loaded.lc_pending_frame_renders = None;
                 if let Some(batch) = self.lc_batch_job.take() {
                     batch
                         .cancel
@@ -1230,6 +1265,9 @@ impl ImageViewer {
                 .cancel
                 .store(true, std::sync::atomic::Ordering::Relaxed);
         }
+        if let Some(loaded) = self.current_image.as_mut() {
+            loaded.lc_pending_frame_renders = None;
+        }
     }
 
     /// `true` when all animation frames have been LC-processed with the
@@ -1242,9 +1280,23 @@ impl ImageViewer {
             && loaded.lc_frame_renders.iter().all(|s| s.is_some())
     }
 
-    /// Kick off batch LC processing for all animation frames. Each frame is
-    /// processed sequentially on a background thread; results are sent one at
-    /// a time via a channel and polled by `check_lc_batch_processing`.
+    /// Kick off batch LC processing for all animation frames.
+    ///
+    /// # Modes
+    /// - **Disk cache hit**: if every frame's LC PNG already exists on disk
+    ///   for these parameters, a loader thread streams them back as
+    ///   `RenderImage`s — no recomputation.
+    /// - **Compute**: a worker runs LC per frame, sending each result via
+    ///   the channel and persisting it to disk for next time.
+    ///
+    /// # Display behavior
+    /// - **Atomic-swap mode** (chosen when `lc_frame_renders` is fully
+    ///   populated for prior parameters): results stream into
+    ///   `lc_pending_frame_renders`; `lc_frame_renders` keeps showing the
+    ///   prior cache until the rebuild finishes — no flicker.
+    /// - **Streaming mode** (chosen for a first-time process): results
+    ///   stream directly into `lc_frame_renders`; unfilled slots fall back
+    ///   to the unprocessed source frame so playback can begin immediately.
     pub fn spawn_lc_batch(&mut self, params: crate::utils::local_contrast::Parameters) {
         use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -1263,24 +1315,105 @@ impl ImageViewer {
             return;
         }
 
-        // Clear stale per-frame results from a prior param set.
-        loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
-        loaded.cached_lc_params = Some(params.clone());
+        // Atomic-swap when there's already a complete LC view to keep
+        // visible during the rebuild.
+        let prior_full = !loaded.lc_frame_renders.is_empty()
+            && loaded.lc_frame_renders.iter().all(|s| s.is_some());
+        let atomic_swap = prior_full;
 
-        // Collect all frame images for the worker thread.
+        if atomic_swap {
+            loaded.lc_pending_frame_renders = Some(vec![None; total_frames]);
+            // Leave lc_frame_renders / cached_lc_params untouched until swap.
+        } else {
+            loaded.lc_pending_frame_renders = None;
+            loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
+            loaded.cached_lc_params = Some(params.clone());
+        }
+
+        let image_key = loaded.image_key.clone();
+        let phash = crate::utils::frame_cache::params_hash(&params);
+
+        let cancel = Arc::new(AtomicBool::new(false));
+        let current_frame = Arc::new(AtomicUsize::new(0));
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        // --- Disk cache hit: every frame already exists on disk for these params ---
+        let disk_paths: Option<Vec<PathBuf>> =
+            image_key.as_ref().and_then(|key| {
+                let paths: Vec<PathBuf> = (0..total_frames)
+                    .filter_map(|i| crate::utils::frame_cache::lc_frame_path(key, &phash, i).ok())
+                    .collect();
+                if paths.len() == total_frames && paths.iter().all(|p| p.exists()) {
+                    Some(paths)
+                } else {
+                    None
+                }
+            });
+
+        if let Some(paths) = disk_paths {
+            debug_eprintln!(
+                "[LC BATCH] Disk cache hit for params {} — loading {} frames",
+                phash, total_frames
+            );
+            let cancel_clone = cancel.clone();
+            let current_clone = current_frame.clone();
+            std::thread::spawn(move || {
+                for (idx, path) in paths.into_iter().enumerate() {
+                    if cancel_clone.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    current_clone.store(idx, Ordering::Relaxed);
+
+                    let img = match image::open(&path) {
+                        Ok(img) => img.to_rgba8(),
+                        Err(_e) => {
+                            debug_eprintln!(
+                                "[LC BATCH] Failed to load cached frame {}: {}",
+                                idx, _e
+                            );
+                            continue;
+                        }
+                    };
+                    let size = (img.width(), img.height());
+                    // GPUI wants BGRA; convert from the PNG's RGBA on the fly.
+                    let mut bgra = img;
+                    for px in bgra.pixels_mut() {
+                        px.0.swap(0, 2);
+                    }
+                    let frame = image::Frame::new(bgra);
+                    let render = Arc::new(gpui::RenderImage::new(
+                        smallvec::SmallVec::from_elem(frame, 1),
+                    ));
+                    if tx.send(Some((idx, render, size))).is_err() {
+                        break;
+                    }
+                }
+                let _ = tx.send(None);
+            });
+
+            self.lc_batch_job = Some(LcBatchJob {
+                handle: rx,
+                cancel,
+                current_frame,
+                total_frames,
+                params,
+                atomic_swap_on_complete: atomic_swap,
+            });
+            return;
+        }
+
+        // --- Compute path: run LC and persist each output to disk ---
         let frame_images: Vec<image::RgbaImage> = anim_data
             .frames
             .iter()
             .map(|f| f.image.to_rgba8())
             .collect();
 
-        let cancel = Arc::new(AtomicBool::new(false));
-        let current_frame = Arc::new(AtomicUsize::new(0));
-        let (tx, rx) = std::sync::mpsc::channel();
-
         let cancel_clone = cancel.clone();
         let current_clone = current_frame.clone();
         let params_clone = params.clone();
+        let image_key_clone = image_key.clone();
+        let phash_clone = phash.clone();
 
         std::thread::spawn(move || {
             use crate::utils::local_contrast::FeedbackFn;
@@ -1305,6 +1438,31 @@ impl ImageViewer {
                     Some(out_map) => {
                         let size = (out_map.width, out_map.height);
                         let bgra = out_map.to_bgra_image();
+
+                        // Persist the LC output to disk for next time.
+                        // Save as RGBA PNG (image crate's PNG encoder doesn't
+                        // do BGRA), so flip channels into a fresh buffer.
+                        if let Some(ref key) = image_key_clone {
+                            if let Ok(dest) =
+                                crate::utils::frame_cache::lc_frame_path(key, &phash_clone, idx)
+                            {
+                                if !dest.exists() {
+                                    let mut rgba_out = bgra.clone();
+                                    for px in rgba_out.pixels_mut() {
+                                        px.0.swap(0, 2);
+                                    }
+                                    if let Err(_e) = rgba_out.save(&dest) {
+                                        debug_eprintln!(
+                                            "[LC BATCH] Failed to persist frame {} to {}: {}",
+                                            idx,
+                                            dest.display(),
+                                            _e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
                         let frame = image::Frame::new(bgra);
                         let render = Arc::new(gpui::RenderImage::new(
                             smallvec::SmallVec::from_elem(frame, 1),
@@ -1329,6 +1487,7 @@ impl ImageViewer {
             current_frame,
             total_frames,
             params,
+            atomic_swap_on_complete: atomic_swap,
         });
     }
 
@@ -1339,31 +1498,73 @@ impl ImageViewer {
     pub fn check_lc_batch_processing(&mut self) -> Option<(usize, usize)> {
         let batch = self.lc_batch_job.as_ref()?;
         let total = batch.total_frames;
+        let atomic_swap = batch.atomic_swap_on_complete;
+        let batch_params = batch.params.clone();
 
         // Drain all available results from the channel.
         loop {
             match batch.handle.try_recv() {
                 Ok(Some((idx, render, size))) => {
                     if let Some(loaded) = self.current_image.as_mut() {
-                        if idx < loaded.lc_frame_renders.len() {
-                            loaded.lc_frame_renders[idx] = Some((render.clone(), size));
-                        }
-                        // Update visible render if this is the current frame.
-                        if let Some(ref anim) = self.image_state.animation {
-                            if idx == anim.current_frame {
-                                loaded.lc_render = Some(render);
-                                loaded.lc_render_size = Some(size);
+                        if atomic_swap {
+                            // Route into pending; do not touch lc_render or
+                            // lc_frame_renders until the swap.
+                            if let Some(pending) = loaded.lc_pending_frame_renders.as_mut() {
+                                if idx < pending.len() {
+                                    pending[idx] = Some((render, size));
+                                }
+                            }
+                        } else {
+                            // Streaming: write directly so playback can pick
+                            // up new frames as they finish.
+                            if idx < loaded.lc_frame_renders.len() {
+                                loaded.lc_frame_renders[idx] =
+                                    Some((render.clone(), size));
+                            }
+                            if let Some(ref anim) = self.image_state.animation {
+                                if idx == anim.current_frame {
+                                    loaded.lc_render = Some(render);
+                                    loaded.lc_render_size = Some(size);
+                                }
                             }
                         }
                     }
                 }
                 Ok(None) => {
                     // Batch complete or cancelled.
+                    if atomic_swap {
+                        if let Some(loaded) = self.current_image.as_mut() {
+                            if let Some(pending) = loaded.lc_pending_frame_renders.take() {
+                                let fully_populated =
+                                    !pending.is_empty() && pending.iter().all(|s| s.is_some());
+                                if fully_populated {
+                                    loaded.lc_frame_renders = pending;
+                                    loaded.cached_lc_params = Some(batch_params);
+                                    if let Some(ref anim) = self.image_state.animation {
+                                        let cur = anim.current_frame;
+                                        if cur < loaded.lc_frame_renders.len() {
+                                            if let Some((render, size)) =
+                                                loaded.lc_frame_renders[cur].clone()
+                                            {
+                                                loaded.lc_render = Some(render);
+                                                loaded.lc_render_size = Some(size);
+                                            }
+                                        }
+                                    }
+                                }
+                                // Partial pending (cancellation) is dropped —
+                                // prior lc_frame_renders stays intact.
+                            }
+                        }
+                    }
                     self.lc_batch_job = None;
                     return None;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    if let Some(loaded) = self.current_image.as_mut() {
+                        loaded.lc_pending_frame_renders = None;
+                    }
                     self.lc_batch_job = None;
                     return None;
                 }
@@ -1861,44 +2062,46 @@ impl ImageViewer {
             }
         }
 
-        // Cache the frame
-        if frame_index < anim_data.frames.len() {
-            match tempfile::Builder::new()
-                .prefix("rpview_frame_")
-                .suffix(".png")
-                .tempfile()
-            {
-                Ok(temp_file) => {
-                    if let Err(_e) = anim_data.frames[frame_index].image.save(temp_file.path()) {
-                        debug_eprintln!("[ERROR] Failed to cache frame {}: {}", frame_index, _e);
-                        return false;
-                    }
-                    match temp_file.into_temp_path().keep() {
-                        Ok(kept) => {
-                            debug_eprintln!("[CACHE] Cached frame {} on-demand", frame_index);
-                            if frame_index < loaded.frame_cache_paths.len() {
-                                loaded.frame_cache_paths[frame_index] = kept;
-                            }
-                            return true;
-                        }
-                        Err(_e) => {
-                            debug_eprintln!(
-                                "[ERROR] Failed to persist frame {}: {}",
-                                frame_index, _e
-                            );
-                        }
-                    }
-                }
-                Err(_e) => {
-                    debug_eprintln!(
-                        "[ERROR] Failed to create temp file for frame {}: {}",
-                        frame_index, _e
-                    );
-                }
-            }
+        // Cache the frame to the persistent cache directory.
+        let Some(key) = loaded.image_key.as_ref() else {
+            return false; // Uncacheable image (no path/mtime).
+        };
+        if frame_index >= anim_data.frames.len() {
+            return false;
         }
 
-        false
+        let dest = match crate::utils::frame_cache::raw_frame_path(key, frame_index) {
+            Ok(p) => p,
+            Err(_e) => {
+                debug_eprintln!(
+                    "[ERROR] Failed to resolve cache path for frame {}: {}",
+                    frame_index, _e
+                );
+                return false;
+            }
+        };
+
+        // If another path resolved to the same destination already, just record it.
+        if dest.exists() {
+            if frame_index < loaded.frame_cache_paths.len() {
+                loaded.frame_cache_paths[frame_index] = dest;
+            }
+            return true;
+        }
+
+        match anim_data.frames[frame_index].image.save(&dest) {
+            Ok(_) => {
+                debug_eprintln!("[CACHE] Cached frame {} on-demand", frame_index);
+                if frame_index < loaded.frame_cache_paths.len() {
+                    loaded.frame_cache_paths[frame_index] = dest;
+                }
+                true
+            }
+            Err(_e) => {
+                debug_eprintln!("[ERROR] Failed to cache frame {}: {}", frame_index, _e);
+                false
+            }
+        }
     }
 }
 
