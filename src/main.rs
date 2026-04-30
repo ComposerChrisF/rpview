@@ -79,7 +79,7 @@ use utils::settings_io;
 
 // Import all actions from lib.rs (they're defined there to avoid duplication)
 use rpview::{
-    ApplyLocalContrast, BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ConfirmDelete,
+    ApplyLocalContrast, ApplyLocalContrastAll, BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ConfirmDelete,
     ContrastDown, ContrastUp, DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp,
     NextFrame, NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer,
     OpenInExternalViewerAndQuit,
@@ -415,6 +415,78 @@ fn main() {
                                     }
                                     cx.notify();
                                 }
+                                LocalContrastControlsEvent::ClearCacheForCurrentImageRequested => {
+                                    let key = this
+                                        .viewer
+                                        .current_image
+                                        .as_ref()
+                                        .and_then(|loaded| loaded.image_key.clone());
+                                    let toast_msg = match key {
+                                        Some(ref k) => match crate::utils::frame_cache::purge_image(k) {
+                                            Ok(freed) => format!(
+                                                "Cleared cache for current image ({:.2} MB)",
+                                                freed as f64 / (1024.0 * 1024.0)
+                                            ),
+                                            Err(e) => format!("Cache clear failed: {e}"),
+                                        },
+                                        None => "No cache key for current image".to_string(),
+                                    };
+                                    // Drop in-memory caches so the next batch
+                                    // does not hand back references to deleted
+                                    // disk files.
+                                    this.viewer.cancel_lc_batch();
+                                    if let Some(loaded) = this.viewer.current_image.as_mut() {
+                                        loaded.lc_render = None;
+                                        loaded.lc_render_size = None;
+                                        loaded.cached_lc_params = None;
+                                        loaded
+                                            .lc_frame_renders
+                                            .iter_mut()
+                                            .for_each(|s| *s = None);
+                                        loaded.lc_pending_frame_renders = None;
+                                        for slot in loaded.frame_cache_paths.iter_mut() {
+                                            *slot = std::path::PathBuf::new();
+                                        }
+                                    }
+                                    this.toast = Some(crate::ToastState {
+                                        message: toast_msg,
+                                        detail: None,
+                                        is_error: false,
+                                        created_at: std::time::Instant::now(),
+                                    });
+                                    cx.notify();
+                                }
+                                LocalContrastControlsEvent::ClearAllCachesRequested => {
+                                    let toast_msg =
+                                        match crate::utils::frame_cache::purge_all() {
+                                            Ok(freed) => format!(
+                                                "Cleared all cached frames ({:.2} MB)",
+                                                freed as f64 / (1024.0 * 1024.0)
+                                            ),
+                                            Err(e) => format!("Cache clear failed: {e}"),
+                                        };
+                                    this.viewer.cancel_lc_batch();
+                                    if let Some(loaded) = this.viewer.current_image.as_mut() {
+                                        loaded.lc_render = None;
+                                        loaded.lc_render_size = None;
+                                        loaded.cached_lc_params = None;
+                                        loaded
+                                            .lc_frame_renders
+                                            .iter_mut()
+                                            .for_each(|s| *s = None);
+                                        loaded.lc_pending_frame_renders = None;
+                                        for slot in loaded.frame_cache_paths.iter_mut() {
+                                            *slot = std::path::PathBuf::new();
+                                        }
+                                    }
+                                    this.toast = Some(crate::ToastState {
+                                        message: toast_msg,
+                                        detail: None,
+                                        is_error: false,
+                                        created_at: std::time::Instant::now(),
+                                    });
+                                    cx.notify();
+                                }
                             },
                         )
                         .detach();
@@ -545,6 +617,7 @@ fn main() {
         // Local Contrast
         forward!(ToggleLocalContrast, handle_toggle_local_contrast);
         forward!(ApplyLocalContrast, handle_apply_local_contrast);
+        forward!(ApplyLocalContrastAll, handle_apply_local_contrast_all);
         forward!(ResetLocalContrast, handle_reset_local_contrast);
         // Zoom
         forward!(ZoomIn, handle_zoom_in);
