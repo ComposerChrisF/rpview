@@ -66,7 +66,9 @@ fn expand_template(
             }
         } else {
             // Decode one full UTF-8 character at byte offset `i`.
-            let ch = template[i..].chars().next().unwrap();
+            let Some(ch) = template[i..].chars().next() else {
+                break;
+            };
             result.push(ch);
             i += ch.len_utf8();
         }

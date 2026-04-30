@@ -5,7 +5,28 @@ use std::path::PathBuf;
 
 /// rpview - A fast, keyboard-driven image viewer built with GPUI
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author,
+    version,
+    about,
+    long_about = None,
+    after_long_help = "EXIT CODES:\n  \
+        0  Success\n  \
+        1  Argument resolution failed (file not found, unsupported format, no images)\n  \
+        2  Invalid command-line usage (clap parse error)\n\n\
+CONFIGURATION:\n  \
+    Settings file (auto-created on first run):\n    \
+        macOS:    ~/Library/Application Support/rpview/settings.json\n    \
+        Linux:    ~/.config/rpview/settings.json\n    \
+        Windows:  %APPDATA%\\rpview\\settings.json\n\n  \
+    Window-title template placeholders\n  \
+    (set via settings.json appearance.window_title_template):\n    \
+        {filename}  current image filename\n    \
+        {index}     1-based position in the list\n    \
+        {total}     total image count\n    \
+        {sm}        sort-mode short label\n    \
+        {sortmode}  sort-mode long label\n",
+)]
 pub struct Cli {
     /// Image files or directories to view
     ///

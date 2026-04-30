@@ -5,6 +5,26 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.6] - 2026-04-30
+
+### Changed
+- Settings writes are now atomic (`tempfile::NamedTempFile` + `persist`) — a crash mid-write can no longer truncate `settings.json`
+- Floating-window bounds observers (Filter, Local Contrast) now coalesce save requests through a 250 ms debouncer; a drag-resize that previously fired hundreds of disk writes now fires at most ~4/sec
+- `--help` (long form) now documents exit codes (0/1/2) and the settings-file location + window-title template placeholders, so the binary is self-describing for agents/scripters; short `-h` is unchanged
+- macOS `application:openFiles:` handler declared `unsafe extern "C-unwind"` to match objc2’s `Imp` ABI, eliminating an ABI-tag mismatch in the function-pointer transmute
+- `Histogram::bins`/`cumsum` switched from `Vec<f32>` to `[f32; 256]` — eliminates ~16k allocator calls per Local Contrast pass on a 4K image
+- `FloatMap::to_rgba8`/`to_bgra_image`: hoisted the `Option<alpha>` discriminant check out of the per-pixel loop (two branches around the loop, branch-free body)
+- `is_supported_image`/`is_svg`: replaced `to_string_lossy().to_lowercase()` with `eq_ignore_ascii_case` — no per-call `String` allocation
+- `main`: CLI parses before settings load, so `--help`/`--version` short-circuit cleanly without I/O
+- Doc-only: clarified the per-image-state cache eviction policy in `AppState` (was misleadingly labeled “LRU”)
+
+### Removed
+- Dead-code helper filter functions (`apply_brightness`, `apply_contrast`, `apply_gamma`, `apply_contrast_to_channel`); the LUT-based `apply_filters` / `apply_filters_to_bgra` path has been the production code path for several releases.  Integration tests in `tests/filter_test.rs` ported to call `apply_filters` directly
+
+### Added
+- `tests/settings_atomic_test.rs`: roundtrip, overwrite, concurrent reader-writer race (verifies no partial reads), nonexistent-parent error, and burst smoke tests for the atomic settings write path
+- `debug_eprintln!` diagnostic when GPUI’s `GPUIApplicationDelegate` class is missing (so a future GPUI rename surfaces a visible signal in dev builds rather than silently breaking “Open With”)
+
 ## [0.20.5] - 2026-04-18
 
 ### Security
@@ -33,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.20.3] - 2026-04-18
 
 ### Changed
-- Renamed LC "Preview" to "Auto Process": when ON, every slider change triggers processing; when OFF, slider changes don't process but the current display is preserved (no longer forced back to unprocessed)
+- Renamed LC “Preview” to “Auto Process”: when ON, every slider change triggers processing; when OFF, slider changes don’t process but the current display is preserved (no longer forced back to unprocessed)
 - Cmd/Ctrl+P (Apply LC) now always processes AND displays the result immediately
 - Closing the main window now quits the app (floating palette windows no longer linger)
 
@@ -46,11 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Click-and-drag now pans the image directly (spacebar no longer required)
-- Local Contrast Preview defaults to OFF (use Cmd/Ctrl+P to apply, "2" to view)
+- Local Contrast Preview defaults to OFF (use Cmd/Ctrl+P to apply, “2” to view)
 
 ### Added
-- Cmd+P / Ctrl+P global shortcut to apply current LC settings without turning on Preview; result is accessible via the "2" key
-- "Auto" resize option in LC panel: picks the factor (0.25x-4x) that brings the largest axis closest to 4K without exceeding it
+- Cmd+P / Ctrl+P global shortcut to apply current LC settings without turning on Preview; result is accessible via the “2” key
+- “Auto” resize option in LC panel: picks the factor (0.25x-4x) that brings the largest axis closest to 4K without exceeding it
 - Per-image LC Preview on/off state: each image remembers whether Preview was enabled, restored when navigating back
 
 ## [0.19.0] - 2026-04-17
@@ -60,12 +80,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Auto-pauses animation when LC is enabled
   - Processes the current frame on demand (per-frame LC cache)
   - Frame stepping (arrow keys) triggers LC reprocessing with cache hits on revisit
-  - "Process All Frames" batch button in LC panel with progress and cancellation
+  - “Process All Frames” batch button in LC panel with progress and cancellation
   - Animation playback with LC applied once all frames are processed
   - Toast message when attempting to resume playback before all frames are processed
 
 ### Fixed
-- LC on animated images no longer shows "Image not loaded" errors
+- LC on animated images no longer shows “Image not loaded” errors
 - LC no longer processes only frame 0 regardless of which frame is displayed
 
 ## [0.18.3] - 2026-04-17
@@ -98,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - LC parameter cache was never populated, causing every Preview re-enable to recompute from scratch
-- `set_lc_enabled` and `check_lc_processing` now use `display_dimensions()` so LC changes don't incorrectly rescale zoom while a slot is displayed
+- `set_lc_enabled` and `check_lc_processing` now use `display_dimensions()` so LC changes don’t incorrectly rescale zoom while a slot is displayed
 
 ## [0.17.4] - 2026-04-16
 
@@ -162,7 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Fast-path algorithm using integral-image box mean (orders-of-magnitude faster on large images)
-- Progress percentage in LC status label ("Processing... 55%")
+- Progress percentage in LC status label (“Processing... 55%”)
 - 1/2 keys toggle Local Contrast for instant A/B comparison (works from LC and Filter dialogs too)
 
 ### Changed
@@ -174,7 +194,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local Contrast dialog (Shift+Cmd+L / Shift+Ctrl+L) with three sliders: Contrast, Lighten Shadows, Darken Highlights
 - Background OkLCh processing on rayon thread pool with cancellation
 - Status indicator (Processing / Ready)
-- View menu entries: "Local Contrast..." and "Reset Local Contrast"
+<!-- typo disable-next-line punctuation-inside-quote -->
+- View menu entries: “Local Contrast...” and “Reset Local Contrast”
 
 ## [0.11.4] - 2026-04-15
 
@@ -192,7 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `FloatMap`: planar f32 bitmap with exact round-trip to `RgbaImage`
-- sRGB ↔ OkLCh color space conversion (Ottosson's Oklab matrices)
+- sRGB ↔ OkLCh color space conversion (Ottosson’s Oklab matrices)
 - `docs/local-contrast-spec.md`: language-neutral spec derived from C# original
 
 ## [0.11.1] - 2026-04-14
@@ -258,7 +279,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.5] - 2026-03-15
 
 ### Fixed
-- Sort mode ignored on drag-drop and Finder "Open With" — images always appeared in alphabetical order regardless of setting
+- Sort mode ignored on drag-drop and Finder “Open With” — images always appeared in alphabetical order regardless of setting
 
 ## [0.8.4] - 2026-03-14
 
@@ -356,7 +377,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.7.0] - 2026-03-09
 
 ### Added
-- Per-setting reset buttons ("↺") in Settings window — grayed when at default, active with green hover when changed
+- Per-setting reset buttons (“↺”) in Settings window — grayed when at default, active with green hover when changed
 
 ## [0.6.3] - 2026-03-09
 
@@ -455,5 +476,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform support (macOS, Windows, Linux)
 - macOS .app bundle with DMG creation
 - Windows icon and version resource embedding
-- macOS "Open With" / Finder integration
+- macOS “Open With” / Finder integration
 - CI/CD with GitHub Actions

@@ -1,9 +1,26 @@
 //! Settings persistence module
 //!
 //! Handles loading and saving settings to/from disk using JSON format.
+//!
+//! Writes are atomic: the JSON is staged into a sibling temp file and then
+//! `persist`-ed (rename) into place, so a crash mid-write leaves either the
+//! prior valid file or the new valid file — never a truncated one.
+//!
+//! For high-frequency callers (window-bounds observers fire on every drag
+//! tick), use `save_settings_debounced`, which coalesces requests and writes
+//! at most once per `DEBOUNCE_INTERVAL`.
 
 use crate::state::settings::AppSettings;
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::sync::mpsc::{self, Sender};
+use std::time::{Duration, Instant};
+
+/// Minimum interval between debounced writes. A drag-resize fires bounds
+/// updates at display-refresh rate; coalescing to ~4 writes/second is
+/// indistinguishable to the user but kind to the disk.
+const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
 /// Get the path to the settings file
 ///
@@ -44,13 +61,80 @@ pub fn save_settings(settings: &AppSettings) -> Result<(), String> {
 }
 
 /// Save settings to a specific path (used for testing)
+///
+/// The write is atomic: the JSON is staged into a sibling temp file inside
+/// the same directory and then `persist`-ed into place. A crash or kill
+/// mid-write leaves either the prior valid file or the new valid file, never
+/// a truncated/corrupt one.
 pub fn save_settings_to_path(settings: &AppSettings, path: &std::path::Path) -> Result<(), String> {
     let json = serde_json::to_string_pretty(settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
 
-    std::fs::write(path, json).map_err(|e| format!("Failed to write settings file: {}", e))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Settings path has no parent directory".to_string())?;
+
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|e| format!("Failed to create temp settings file: {}", e))?;
+    tmp.write_all(json.as_bytes())
+        .map_err(|e| format!("Failed to write temp settings file: {}", e))?;
+    tmp.as_file()
+        .sync_all()
+        .map_err(|e| format!("Failed to sync temp settings file: {}", e))?;
+    tmp.persist(path)
+        .map_err(|e| format!("Failed to persist settings file: {}", e))?;
 
     Ok(())
+}
+
+/// Coalesce frequent save requests (e.g. window-bounds drag ticks) into at
+/// most one write per `DEBOUNCE_INTERVAL`.  The most recent settings value
+/// wins; intermediate updates are dropped.
+///
+/// On the first call this lazily spawns a single long-lived worker thread
+/// that owns the I/O.  Errors are logged to stderr but do not propagate;
+/// the next debounced or immediate save will retry.
+pub fn save_settings_debounced(settings: &AppSettings) {
+    static SENDER: OnceLock<Sender<AppSettings>> = OnceLock::new();
+    let tx = SENDER.get_or_init(spawn_debounce_worker);
+    let _ = tx.send(settings.clone());
+}
+
+fn spawn_debounce_worker() -> Sender<AppSettings> {
+    let (tx, rx) = mpsc::channel::<AppSettings>();
+    std::thread::Builder::new()
+        .name("rpview-settings-debounce".to_string())
+        .spawn(move || {
+            let mut last_write: Option<Instant> = None;
+            while let Ok(first) = rx.recv() {
+                // Always coalesce: drain any extra requests that arrived while
+                // we were processing the last one, keeping only the newest.
+                let mut latest = first;
+                while let Ok(newer) = rx.try_recv() {
+                    latest = newer;
+                }
+
+                // Honor the inter-write interval.  If we wrote recently,
+                // sleep the remainder, then drain again so any updates that
+                // arrive *during* the sleep are folded into the next write.
+                if let Some(t) = last_write {
+                    let elapsed = t.elapsed();
+                    if elapsed < DEBOUNCE_INTERVAL {
+                        std::thread::sleep(DEBOUNCE_INTERVAL - elapsed);
+                        while let Ok(newer) = rx.try_recv() {
+                            latest = newer;
+                        }
+                    }
+                }
+
+                if let Err(e) = save_settings(&latest) {
+                    eprintln!("Warning: debounced settings write failed: {}", e);
+                }
+                last_write = Some(Instant::now());
+            }
+        })
+        .expect("failed to spawn settings-debounce thread");
+    tx
 }
 
 /// Load settings from disk

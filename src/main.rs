@@ -165,14 +165,9 @@ pub(crate) struct App {
 // - app_keybindings.rs: setup_key_bindings(), setup_menus()
 
 fn main() {
-    // Load settings from disk (or use defaults if file doesn't exist)
-    let settings = settings_io::load_settings();
-    debug_eprintln!(
-        "Settings loaded from: {}",
-        settings_io::get_settings_path().display()
-    );
-
-    // Parse command-line arguments to get image paths and optional start path
+    // Parse command-line arguments first.  This makes clap short-circuit on
+    // `--help` / `--version` before any settings I/O, so the help output
+    // isn't preceded by debug logs in dev builds.
     let (image_paths, start_path) = match Cli::parse_image_paths() {
         Ok(result) => result,
         Err(e) => {
@@ -180,6 +175,13 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    // Load settings from disk (or use defaults if file doesn't exist)
+    let settings = settings_io::load_settings();
+    debug_eprintln!(
+        "Settings loaded from: {}",
+        settings_io::get_settings_path().display()
+    );
 
     // Determine the search directory for error messages
     let search_dir = if image_paths.is_empty() {
@@ -221,8 +223,9 @@ fn main() {
 
     let application = Application::new();
 
-    // Register the application:openFiles: handler on GPUI's delegate class
-    // This must be done after Application::new() creates the delegate class
+    // Register the application:openFiles: handler on GPUI's delegate class.
+    // Call after `Application::new()` (which constructs the delegate class)
+    // but before `application.run()` (which starts dispatching events).
     #[cfg(target_os = "macos")]
     {
         macos_open_handler::register_open_files_handler();
