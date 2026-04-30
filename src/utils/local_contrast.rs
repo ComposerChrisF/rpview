@@ -234,10 +234,13 @@ const NUM_BINS: usize = 256;
 /// Per-site local histogram. `bins` is the weighted luminance histogram;
 /// `cumsum[i] = sum(bins[0..=i])` precomputed once so per-pixel lookups
 /// collapse from O(256) to O(1).
+///
+/// `bins` and `cumsum` are fixed-size 256-element arrays so allocating a
+/// `Histogram` (~16k of them per LC pass on a 4K image) is allocator-free.
 #[derive(Clone)]
 struct Histogram {
-    bins: Vec<f32>,   // NUM_BINS
-    cumsum: Vec<f32>, // NUM_BINS
+    bins: [f32; NUM_BINS],
+    cumsum: [f32; NUM_BINS],
     /// Total weight (sum of all bin entries).
     total: f32,
     /// Mean luminance × 255.
@@ -249,8 +252,8 @@ struct Histogram {
 impl Histogram {
     fn empty() -> Self {
         Self {
-            bins: vec![0.0; NUM_BINS],
-            cumsum: vec![0.0; NUM_BINS],
+            bins: [0.0; NUM_BINS],
+            cumsum: [0.0; NUM_BINS],
             total: 0.0,
             mean: 0.0,
             median: 0.0,

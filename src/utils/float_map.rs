@@ -80,14 +80,27 @@ impl FloatMap {
     /// clamped and rounded.
     pub fn to_rgba8(&self) -> RgbaImage {
         let mut out = ImageBuffer::new(self.width, self.height);
-        for (i, px) in out.pixels_mut().enumerate() {
-            let alpha = self.a.as_ref().map(|v| v[i]).unwrap_or(1.0);
-            *px = Rgba([
-                float_to_byte(self.r[i]),
-                float_to_byte(self.g[i]),
-                float_to_byte(self.b[i]),
-                float_to_byte(alpha),
-            ]);
+        match &self.a {
+            Some(a) => {
+                for (i, px) in out.pixels_mut().enumerate() {
+                    *px = Rgba([
+                        float_to_byte(self.r[i]),
+                        float_to_byte(self.g[i]),
+                        float_to_byte(self.b[i]),
+                        float_to_byte(a[i]),
+                    ]);
+                }
+            }
+            None => {
+                for (i, px) in out.pixels_mut().enumerate() {
+                    *px = Rgba([
+                        float_to_byte(self.r[i]),
+                        float_to_byte(self.g[i]),
+                        float_to_byte(self.b[i]),
+                        255,
+                    ]);
+                }
+            }
         }
         out
     }
@@ -132,14 +145,27 @@ impl FloatMap {
     /// is `B, G, R, A`.
     pub fn to_bgra_image(&self) -> RgbaImage {
         let mut out = ImageBuffer::new(self.width, self.height);
-        for (i, px) in out.pixels_mut().enumerate() {
-            let alpha = self.a.as_ref().map(|v| v[i]).unwrap_or(1.0);
-            *px = Rgba([
-                float_to_byte(self.b[i]),
-                float_to_byte(self.g[i]),
-                float_to_byte(self.r[i]),
-                float_to_byte(alpha),
-            ]);
+        match &self.a {
+            Some(a) => {
+                for (i, px) in out.pixels_mut().enumerate() {
+                    *px = Rgba([
+                        float_to_byte(self.b[i]),
+                        float_to_byte(self.g[i]),
+                        float_to_byte(self.r[i]),
+                        float_to_byte(a[i]),
+                    ]);
+                }
+            }
+            None => {
+                for (i, px) in out.pixels_mut().enumerate() {
+                    *px = Rgba([
+                        float_to_byte(self.b[i]),
+                        float_to_byte(self.g[i]),
+                        float_to_byte(self.r[i]),
+                        255,
+                    ]);
+                }
+            }
         }
         out
     }

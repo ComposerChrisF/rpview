@@ -113,7 +113,8 @@
       "Read(//Users/chris/Chris/App/Rust/ccf-gpui-widgets/src/**)",
       "Bash(gh workflow *)",
       "Bash(cargo update *)",
-      "Bash(awk '{print $9, $5}')"
+      "Bash(awk '{print $9, $5}')",
+      "Bash(awk -F: '!/test/')"
     ]
   }
 }

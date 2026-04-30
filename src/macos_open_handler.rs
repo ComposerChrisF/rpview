@@ -44,7 +44,11 @@ fn store_paths(paths: Vec<PathBuf>) {
 
 /// The handler function that will be called when application:openFiles: is invoked.
 /// This has the signature: void (id self, SEL _cmd, NSApplication* app, NSArray<NSString*>* filenames)
-extern "C" fn handle_open_files(
+///
+/// Declared `unsafe extern "C-unwind"` to match objc2's `Imp` typedef
+/// (`unsafe extern "C-unwind" fn()`); this avoids an ABI-tag mismatch in the
+/// transmute below.
+unsafe extern "C-unwind" fn handle_open_files(
     _this: &AnyObject,
     _cmd: Sel,
     _app: &AnyObject,
@@ -79,8 +83,9 @@ extern "C" fn handle_open_files(
 }
 
 /// Register the application:openFiles: handler on GPUI's app delegate class.
-/// This should be called BEFORE Application::new().run() to ensure the method
-/// is available when macOS sends the open files event.
+/// Call this after `Application::new()` (which constructs the delegate class)
+/// but before `application.run()` (which starts dispatching events through
+/// it).
 pub fn register_open_files_handler() {
     unsafe {
         // GPUI's app delegate class name
@@ -88,7 +93,15 @@ pub fn register_open_files_handler() {
         let cls = objc_getClass(class_name.as_ptr());
 
         if cls.is_null() {
-            // Class doesn't exist yet
+            // Class doesn't exist (or has been renamed). Surface this in dev
+            // builds so a future GPUI rename of `GPUIApplicationDelegate`
+            // produces a visible signal rather than silently breaking
+            // "Open With".
+            crate::debug_eprintln!(
+                "[macos_open_handler] GPUIApplicationDelegate class not found; \
+                 application:openFiles: handler NOT installed. \
+                 Has GPUI's delegate class been renamed?"
+            );
             return;
         }
 
@@ -99,9 +112,13 @@ pub fn register_open_files_handler() {
         // Encoding: v@:@@  (void, id, SEL, id, id)
         let types = c"v@:@@";
 
-        // Cast the function pointer to Imp
+        // Cast the function pointer to Imp.  Both sides are
+        // `unsafe extern "C-unwind" fn(...)`, so this transmutes only the
+        // argument tuple — `Imp` is `fn()` (type-erased) and the typed
+        // signature must be supplied at the call boundary.  No ABI
+        // conversion happens here.
         let imp: Imp = std::mem::transmute::<
-            extern "C" fn(&AnyObject, Sel, &AnyObject, *const AnyObject),
+            unsafe extern "C-unwind" fn(&AnyObject, Sel, &AnyObject, *const AnyObject),
             Imp,
         >(handle_open_files);
 

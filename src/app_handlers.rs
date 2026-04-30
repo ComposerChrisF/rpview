@@ -248,7 +248,7 @@ impl App {
                                         bounds,
                                     ),
                                 );
-                                let _ = crate::utils::settings_io::save_settings(&app.settings);
+                                crate::utils::settings_io::save_settings_debounced(&app.settings);
                             });
                         })
                         .detach();
@@ -404,7 +404,7 @@ impl App {
                                         bounds,
                                     ),
                                 );
-                                let _ = crate::utils::settings_io::save_settings(&app.settings);
+                                crate::utils::settings_io::save_settings_debounced(&app.settings);
                             });
                         })
                         .detach();

@@ -90,7 +90,12 @@ pub struct AppState {
     /// Current sort mode
     pub sort_mode: SortMode,
 
-    /// Cache of per-image states (LRU cache with max 1000 items)
+    /// Cache of per-image states.  Capped at `max_cache_size` entries; on
+    /// overflow, the entry with the oldest `last_accessed` timestamp is
+    /// dropped.  Eviction is O(n) per insert (linear scan over the map),
+    /// which is acceptable for the default cap of 1000.  If the cap grows
+    /// substantially, replace with `lru::LruCache` or an `IndexMap` to
+    /// restore O(1) eviction.
     pub image_states: HashMap<PathBuf, ImageState>,
 
     /// Maximum cache size

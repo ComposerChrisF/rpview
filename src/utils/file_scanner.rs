@@ -9,21 +9,19 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
 
 /// Check if a file is an SVG
 pub fn is_svg(path: &Path) -> bool {
-    if let Some(extension) = path.extension() {
-        extension.to_string_lossy().to_lowercase() == "svg"
-    } else {
-        false
-    }
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|s| s.eq_ignore_ascii_case("svg"))
 }
 
 /// Check if a file has a supported image extension
 pub fn is_supported_image(path: &Path) -> bool {
-    if let Some(extension) = path.extension() {
-        let ext = extension.to_string_lossy().to_lowercase();
-        SUPPORTED_EXTENSIONS.contains(&ext.as_str())
-    } else {
-        false
-    }
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    SUPPORTED_EXTENSIONS
+        .iter()
+        .any(|s| ext.eq_ignore_ascii_case(s))
 }
 
 /// Scan a directory for supported image files (non-recursive)
