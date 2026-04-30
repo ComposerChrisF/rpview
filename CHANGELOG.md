@@ -5,6 +5,16 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.1] - 2026-04-30
+
+### Fixed
+- “Process All Frames” on a fully-processed animated GIF re-loaded every frame from disk (visible progress bar, redundant work) instead of recognizing the work was already done.  Now: when every frame is already in memory at the requested params, the call is a no-op (just refreshes the visible LC pixel for the current frame)
+- “Process All Frames” on a partially-processed animation (some frames done, e.g. after a cancelled batch) used to reprocess every frame from scratch.  Now resumes — only the unfilled slots are processed, populated slots are kept
+
+### Changed
+- `spawn_lc_batch` now builds a per-frame work plan: each frame is independently classified as Skip (already in memory), Load (cached PNG exists on disk), or Compute (run LC and persist).  Replaces the all-or-nothing disk-cache-hit branch with mixed dispatch, so a partial disk cache from an earlier cancelled run is reused frame-by-frame
+- Debug logs include a one-line breakdown of each batch (`N frames: X skip, Y load from disk, Z compute`) so cache hit rates are visible during development
+
 ## [0.21.0] - 2026-04-30
 
 ### Added
