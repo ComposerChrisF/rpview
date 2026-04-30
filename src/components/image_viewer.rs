@@ -1391,18 +1391,20 @@ impl ImageViewer {
             })
             .collect();
 
-        let load_count = work_items
-            .iter()
-            .filter(|w| matches!(w, WorkItem::Load { .. }))
-            .count();
-        let compute_count = work_items.len() - load_count;
-        debug_eprintln!(
-            "[LC BATCH] {} frames: {} skip, {} load from disk, {} compute",
-            total_frames,
-            total_frames - work_items.len(),
-            load_count,
-            compute_count
-        );
+        #[cfg(debug_assertions)]
+        {
+            let load_count = work_items
+                .iter()
+                .filter(|w| matches!(w, WorkItem::Load { .. }))
+                .count();
+            debug_eprintln!(
+                "[LC BATCH] {} frames: {} skip, {} load from disk, {} compute",
+                total_frames,
+                total_frames - work_items.len(),
+                load_count,
+                work_items.len() - load_count
+            );
+        }
 
         let cancel = Arc::new(AtomicBool::new(false));
         let current_frame = Arc::new(AtomicUsize::new(0));
