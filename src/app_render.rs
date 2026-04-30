@@ -221,28 +221,37 @@ impl Render for App {
                 }
             }
 
-            if let Some(ref mut anim_state) = self.viewer.image_state.animation {
-                let now = Instant::now();
-                let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
-
-                // Get current frame duration
-                let frame_duration = anim_state
-                    .frame_durations
-                    .get(anim_state.current_frame)
-                    .copied()
-                    .unwrap_or(100);
-
-                // Advance to next frame when duration has elapsed
-                if elapsed >= frame_duration {
-                    let next_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
-                    debug_eprintln!(
-                        "[ANIMATION] Advancing from frame {} to frame {}",
-                        anim_state.current_frame,
-                        next_frame
-                    );
-                    anim_state.current_frame = next_frame;
-                    self.last_frame_update = now;
+            // Compute frame advancement under a short-lived borrow, then
+            // apply it via `set_current_frame` so the size-aware rescale
+            // fires when frame dimensions differ.
+            let advance: Option<usize> = {
+                if let Some(ref anim_state) = self.viewer.image_state.animation {
+                    let now = Instant::now();
+                    let elapsed =
+                        now.duration_since(self.last_frame_update).as_millis() as u32;
+                    let frame_duration = anim_state
+                        .frame_durations
+                        .get(anim_state.current_frame)
+                        .copied()
+                        .unwrap_or(100);
+                    if elapsed >= frame_duration {
+                        let next = (anim_state.current_frame + 1) % anim_state.frame_count;
+                        debug_eprintln!(
+                            "[ANIMATION] Advancing from frame {} to frame {}",
+                            anim_state.current_frame,
+                            next
+                        );
+                        Some(next)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
                 }
+            };
+            if let Some(next) = advance {
+                self.last_frame_update = Instant::now();
+                self.viewer.set_current_frame(next);
             }
 
             // Request next animation frame (GPUI's pattern for continuous animation)

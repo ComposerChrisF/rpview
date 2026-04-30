@@ -1209,7 +1209,12 @@ impl App {
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
             // Pause animation when manually navigating frames
             anim_state.is_playing = false;
-            anim_state.current_frame = (anim_state.current_frame + 1) % anim_state.frame_count;
+        }
+        if let Some(ref anim) = self.viewer.image_state.animation {
+            let next = (anim.current_frame + 1) % anim.frame_count;
+            // Goes through set_current_frame so the rescale fires when the
+            // new frame's effective dimensions differ.
+            self.viewer.set_current_frame(next);
         }
         // If LC is active, reprocess the new frame.
         if self.viewer.lc_enabled {
@@ -1223,13 +1228,15 @@ impl App {
             return;
         }
         if let Some(ref mut anim_state) = self.viewer.image_state.animation {
-            // Pause animation when manually navigating frames
             anim_state.is_playing = false;
-            if anim_state.current_frame == 0 {
-                anim_state.current_frame = anim_state.frame_count - 1;
+        }
+        if let Some(ref anim) = self.viewer.image_state.animation {
+            let prev = if anim.current_frame == 0 {
+                anim.frame_count - 1
             } else {
-                anim_state.current_frame -= 1;
-            }
+                anim.current_frame - 1
+            };
+            self.viewer.set_current_frame(prev);
         }
         // If LC is active, reprocess the new frame.
         if self.viewer.lc_enabled {
