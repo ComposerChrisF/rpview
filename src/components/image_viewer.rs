@@ -58,19 +58,47 @@ fn rgba_to_bgra_render_image(rgba: &image::RgbaImage) -> Arc<gpui::RenderImage> 
     )))
 }
 
-/// Effective display dimensions for `loaded`. When an LC render is active
-/// (enabled *and* present), its pixel size drives zoom/fit math and the
-/// resolution readout so that "100%" matches the actual pixels on the GPU —
-/// otherwise the source file's dimensions do.
-fn effective_image_size(loaded: &LoadedImage, lc_enabled: bool) -> (u32, u32) {
-    if lc_enabled
-        && loaded.lc_render.is_some()
-        && let Some(size) = loaded.lc_render_size
-    {
-        size
-    } else {
-        (loaded.width, loaded.height)
+/// Effective display dimensions for `loaded` at `frame_idx` (when animated).
+///
+/// Selection priority:
+/// 1. **LC enabled + per-frame LC result cached** → that result's size.
+///    Frame-aware: animated GIFs whose frames are different sizes (or LC
+///    `resize_factor != 1.0`) report each frame's true display size.
+/// 2. **LC enabled + animated, no per-frame result yet** → the unprocessed
+///    source frame's size. We display unprocessed during streaming
+///    fallback, so dimensions need to follow what's actually on screen.
+/// 3. **LC enabled + static** → `lc_render_size`.
+/// 4. **LC off + animated** → the current frame's source dimensions.
+/// 5. **LC off + static (or fallback)** → file dimensions.
+fn effective_image_size(
+    loaded: &LoadedImage,
+    lc_enabled: bool,
+    frame_idx: Option<usize>,
+) -> (u32, u32) {
+    if lc_enabled {
+        if let Some(idx) = frame_idx {
+            if let Some(Some((_, size))) = loaded.lc_frame_renders.get(idx) {
+                return *size;
+            }
+            if let Some(ref anim) = loaded.animation_data
+                && let Some(frame) = anim.frames.get(idx)
+            {
+                return (frame.image.width(), frame.image.height());
+            }
+        }
+        if loaded.lc_render.is_some()
+            && let Some(size) = loaded.lc_render_size
+        {
+            return size;
+        }
     }
+    if let Some(idx) = frame_idx
+        && let Some(ref anim) = loaded.animation_data
+        && let Some(frame) = anim.frames.get(idx)
+    {
+        return (frame.image.width(), frame.image.height());
+    }
+    (loaded.width, loaded.height)
 }
 
 pub(crate) struct LcJob {
@@ -475,7 +503,11 @@ impl ImageViewer {
     /// alone. `apparent_width = width * zoom` stays constant, and because
     /// `pan` is the screen position of the image's top-left corner, it
     /// doesn't shift when only the pixel grid underneath resamples.
-    fn rescale_for_size_change(&mut self, old_eff: (u32, u32), new_eff: (u32, u32)) {
+    pub(crate) fn rescale_for_size_change(
+        &mut self,
+        old_eff: (u32, u32),
+        new_eff: (u32, u32),
+    ) {
         if old_eff == new_eff || new_eff.0 == 0 || old_eff.0 == 0 {
             return;
         }
@@ -485,6 +517,40 @@ impl ImageViewer {
             let scale = old_eff.0 as f32 / new_eff.0 as f32;
             self.image_state.zoom *= scale;
         }
+    }
+
+    /// Run `f` after snapshotting `display_dimensions()`, then rescale
+    /// zoom/pan if the dimensions changed. Use this around any mutation
+    /// that can shift the effective display size (frame transitions,
+    /// LC enable/disable, slot recall, batch swap, per-frame LC arrival)
+    /// so the visible content stays in place.
+    pub(crate) fn with_size_aware_change<F: FnOnce(&mut Self)>(&mut self, f: F) {
+        let old_eff = self.display_dimensions();
+        f(self);
+        let new_eff = self.display_dimensions();
+        if let (Some(old), Some(new)) = (old_eff, new_eff)
+            && old != new
+        {
+            self.rescale_for_size_change(old, new);
+        }
+    }
+
+    /// Atomically change the current animation frame, rescaling zoom/pan
+    /// if the new frame's effective display dimensions differ. Returns
+    /// `true` if the frame index actually changed.
+    pub fn set_current_frame(&mut self, new_frame: usize) -> bool {
+        let Some(ref anim) = self.image_state.animation else {
+            return false;
+        };
+        if anim.current_frame == new_frame || new_frame >= anim.frame_count {
+            return false;
+        }
+        self.with_size_aware_change(|s| {
+            if let Some(ref mut anim) = s.image_state.animation {
+                anim.current_frame = new_frame;
+            }
+        });
+        true
     }
 
     /// Toggle between fit-to-window (centered) and 100% zoom.
@@ -1531,59 +1597,81 @@ impl ImageViewer {
 
         // Drain all available results from the channel.
         loop {
-            match batch.handle.try_recv() {
+            // try_recv requires only an immutable borrow; pull it out so we
+            // can mutate `self` afterwards without a borrow conflict.
+            let recv = self
+                .lc_batch_job
+                .as_ref()
+                .map(|b| b.handle.try_recv())
+                .unwrap_or(Err(std::sync::mpsc::TryRecvError::Disconnected));
+            match recv {
                 Ok(Some((idx, render, size))) => {
-                    if let Some(loaded) = self.current_image.as_mut() {
-                        if atomic_swap {
-                            // Route into pending; do not touch lc_render or
-                            // lc_frame_renders until the swap.
-                            if let Some(pending) = loaded.lc_pending_frame_renders.as_mut() {
-                                if idx < pending.len() {
-                                    pending[idx] = Some((render, size));
-                                }
-                            }
-                        } else {
-                            // Streaming: write directly so playback can pick
-                            // up new frames as they finish.
+                    if atomic_swap {
+                        // Route into pending; do not touch lc_render or
+                        // lc_frame_renders until the swap. No size change
+                        // visible to the user yet, so no rescale.
+                        if let Some(loaded) = self.current_image.as_mut()
+                            && let Some(pending) = loaded.lc_pending_frame_renders.as_mut()
+                            && idx < pending.len()
+                        {
+                            pending[idx] = Some((render, size));
+                        }
+                    } else {
+                        // Streaming: writing this frame into lc_frame_renders
+                        // can change the displayed size (was unprocessed
+                        // source dims, now LC dims) — wrap so the rescale
+                        // fires when idx == current_frame.
+                        self.with_size_aware_change(|s| {
+                            let Some(loaded) = s.current_image.as_mut() else {
+                                return;
+                            };
                             if idx < loaded.lc_frame_renders.len() {
                                 loaded.lc_frame_renders[idx] =
                                     Some((render.clone(), size));
                             }
-                            if let Some(ref anim) = self.image_state.animation {
-                                if idx == anim.current_frame {
-                                    loaded.lc_render = Some(render);
-                                    loaded.lc_render_size = Some(size);
-                                }
+                            if let Some(ref anim) = s.image_state.animation
+                                && idx == anim.current_frame
+                            {
+                                loaded.lc_render = Some(render);
+                                loaded.lc_render_size = Some(size);
                             }
-                        }
+                        });
                     }
                 }
                 Ok(None) => {
                     // Batch complete or cancelled.
                     if atomic_swap {
-                        if let Some(loaded) = self.current_image.as_mut() {
-                            if let Some(pending) = loaded.lc_pending_frame_renders.take() {
-                                let fully_populated =
-                                    !pending.is_empty() && pending.iter().all(|s| s.is_some());
-                                if fully_populated {
-                                    loaded.lc_frame_renders = pending;
-                                    loaded.cached_lc_params = Some(batch_params);
-                                    if let Some(ref anim) = self.image_state.animation {
-                                        let cur = anim.current_frame;
-                                        if cur < loaded.lc_frame_renders.len() {
-                                            if let Some((render, size)) =
-                                                loaded.lc_frame_renders[cur].clone()
-                                            {
-                                                loaded.lc_render = Some(render);
-                                                loaded.lc_render_size = Some(size);
-                                            }
-                                        }
-                                    }
-                                }
+                        // The swap can change the displayed size for the
+                        // current frame (old params → new params, and
+                        // resize_factor may differ). Wrap it.
+                        let batch_params_for_swap = batch_params.clone();
+                        self.with_size_aware_change(|s| {
+                            let Some(loaded) = s.current_image.as_mut() else {
+                                return;
+                            };
+                            let Some(pending) = loaded.lc_pending_frame_renders.take() else {
+                                return;
+                            };
+                            let fully_populated =
+                                !pending.is_empty() && pending.iter().all(|s| s.is_some());
+                            if !fully_populated {
                                 // Partial pending (cancellation) is dropped —
                                 // prior lc_frame_renders stays intact.
+                                return;
                             }
-                        }
+                            loaded.lc_frame_renders = pending;
+                            loaded.cached_lc_params = Some(batch_params_for_swap);
+                            if let Some(ref anim) = s.image_state.animation {
+                                let cur = anim.current_frame;
+                                if cur < loaded.lc_frame_renders.len()
+                                    && let Some((render, size)) =
+                                        loaded.lc_frame_renders[cur].clone()
+                                {
+                                    loaded.lc_render = Some(render);
+                                    loaded.lc_render_size = Some(size);
+                                }
+                            }
+                        });
                     }
                     self.lc_batch_job = None;
                     return None;
@@ -1614,14 +1702,7 @@ impl ImageViewer {
         if self.lc_enabled == enabled {
             return;
         }
-        let old_eff = self.display_dimensions();
-        self.lc_enabled = enabled;
-        let new_eff = self.display_dimensions();
-        if let (Some(old), Some(new)) = (old_eff, new_eff)
-            && old != new
-        {
-            self.rescale_for_size_change(old, new);
-        }
+        self.with_size_aware_change(|s| s.lc_enabled = enabled);
     }
     #[allow(dead_code)]
     pub fn is_lc_enabled(&self) -> bool {
@@ -1653,14 +1734,7 @@ impl ImageViewer {
         if self.active_slot == Some(slot) {
             return;
         }
-        let old_eff = self.display_dimensions();
-        self.active_slot = Some(slot);
-        let new_eff = self.display_dimensions();
-        if let (Some(old), Some(new)) = (old_eff, new_eff)
-            && old != new
-        {
-            self.rescale_for_size_change(old, new);
-        }
+        self.with_size_aware_change(|s| s.active_slot = Some(slot));
     }
 
     /// Exit slot-recall mode, returning to the normal display path.
@@ -1669,26 +1743,24 @@ impl ImageViewer {
         if self.active_slot.is_none() {
             return;
         }
-        let old_eff = self.display_dimensions();
-        self.active_slot = None;
-        let new_eff = self.display_dimensions();
-        if let (Some(old), Some(new)) = (old_eff, new_eff)
-            && old != new
-        {
-            self.rescale_for_size_change(old, new);
-        }
+        self.with_size_aware_change(|s| s.active_slot = None);
     }
 
-    /// Effective display dimensions taking active slot into account.
-    fn display_dimensions(&self) -> Option<(u32, u32)> {
+    /// Effective display dimensions taking active slot and animation frame
+    /// into account.
+    pub(crate) fn display_dimensions(&self) -> Option<(u32, u32)> {
         if let Some(slot) = self.active_slot {
             let idx = (slot - 3) as usize;
-            self.saved_slots[idx].as_ref().map(|s| (s.width, s.height))
-        } else {
-            self.current_image
-                .as_ref()
-                .map(|img| effective_image_size(img, self.lc_enabled))
+            return self.saved_slots[idx].as_ref().map(|s| (s.width, s.height));
         }
+        let frame_idx = self
+            .image_state
+            .animation
+            .as_ref()
+            .map(|a| a.current_frame);
+        self.current_image
+            .as_ref()
+            .map(|img| effective_image_size(img, self.lc_enabled, frame_idx))
     }
 
     /// Capture the currently visible image as a `SavedSlot`. Returns `None`
@@ -1752,26 +1824,21 @@ impl ImageViewer {
         };
         let installed = match result {
             Some((render_image, size)) => {
-                let old_eff = self.display_dimensions();
-                if let Some(loaded) = self.current_image.as_mut() {
-                    loaded.lc_render = Some(render_image.clone());
-                    loaded.lc_render_size = Some(size);
-                    loaded.cached_lc_params = Some(completed_job.params);
+                self.with_size_aware_change(|s| {
+                    if let Some(loaded) = s.current_image.as_mut() {
+                        loaded.lc_render = Some(render_image.clone());
+                        loaded.lc_render_size = Some(size);
+                        loaded.cached_lc_params = Some(completed_job.params);
 
-                    // Also cache per-frame for animated images.
-                    if let Some(ref anim) = self.image_state.animation {
-                        let idx = anim.current_frame;
-                        if idx < loaded.lc_frame_renders.len() {
-                            loaded.lc_frame_renders[idx] = Some((render_image, size));
+                        // Also cache per-frame for animated images.
+                        if let Some(ref anim) = s.image_state.animation {
+                            let idx = anim.current_frame;
+                            if idx < loaded.lc_frame_renders.len() {
+                                loaded.lc_frame_renders[idx] = Some((render_image, size));
+                            }
                         }
                     }
-                }
-                let new_eff = self.display_dimensions();
-                if let (Some(old), Some(new)) = (old_eff, new_eff)
-                    && old != new
-                {
-                    self.rescale_for_size_change(old, new);
-                }
+                });
                 true
             }
             None => false,

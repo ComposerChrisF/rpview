@@ -5,6 +5,18 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.2] - 2026-04-30
+
+### Fixed
+- The image used to visually jump when its effective display size changed mid-session: switching between processed and unprocessed views at LC `resize_factor != 1.0`, animating through a GIF whose frames have differing sizes (same aspect ratio), and the moment a streaming LC frame arrived for the current frame all left zoom and pan stale.  Zoom/pan now rescales so the image stays visually anchored across:
+  - Animation frame transitions (next/prev key, auto-play tick) — so frames at different sizes don’t shift on screen
+  - Per-frame LC arrival in streaming mode — the boundary between “showing unprocessed source” and “showing LC result at a different resolution” no longer pops
+  - Atomic-swap completion when a re-process at new params lands
+
+### Changed
+- `effective_image_size` is now frame-aware: takes an `Option<usize>` frame index and prefers per-frame LC dimensions, then per-frame source dimensions, falling back to file dimensions only when neither is available. `display_dimensions()` passes the current animation frame so reads always reflect what’s actually on screen
+- New `ImageViewer::with_size_aware_change(closure)` helper consolidates the snapshot-mutate-rescale pattern used by `set_lc_enabled`, `recall_slot`, `clear_active_slot`, the single-frame LC arrival, the LC batch streaming path, and the atomic-swap completion.  New `ImageViewer::set_current_frame(idx)` routes all frame-index mutations through it, so the auto-play tick and `]`/`[` handlers now rescale automatically when frame dimensions differ
+
 ## [0.21.1] - 2026-04-30
 
 ### Fixed
