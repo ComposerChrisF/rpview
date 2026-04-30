@@ -16,17 +16,37 @@ impl Render for App {
         if self.viewer.check_async_load() {
             // Image loaded successfully or failed - load state and setup animation
             if let Some(path) = self.app_state.current_image().cloned() {
-                // Re-apply Local Contrast on every new image (session-global
-                // sliders). Done before filter-state restore so the async LC
-                // worker kicks off as early as possible.
-                self.reapply_local_contrast_if_active(cx);
-
-                // Load cached state if available and enabled in settings
+                // Load cached state FIRST so the restored current_frame is
+                // available before we cache it / before LC reapply uses it.
                 if self.settings.viewer_behavior.remember_per_image_state
                     && self.app_state.image_states.contains_key(&path)
                 {
                     self.load_current_image_state(cx);
-                } else {
+                }
+
+                // Cache the restored frame on disk if the loader hadn't
+                // pre-cached it (loader only pre-caches frames 0..3, but the
+                // user's restored current_frame may be elsewhere). Without
+                // this, render falls back to "Failed to load image frame"
+                // when the user returns to a frame >= 3.
+                if let Some(idx) = self
+                    .viewer
+                    .image_state
+                    .animation
+                    .as_ref()
+                    .map(|a| a.current_frame)
+                {
+                    self.viewer.cache_frame(idx);
+                }
+
+                // Re-apply Local Contrast on every new image (session-global
+                // sliders). Now that current_frame is restored and cached,
+                // this can rehydrate the per-frame LC cache from disk too.
+                self.reapply_local_contrast_if_active(cx);
+
+                if !(self.settings.viewer_behavior.remember_per_image_state
+                    && self.app_state.image_states.contains_key(&path))
+                {
                     // Apply default zoom mode from settings for new images
                     use crate::state::settings::ZoomMode;
                     match self.settings.viewer_behavior.default_zoom_mode {
