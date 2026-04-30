@@ -2399,36 +2399,49 @@ impl ImageViewer {
             .unwrap_or((loaded.width, loaded.height));
 
         // Get the display path (handles animation frames and filters).
-        // When LC is enabled for an animation, skip the frame-path lookup
-        // and fall through to the priority chain below (which picks up the
-        // per-frame LC render via lc_candidate).
+        // For animations the path always points at the current frame's
+        // cached PNG when available — so the LC priority chain has the
+        // correct per-frame source as a fallback when there's no LC render
+        // yet (streaming-process state, or post-navigation rehydration).
         let path =
             if let Some(ref anim_state) = self.image_state.animation {
                 let frame_index = anim_state.current_frame;
 
-                if self.lc_enabled {
-                    // LC is active — use the original path as a fallback;
-                    // the lc_candidate in the priority chain will pick up
-                    // the per-frame LC render if available.
-                    loaded.path.clone()
-                } else if frame_index < loaded.frame_cache_paths.len() {
-                    let cached_path = &loaded.frame_cache_paths[frame_index];
-                    if !cached_path.as_os_str().is_empty() && cached_path.exists() {
-                        cached_path.clone()
-                    } else {
-                        // Frame not cached, show error
-                        return div()
-                            .size_full()
-                            .child(cx.new(|_cx| {
-                                ErrorDisplay::new("Failed to load image frame".to_string())
-                            }))
-                            .into_any_element();
-                    }
-                } else {
-                    // Invalid frame index
+                if frame_index >= loaded.frame_cache_paths.len() {
                     return div()
                         .size_full()
                         .child(cx.new(|_cx| ErrorDisplay::new("Invalid frame index".to_string())))
+                        .into_any_element();
+                }
+                let cached_path = &loaded.frame_cache_paths[frame_index];
+                let path_ok = !cached_path.as_os_str().is_empty() && cached_path.exists();
+
+                // Whether we have a per-frame LC render that will take
+                // priority below — if so the path itself is unused.
+                let has_lc_render = self.lc_enabled
+                    && loaded
+                        .lc_frame_renders
+                        .get(frame_index)
+                        .and_then(|s| s.as_ref())
+                        .is_some();
+
+                if path_ok {
+                    cached_path.clone()
+                } else if has_lc_render {
+                    // Path is unused — lc_candidate has the pixels.
+                    PathBuf::new()
+                } else if self.lc_enabled {
+                    // LC is on but no per-frame render yet AND raw frame not
+                    // cached. Fall back to the GIF file (shows frame 0 — not
+                    // ideal, but better than erroring; cache_frame should
+                    // typically have populated this slot already).
+                    loaded.path.clone()
+                } else {
+                    return div()
+                        .size_full()
+                        .child(cx.new(|_cx| {
+                            ErrorDisplay::new("Failed to load image frame".to_string())
+                        }))
                         .into_any_element();
                 }
             } else {

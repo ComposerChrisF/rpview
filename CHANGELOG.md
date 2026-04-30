@@ -5,6 +5,17 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.3] - 2026-04-30
+
+### Fixed
+- Shift+Cmd+P / Shift+Ctrl+P (Process All Frames) no longer pauses the animation.  Single-frame Apply still auto-pauses (so the user can compare result to source), but batch processing leaves playback running because the streaming/atomic-swap fallback handles unprocessed frames gracefully
+- Navigating away from a fully-processed animated GIF and back used to show “Failed to load image frame” or render only the first GIF frame as the LC fallback.  The previously-saved per-frame LC cache is now rehydrated from disk automatically (when `lc_enabled` and a complete on-disk cache exists for the current parameters), and the renderer’s animated LC-enabled fallback uses the current frame’s cached PNG instead of the GIF file (which only ever shows frame 0)
+- The async loader pre-caches frames 0–2; if the user’s restored `current_frame` was elsewhere (e.g. they paused on frame 5 before navigating away), the renderer would error on return.  The current frame is now cached on disk synchronously at the moment per-image state is restored
+
+### Changed
+- `reapply_local_contrast_if_active` now runs the disk-rehydrate path for animated images regardless of the Auto Process toggle (a disk-cache hit is essentially free), and only falls through to the recompute path when Auto Process is on and the cache is incomplete
+- Renderer’s path resolution for animations is unified: animated images always resolve to `frame_cache_paths[current_frame]` (with a graceful fallback to the GIF file only when both LC and raw caches are missing), so the LC priority chain always has the _current_ unprocessed frame available as a fallback rather than the first frame of the GIF
+
 ## [0.21.2] - 2026-04-30
 
 ### Fixed

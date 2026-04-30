@@ -349,6 +349,11 @@ impl App {
 
     /// Shift+Cmd+P / Shift+Ctrl+P: process all frames if the image is
     /// animated; otherwise behave like the single-frame Apply.
+    ///
+    /// Unlike single-frame Apply (which auto-pauses so the user can compare
+    /// the result), batch processing leaves playback running — the new
+    /// streaming/atomic-swap paths render unprocessed frames as a fallback,
+    /// so the user can keep watching the animation while LC builds.
     pub(crate) fn handle_apply_local_contrast_all(
         &mut self,
         window: &mut Window,
@@ -363,9 +368,6 @@ impl App {
             // Static image — single Apply path.
             self.handle_apply_local_contrast(window, cx);
             return;
-        }
-        if let Some(ref mut anim) = self.viewer.image_state.animation {
-            anim.is_playing = false;
         }
         self.viewer.set_lc_enabled(true);
         self.viewer.spawn_lc_batch(params);
@@ -1534,15 +1536,38 @@ impl App {
     /// Called after every successful image load so the sliders "follow"
     /// the user across images like the filter sliders do.
     pub(crate) fn reapply_local_contrast_if_active(&mut self, cx: &mut Context<Self>) {
+        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
+        if params.is_identity() {
+            return;
+        }
+
+        // Animated + LC enabled + complete disk cache for these params →
+        // rehydrate from disk. Cheap (no recomputation) and avoids the
+        // "navigate back to a previously-processed GIF and the LC view is
+        // gone" surprise.
+        if self.viewer.lc_enabled
+            && let Some(ref loaded) = self.viewer.current_image
+            && let Some(ref data) = loaded.animation_data
+            && let Some(ref key) = loaded.image_key
+        {
+            let phash = crate::utils::frame_cache::params_hash(&params);
+            let total = data.frame_count;
+            let all_present = (0..total).all(|i| {
+                crate::utils::frame_cache::lc_frame_path(key, &phash, i)
+                    .map(|p| p.exists())
+                    .unwrap_or(false)
+            });
+            if all_present {
+                self.viewer.spawn_lc_batch(params);
+                return;
+            }
+        }
+
         let auto = self.local_contrast_controls.read(cx).auto_process;
         if !auto {
             // Auto Process off — don't auto-process on navigation.
             // Don't change lc_enabled; the new image has no lc_render yet
             // so the viewer will show the unprocessed image naturally.
-            return;
-        }
-        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
-        if params.is_identity() {
             return;
         }
         // Auto-pause animation when LC is active.
