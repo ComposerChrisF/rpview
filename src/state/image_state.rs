@@ -12,6 +12,14 @@ pub struct ImageState {
     /// Whether the image is at fit-to-window size
     pub is_fit_to_window: bool,
 
+    /// Effective display dimensions (width, height) at the time `zoom`/`pan`
+    /// were last persisted. Used by `load_current_image_state` to rescale
+    /// zoom when the displayed pixel grid differs at restore time — e.g.
+    /// the user processed at LC `resize_factor = 4.0`, navigated away, and
+    /// the LC render is gone on return so the source dims drive layout.
+    /// `None` for never-saved or pre-existing cached states.
+    pub saved_effective_size: Option<(u32, u32)>,
+
     /// Last time this state was accessed (for LRU cache)
     pub last_accessed: Instant,
 
@@ -43,6 +51,7 @@ impl ImageState {
             zoom: 1.0,
             pan: (0.0, 0.0),
             is_fit_to_window: true,
+            saved_effective_size: None,
             last_accessed: Instant::now(),
             filters: default_filters,
             filters_enabled: true,
