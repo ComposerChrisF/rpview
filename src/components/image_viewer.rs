@@ -376,14 +376,30 @@ impl ImageViewer {
         }
     }
 
-    /// Set the image state
+    /// Set the image state, rescaling `zoom` to preserve the apparent
+    /// on-screen size when the effective display dimensions differ from
+    /// what they were at save time. Without this, restoring `zoom = 1.0`
+    /// from a saved state captured against a 4× LC render would render
+    /// the source image at 1:1 (visibly 4× too small) rather than at the
+    /// 4× apparent size the user actually saw.
     pub fn set_image_state(&mut self, state: ImageState) {
+        let saved_eff = state.saved_effective_size;
         self.image_state = state;
+        let current_eff = self.display_dimensions();
+        if let (Some(saved), Some(current)) = (saved_eff, current_eff)
+            && saved != current
+        {
+            self.rescale_for_size_change(saved, current);
+        }
     }
 
-    /// Get the current image state
+    /// Get the current image state, capturing the effective display
+    /// dimensions so a future restore can rescale zoom if the displayed
+    /// pixel grid has changed.
     pub fn get_image_state(&self) -> ImageState {
-        self.image_state.clone()
+        let mut state = self.image_state.clone();
+        state.saved_effective_size = self.display_dimensions();
+        state
     }
 
     /// Calculate and set fit-to-window zoom for the current image

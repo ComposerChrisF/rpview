@@ -5,6 +5,14 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.4] - 2026-04-30
+
+### Fixed
+- Saved zoom/pan no longer drift on navigate-back when the image had been viewed at LC `resize_factor != 1.0` and the LC render is gone after reload.  Symptom: navigate to an image, process at 4×, zoom to 100%, navigate away and back — the image rendered at ~4× too small in the upper-left corner because the saved `zoom = 1.0` had been calibrated against the 4× LC dimensions but the restored view fell back to source dimensions.  State now carries `saved_effective_size`, and `set_image_state` rescales zoom on restore so the apparent on-screen size and pan position are preserved across the round trip
+
+### Changed
+- `ImageState` gained `saved_effective_size: Option<(u32, u32)>` (width, height of the displayed pixel grid at save time). `get_image_state` populates it; `set_image_state` runs `rescale_for_size_change(saved, current)` after applying the state.  Pre-existing cached states without the field skip the rescale on first restore and self-heal on the next save
+
 ## [0.21.3] - 2026-04-30
 
 ### Fixed
