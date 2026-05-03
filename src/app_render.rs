@@ -3,6 +3,14 @@ use crate::utils::debug_eprintln;
 
 impl Render for App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Push current image dimensions to the GPU-pipeline controls so its
+        // Auto-resize button can pick the right factor.  Cheap: the setter
+        // short-circuits if dims are unchanged and never triggers a re-render
+        // on its own.
+        let current_dims = self.viewer.current_image.as_ref().map(|i| (i.width, i.height));
+        self.gpu_pipeline_controls
+            .update(cx, |c, _| c.set_image_dimensions(current_dims));
+
         // Auto-dismiss toast after 2.5 seconds
         if let Some(ref toast) = self.toast {
             if toast.created_at.elapsed() >= Duration::from_millis(2500) {
@@ -737,6 +745,12 @@ impl Render for App {
             }))
             .on_action(cx.listener(|this, _: &ResetLocalContrast, window, cx| {
                 this.handle_reset_local_contrast(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleGpuPipeline, window, cx| {
+                this.handle_toggle_gpu_pipeline(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ResetGpuPipeline, window, cx| {
+                this.handle_reset_gpu_pipeline(window, cx);
             }))
             .on_action(cx.listener(|this, _: &ZoomIn, window, cx| {
                 this.handle_zoom_in(window, cx);

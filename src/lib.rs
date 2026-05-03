@@ -11,6 +11,7 @@
 pub mod cli;
 pub mod components;
 pub mod error;
+pub mod gpu;
 pub mod state;
 pub mod utils;
 
@@ -35,6 +36,8 @@ actions!(
         ApplyLocalContrast,
         ApplyLocalContrastAll,
         ResetLocalContrast,
+        ToggleGpuPipeline,
+        ResetGpuPipeline,
         ZoomIn,
         ZoomOut,
         ZoomReset,

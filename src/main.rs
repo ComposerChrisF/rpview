@@ -63,6 +63,9 @@ mod app_render;
 mod cli;
 mod components;
 mod error;
+#[allow(dead_code)] // Public API of the new GPU filter pipeline; consumers
+// are wired up incrementally. Remove this once the UI calls the module.
+mod gpu;
 mod state;
 mod utils;
 mod window_title;
@@ -70,8 +73,9 @@ mod window_title;
 use cli::Cli;
 use components::{
     DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, FilterWindowView,
-    HelpOverlay, ImageViewer, LocalContrastControls, LocalContrastControlsEvent,
-    LocalContrastWindowView, SettingsWindow,
+    GpuPipelineControls, GpuPipelineControlsEvent, GpuPipelineWindowView, HelpOverlay,
+    ImageViewer, LocalContrastControls, LocalContrastControlsEvent, LocalContrastWindowView,
+    SettingsWindow,
 };
 use state::{AppSettings, AppState};
 use utils::debug_eprintln;
@@ -86,11 +90,12 @@ use rpview::{
     PanDown, PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
     PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, RecallSlot3,
     RecallSlot4, RecallSlot5, RecallSlot6, RecallSlot7, RecallSlot8, RecallSlot9, RequestDelete,
-    RequestPermanentDelete, ResetFilters, ResetLocalContrast, ResetSettingsToDefaults,
-    RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical, SortByModified,
-    SortByTypeToggle, StoreSlot3, StoreSlot4, StoreSlot5, StoreSlot6, StoreSlot7, StoreSlot8,
-    StoreSlot9, ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters, ToggleHelp,
-    ToggleLocalContrast, ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast,
+    RequestPermanentDelete, ResetFilters, ResetGpuPipeline, ResetLocalContrast,
+    ResetSettingsToDefaults, RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical,
+    SortByModified, SortByTypeToggle, StoreSlot3, StoreSlot4, StoreSlot5, StoreSlot6, StoreSlot7,
+    StoreSlot8, StoreSlot9, ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters,
+    ToggleGpuPipeline, ToggleHelp, ToggleLocalContrast, ToggleSettings, ToggleZoomIndicator,
+    ZoomIn, ZoomInFast,
     ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow,
     ZoomReset, ZoomResetAndCenter,
 };
@@ -138,6 +143,12 @@ pub(crate) struct App {
     /// Local Contrast controls (sliders). Always exists; lives in the App so
     /// its slider values persist across open/close of the LC window.
     local_contrast_controls: Entity<LocalContrastControls>,
+    /// Open floating GPU Pipeline window handle (None = closed)
+    gpu_pipeline_window: Option<WindowHandle<GpuPipelineWindowView>>,
+    /// GPU pipeline controls (sliders + per-stage enables). Always exists;
+    /// lives in the App so its values persist across open/close of the
+    /// GPU pipeline window.
+    gpu_pipeline_controls: Entity<GpuPipelineControls>,
     /// Settings window component
     settings_window: Entity<SettingsWindow>,
     /// Help overlay component
@@ -491,6 +502,29 @@ fn main() {
                         )
                         .detach();
 
+                    // Create GPU-pipeline controls (sliders + per-stage enables).
+                    // Lives on the App so values persist across window open/close.
+                    let gpu_pipeline_controls = inner_cx.new(|cx| {
+                        GpuPipelineControls::new(settings.appearance.font_size_scale, cx)
+                    });
+                    inner_cx
+                        .subscribe(
+                            &gpu_pipeline_controls,
+                            |this, _entity, event: &GpuPipelineControlsEvent, cx| match event {
+                                GpuPipelineControlsEvent::ParametersChanged => {
+                                    let params =
+                                        this.gpu_pipeline_controls.read(cx).get_params(cx);
+                                    this.viewer.update_gpu_pipeline(params);
+                                    cx.notify();
+                                }
+                                GpuPipelineControlsEvent::ResetRequested => {
+                                    this.viewer.reset_gpu_pipeline();
+                                    cx.notify();
+                                }
+                            },
+                        )
+                        .detach();
+
                     // Create settings window
                     let settings_window =
                         inner_cx.new(|cx| SettingsWindow::new(settings.clone(), cx));
@@ -539,6 +573,8 @@ fn main() {
                         filter_controls,
                         local_contrast_window: None,
                         local_contrast_controls,
+                        gpu_pipeline_window: None,
+                        gpu_pipeline_controls,
                         settings_window,
                         help_overlay,
                         debug_overlay,

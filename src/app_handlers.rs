@@ -469,11 +469,100 @@ impl App {
         }
     }
 
+    pub(crate) fn handle_toggle_gpu_pipeline(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.gpu_pipeline_window.is_some() {
+            self.close_gpu_pipeline_window(cx);
+        } else {
+            self.open_gpu_pipeline_window(cx);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn handle_reset_gpu_pipeline(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.gpu_pipeline_controls.update(cx, |c, cx| c.reset_all(cx));
+        self.viewer.reset_gpu_pipeline();
+        cx.notify();
+    }
+
+    pub(crate) fn open_gpu_pipeline_window(&mut self, cx: &mut Context<Self>) {
+        if self.gpu_pipeline_window.is_some() {
+            return;
+        }
+        let bounds = gpui::Bounds::centered(None, gpui::size(gpui::px(340.0), gpui::px(620.0)), cx);
+        let controls = self.gpu_pipeline_controls.clone();
+        let weak_app = cx.weak_entity();
+
+        let result = cx.open_window(
+            gpui::WindowOptions {
+                window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
+                kind: gpui::WindowKind::Floating,
+                is_resizable: true,
+                is_movable: true,
+                titlebar: Some(gpui::TitlebarOptions {
+                    title: Some("GPU Pipeline".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            move |window, cx| {
+                crate::utils::window_level::set_always_on_top(window);
+                let weak_for_escape = weak_app.clone();
+                let on_escape: crate::components::EscapeCallback =
+                    Box::new(move |window, app_cx| {
+                        window.remove_window();
+                        let _ = weak_for_escape.update(app_cx, |app, inner_cx| {
+                            app.register_escape_press(inner_cx);
+                        });
+                    });
+                let view = cx.new(|inner_cx| {
+                    crate::components::GpuPipelineWindowView::new(
+                        controls.clone(),
+                        on_escape,
+                        inner_cx,
+                    )
+                });
+                // Clear the handle when the view (window) drops.
+                let weak_for_close = weak_app.clone();
+                view.update(cx, |_, inner_cx| {
+                    inner_cx
+                        .on_release(move |_, app_cx| {
+                            let _ = weak_for_close.update(app_cx, |app, _| {
+                                app.gpu_pipeline_window = None;
+                            });
+                        })
+                        .detach();
+                });
+                view
+            },
+        );
+        match result {
+            Ok(handle) => {
+                self.gpu_pipeline_window = Some(handle);
+            }
+            Err(e) => eprintln!("Failed to open GPU Pipeline window: {:?}", e),
+        }
+    }
+
+    pub(crate) fn close_gpu_pipeline_window(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.gpu_pipeline_window.take() {
+            let _ = handle.update(cx, |_, window, _| window.remove_window());
+        }
+    }
+
     pub(crate) fn handle_disable_filters(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.viewer.clear_active_slot();
         self.viewer.image_state.filters_enabled = false;
         self.viewer.update_filtered_cache();
         self.viewer.set_lc_enabled(false);
+        self.viewer.set_gpu_pipeline_enabled(false);
         self.save_current_image_state();
         cx.notify();
     }
@@ -483,6 +572,7 @@ impl App {
         self.viewer.image_state.filters_enabled = true;
         self.viewer.update_filtered_cache();
         self.viewer.set_lc_enabled(true);
+        self.viewer.set_gpu_pipeline_enabled(true);
         self.save_current_image_state();
         cx.notify();
     }
@@ -640,8 +730,42 @@ impl App {
                 .and_then(|s| s.to_str())
                 .unwrap_or("image");
 
-            // Determine extension from settings when filters are enabled
-            let save_ext = if self.viewer.image_state.filters_enabled {
+            // Detect whether anything other than the raw source is being
+            // displayed.  The bytes we save will come from
+            // `viewer.capture_current_display()`, which already mirrors
+            // the renderer's priority chain (slot → GPU pipeline → LC →
+            // filtered → raw), so we only need to distinguish "raw
+            // fallback" from "processed/recalled" here.
+            let active_slot = self.viewer.active_slot.is_some();
+            let gpu_pipeline_active = self.viewer.gpu_pipeline_enabled
+                && self
+                    .viewer
+                    .current_image
+                    .as_ref()
+                    .is_some_and(|i| i.gpu_pipeline_render.is_some());
+            let lc_active = self.viewer.lc_enabled
+                && self.viewer.current_image.as_ref().is_some_and(|i| {
+                    i.lc_render.is_some()
+                        || self
+                            .viewer
+                            .image_state
+                            .animation
+                            .as_ref()
+                            .and_then(|a| i.lc_frame_renders.get(a.current_frame))
+                            .and_then(|opt| opt.as_ref())
+                            .is_some()
+                });
+            let filters_active = self.viewer.image_state.filters_enabled
+                && self
+                    .viewer
+                    .current_image
+                    .as_ref()
+                    .is_some_and(|i| i.filtered_render.is_some());
+            let any_processing =
+                active_slot || gpu_pipeline_active || lc_active || filters_active;
+
+            // Determine extension from settings when any processing is active
+            let save_ext = if any_processing {
                 // Use default save format from settings
                 use crate::state::settings::SaveFormat;
                 match self.settings.file_operations.default_save_format {
@@ -659,15 +783,16 @@ impl App {
                     SaveFormat::Webp => "webp",
                 }
             } else {
-                // Use original extension for unfiltered saves
+                // Use original extension for unprocessed saves
                 current_path
                     .extension()
                     .and_then(|e| e.to_str())
                     .unwrap_or("png")
             };
 
-            // Generate suggested filename with _filtered suffix if filters are enabled
-            let suggested_name = if self.viewer.image_state.filters_enabled {
+            // Generate suggested filename with _filtered suffix if any
+            // processing is active.
+            let suggested_name = if any_processing {
                 format!("{}_filtered.{}", original_stem, save_ext)
             } else {
                 format!("{}.{}", original_stem, save_ext)
@@ -697,29 +822,42 @@ impl App {
             }
 
             if let Some(save_path) = file_dialog.save_file() {
-                // Determine what to save based on filter state
-                let save_result = if self.viewer.image_state.filters_enabled {
-                    // Re-apply filters to the original for save. The in-memory filtered
-                    // buffer we hold for display is BGRA; easier to just re-run the LUT
-                    // against the original RGBA source than convert back.
-                    if let Some(loaded_image) = &self.viewer.current_image {
-                        if let Ok(original_img) = image::open(&loaded_image.path) {
-                            let filters = &self.viewer.image_state.filters;
-                            let filtered_img = utils::filters::apply_filters(
-                                &original_img,
-                                filters.brightness,
-                                filters.contrast,
-                                filters.gamma,
-                            );
-                            self.save_dynamic_image_to_path(&filtered_img, &save_path)
-                        } else {
-                            Err("Failed to load original image".to_string())
-                        }
-                    } else {
-                        Err("No image loaded".to_string())
+                let save_result = if any_processing {
+                    // Whatever is on screen — slot recall, GPU pipeline,
+                    // per-frame or static LC, or CPU brightness/contrast/
+                    // gamma — pull the BGRA bytes out of its `RenderImage`
+                    // and serialize them.  `capture_current_display`
+                    // mirrors the renderer's exact priority chain.
+                    match self.viewer.capture_current_display() {
+                        Some(snapshot) => match snapshot.render.as_bytes(0) {
+                            Some(bgra) => {
+                                let mut rgba = bgra.to_vec();
+                                for px in rgba.chunks_exact_mut(4) {
+                                    px.swap(0, 2);
+                                }
+                                match image::RgbaImage::from_raw(
+                                    snapshot.width,
+                                    snapshot.height,
+                                    rgba,
+                                ) {
+                                    Some(img) => {
+                                        let dynamic = image::DynamicImage::ImageRgba8(img);
+                                        self.save_dynamic_image_to_path(&dynamic, &save_path)
+                                    }
+                                    None => {
+                                        Err("Display buffer size mismatch".to_string())
+                                    }
+                                }
+                            }
+                            None => Err("Display has no frame data".to_string()),
+                        },
+                        None => Err("No image to save".to_string()),
                     }
                 } else {
-                    // Save original image without filters (atomic: copy to temp, then rename)
+                    // Save original image without processing (atomic: copy
+                    // to temp, then rename) so the on-disk bytes are
+                    // preserved exactly — including the original format's
+                    // encoding choices.
                     if let Some(loaded_image) = &self.viewer.current_image {
                         let parent = save_path.parent().unwrap_or(&save_path);
                         tempfile::NamedTempFile::new_in(parent)

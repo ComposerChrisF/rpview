@@ -1,10 +1,16 @@
 use image::{DynamicImage, ImageBuffer};
 
-/// Apply all filters to an image in a single pass using a combined LUT
+/// Apply all filters to an image in a single pass using a combined LUT.
 /// This is more efficient than applying filters sequentially, as it:
 /// 1. Only iterates through pixels once instead of up to 3 times
 /// 2. Only allocates one output buffer instead of up to 3
 /// 3. Pre-computes all transformations into a single 256-entry lookup table
+///
+/// Currently exercised only by the test suite — the production save path
+/// extracts BGRA bytes from the cached `filtered_render` instead of
+/// re-applying filters on disk.  Kept around for symmetry with
+/// `apply_filters_to_bgra` and as a `DynamicImage`-friendly entry point.
+#[allow(dead_code)]
 pub fn apply_filters(
     img: &DynamicImage,
     brightness: f32,
