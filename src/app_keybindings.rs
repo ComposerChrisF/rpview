@@ -17,6 +17,7 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-cmd-l", ToggleLocalContrast, None),
         KeyBinding::new("cmd-p", ApplyLocalContrast, None),
         KeyBinding::new("shift-cmd-p", ApplyLocalContrastAll, None),
+        KeyBinding::new("shift-cmd-g", ToggleGpuPipeline, None),
         // Zoom controls - base (normal speed)
         KeyBinding::new("=", ZoomIn, None), // = key (same as +)
         KeyBinding::new("+", ZoomIn, None),
@@ -224,6 +225,9 @@ pub(crate) fn setup_menus(cx: &mut gpui::App) {
                 MenuItem::action("Apply Local Contrast", ApplyLocalContrast),
                 MenuItem::action("Apply Local Contrast (All Frames)", ApplyLocalContrastAll),
                 MenuItem::action("Reset Local Contrast", ResetLocalContrast),
+                MenuItem::separator(),
+                MenuItem::action("GPU Pipeline...", ToggleGpuPipeline),
+                MenuItem::action("Reset GPU Pipeline", ResetGpuPipeline),
                 MenuItem::separator(),
                 MenuItem::action("Toggle Help", ToggleHelp),
                 MenuItem::action("Toggle Debug", ToggleDebug),

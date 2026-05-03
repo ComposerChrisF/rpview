@@ -1,6 +1,6 @@
 [package]
 name = "rpview"
-version = "0.21.4"
+version = "0.22.0"
 edition = "2024"
 authors = ["rpview contributors"]
 description = "A fast, cross-platform image viewer built with GPUI"
@@ -27,6 +27,9 @@ rayon = "1"
 thiserror = "2"
 smallvec = "1"
 tempfile = "3.8"
+wgpu = { version = "25", default-features = false, features = ["wgsl", "metal", "dx12"] }
+pollster = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
 # smallvec is included here for convenience, it is used by gpui when creating
 # components that can have children. uncomment this line or
 # use `cargo add smallvec` to add it to your project

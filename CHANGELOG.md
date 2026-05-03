@@ -5,6 +5,21 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-05-02
+
+### Added
+- **GPU pixel-shader filter pipeline.**  New `src/gpu/` module hosts a standalone wgpu instance (independent of GPUI’s blade-graphics renderer) running WGSL compute shaders ported from PixelShaderPaint3.  Single unified pipeline does sRGB→OKLab decode once, runs every enabled stage in OKLab, encodes back to sRGB BGRA once.  Stages (in fixed order): Local Contrast (PSP3 algorithm — Gaussian-blur-of-OKLab-L deviation enhancement), Brightness/Contrast, Vibrance (with Saturation merged in after vibrance scaling), Hue Rotation.  Each stage’s params are `Option`-wrapped so disabling a stage skips its dispatch entirely; an “all stages off + resize=1×” call short-circuits to a CPU channel-swap and never touches the GPU
+- **GPU Pipeline floating window** (Shift+Cmd+G or View menu).  Single window with collapsible sections per stage, each with an enable checkbox + sliders.  Resize is a row of explicit buttons (¼×, ½×, 1×, 2×, 4×, Auto), where Auto picks the largest discrete factor that keeps the longer image dimension ≤ 4096 px.  LC Radius is logarithmic (4–1000 px range, fine control near low end) and resize-aware — a “60 px” radius is sent to the shader as 240 px when previewing at 4× so the perceptual reach stays constant.  Hue slider centers on 0.5 = 0° with ±180° travel.  Midpoint slider (in the LC section) is the shared pivot for both LC’s shadow/highlight blend and BC’s contrast scaling
+- **GPU pipeline integrates with the existing slot system.**  New `gpu_pipeline_enabled` flag on the viewer is parallel to `lc_enabled`: pressing `1` (DisableFilters) flips both off so the raw source shows; `2` flips them back on, instantly re-displaying the cached output.  Ctrl+3..9 stores the currently-displayed GPU output to a slot; 3..9 recalls.  The display priority is: active slot → GPU pipeline → per-frame/static LC → CPU brightness/contrast/gamma → raw file
+- **Save File now serializes the processed image.**  Whatever is on screen — slot recall, GPU pipeline, per-frame or static LC, or CPU brightness/contrast/gamma — gets saved.  The implementation pulls BGRA bytes from the displayed `RenderImage` via `gpui::RenderImage::as_bytes(0)`, swaps channels back to RGBA, and writes via the user’s chosen format.  Falls through to an atomic byte-for-byte copy of the original file only when no processing is active
+
+### Changed
+- Display priority chain in `ImageViewer::render_view` now includes the GPU pipeline output between active slot and CPU LC.  `effective_image_size` consults `gpu_pipeline_render_size` first (via the new `gpu_pipeline_enabled` flag) so zoom math and the readout reflect the actual displayed pixel grid
+- `update_gpu_pipeline` adjusts `image_state.zoom` by `old_eff_factor / new_eff_factor` whenever the effective resize factor changes (toggling stages on/off, changing the resize button, or going to identity).  Works in both fit-to-window and free-zoom modes — in fit mode the new zoom equals what `fit_to_window` would recompute for the new effective size, so the image stays visually fit across resize changes
+- `capture_current_display` (used by Ctrl+3..9 slot stores and the new Save path) mirrors the renderer’s full priority chain including per-frame LC for animations.  Promoted to `pub(crate)` so save handlers can reuse it
+- `handle_disable_filters` / `handle_enable_filters` (the `1` / `2` keys) now toggle `gpu_pipeline_enabled` alongside the existing LC and filter flags, so the GPU pipeline output participates in the A/B comparison flow
+- New `wgpu = "25"`, `pollster = "0.4"`, `bytemuck` direct dependencies.  Naga 25.0.1 is shared with GPUI’s transitive dep tree
+
 ## [0.21.4] - 2026-04-30
 
 ### Fixed

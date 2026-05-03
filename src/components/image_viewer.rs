@@ -73,8 +73,18 @@ fn rgba_to_bgra_render_image(rgba: &image::RgbaImage) -> Arc<gpui::RenderImage> 
 fn effective_image_size(
     loaded: &LoadedImage,
     lc_enabled: bool,
+    gpu_pipeline_enabled: bool,
     frame_idx: Option<usize>,
 ) -> (u32, u32) {
+    // GPU pipeline output sits above CPU LC in display priority — when it's
+    // present and enabled it's what's on screen, and `resize_factor` may
+    // have shrunk it.
+    if gpu_pipeline_enabled
+        && loaded.gpu_pipeline_render.is_some()
+        && let Some(size) = loaded.gpu_pipeline_render_size
+    {
+        return size;
+    }
     if lc_enabled {
         if let Some(idx) = frame_idx {
             if let Some(Some((_, size))) = loaded.lc_frame_renders.get(idx) {
@@ -212,6 +222,19 @@ pub struct LoadedImage {
     /// `None` at an index means that frame hasn't been LC-processed yet.
     /// Empty vec for static images.
     pub lc_frame_renders: Vec<LcResult>,
+
+    // --- GPU pipeline state ---
+    /// Output of the unified GPU pixel-shader pipeline (PSP3 algorithm,
+    /// LC + SBC + Vibrance + Hue in OKLab).  Independent of the CPU LC
+    /// path; takes priority over `lc_render` when present.  Cleared on
+    /// navigation, reset, or when every stage is disabled.  Save File pulls
+    /// BGRA bytes back out via `RenderImage::as_bytes(0)`.
+    pub gpu_pipeline_render: Option<Arc<gpui::RenderImage>>,
+    /// Pixel dimensions of `gpu_pipeline_render` — differs from `width`/
+    /// `height` when `UnifiedParams::resize_factor != 1.0`.
+    pub gpu_pipeline_render_size: Option<(u32, u32)>,
+    /// Params used to produce `gpu_pipeline_render` (for change detection).
+    pub cached_gpu_pipeline_params: Option<crate::gpu::UnifiedParams>,
     /// Pending per-frame LC renders during an atomic-swap rebuild. When
     /// `Some`, the active batch job is writing here instead of into
     /// `lc_frame_renders`; the swap happens only once every slot is filled.
@@ -304,6 +327,12 @@ pub struct ImageViewer {
     /// Session-wide toggle for the LC output (so the `1`/`2` keys can A/B
     /// the processed image against the un-processed one).
     pub(crate) lc_enabled: bool,
+    /// Session-wide toggle for the GPU-pipeline output, parallel to
+    /// `lc_enabled`.  Pressing `1` (DisableFilters) flips this off so the
+    /// raw source shows; `2` (EnableFilters) flips it back on.  The cached
+    /// `gpu_pipeline_render` is preserved across the toggle so re-enabling
+    /// is instant.
+    pub(crate) gpu_pipeline_enabled: bool,
 
     // --- Saved snapshots ---
     /// User-saved image snapshots: indices 0..6 correspond to keys 3..9.
@@ -361,6 +390,7 @@ impl ImageViewer {
             pending_lc_params: None,
             lc_batch_job: None,
             lc_enabled: false,
+            gpu_pipeline_enabled: true,
             saved_slots: Default::default(),
             active_slot: None,
             svg_reraster_path: None,
@@ -807,6 +837,9 @@ impl ImageViewer {
                     cached_lc_params: None,
                     lc_frame_renders: vec![None; lc_frame_count],
                     lc_pending_frame_renders: None,
+                    gpu_pipeline_render: None,
+                    gpu_pipeline_render_size: None,
+                    cached_gpu_pipeline_params: None,
                     animation_data,
                     frame_cache_paths,
                     image_key,
@@ -917,6 +950,9 @@ impl ImageViewer {
                             cached_lc_params: None,
                             lc_frame_renders: vec![None; lc_frame_count],
                             lc_pending_frame_renders: None,
+                            gpu_pipeline_render: None,
+                            gpu_pipeline_render_size: None,
+                            cached_gpu_pipeline_params: None,
                             animation_data: data.animation_data,
                             frame_cache_paths,
                             image_key: data.image_key,
@@ -1057,6 +1093,175 @@ impl ImageViewer {
             debug_eprintln!("[FILTER_THREAD] LUT pass complete");
             let _ = sender.send(Ok(render_image));
         });
+    }
+
+    /// Run the unified GPU pipeline (PSP3 algorithm: LC + SBC + Vibrance + Hue
+    /// in OKLab) on the current static image and store the result for display.
+    ///
+    /// **Synchronous on the calling thread.**  For typical interactive use at
+    /// `resize_factor` ≤ 0.5 on a discrete or unified GPU this completes in a
+    /// few tens of milliseconds; at full resolution on a 24 MP image it can
+    /// take ~50 ms including readback.  If that proves laggy on slider drags
+    /// we'll move it to a background task.
+    ///
+    /// **Static images only.**  For animated images we currently process the
+    /// frame's already-decoded RGBA on a per-call basis without per-frame
+    /// caching — performance acceptable for stills, not optimal for scrubbing
+    /// animations.  The CPU LC path remains the production tool for
+    /// animations.
+    ///
+    /// On `params.is_identity()` (no stages enabled or every enabled stage
+    /// at default), clears the cached GPU output and returns.
+    pub fn update_gpu_pipeline(&mut self, params: crate::gpu::UnifiedParams) {
+        // The GPU pipeline doesn't make sense for SVGs (rasterized at a
+        // fixed scale and the source isn't a flat RGBA buffer).
+        if let Some(ref loaded) = self.current_image
+            && crate::utils::file_scanner::is_svg(&loaded.path)
+        {
+            return;
+        }
+
+        let Some(loaded) = self.current_image.as_mut() else {
+            return;
+        };
+
+        // Resize always applies — even with every stage disabled, a
+        // `resize_factor != 1.0` produces a resized BGRA buffer for display.
+        // We only fully bail out (clearing any cached GPU output) when both
+        // `is_identity()` and `resize_factor == 1.0` — i.e. genuinely "no
+        // pipeline effect at all."
+        let resize_active = (params.resize_factor - 1.0).abs() > 0.001;
+        let no_effect = params.is_identity() && !resize_active;
+
+        // Adjust zoom so the same source-image content keeps the same
+        // on-screen size across resize-factor and on/off transitions.
+        //
+        // The displayed pixel width is `effective_image_size * zoom`.
+        // `effective_image_size` follows the GPU output's `resize_factor`
+        // when a GPU result is present, native otherwise.  To preserve
+        // the visible size we keep `eff * zoom` constant by scaling
+        // `zoom *= old_eff / new_eff`.
+        //
+        // Works in both fit-to-window and free-zoom modes — in fit mode the
+        // new `zoom` equals what `fit_to_window()` would recompute for the
+        // new effective size, so the image stays visually fit.
+        let old_eff_factor = if loaded.gpu_pipeline_render.is_some() {
+            loaded
+                .cached_gpu_pipeline_params
+                .as_ref()
+                .map(|p| p.resize_factor)
+                .unwrap_or(1.0)
+        } else {
+            1.0
+        };
+        let new_eff_factor = if no_effect {
+            1.0
+        } else {
+            params.resize_factor
+        };
+        if (old_eff_factor - new_eff_factor).abs() > 0.001 && new_eff_factor > 0.0 {
+            self.image_state.zoom *= old_eff_factor / new_eff_factor;
+        }
+
+        if no_effect {
+            loaded.gpu_pipeline_render = None;
+            loaded.gpu_pipeline_render_size = None;
+            loaded.cached_gpu_pipeline_params = None;
+            return;
+        }
+
+        // Cache hit?
+        if loaded.cached_gpu_pipeline_params.as_ref() == Some(&params)
+            && loaded.gpu_pipeline_render.is_some()
+        {
+            return;
+        }
+
+        // Lazily decode source RGBA (shared with CPU filter / LC paths).
+        if loaded.decoded_rgba8.is_none() {
+            match image_loader::load_image(&loaded.path) {
+                Ok(img) => {
+                    loaded.decoded_rgba8 = Some(Arc::new(img.to_rgba8()));
+                }
+                Err(_e) => {
+                    debug_eprintln!("[GPU] Source decode failed: {}", _e);
+                    return;
+                }
+            }
+        }
+
+        // For animated images, prefer the currently-displayed frame's
+        // already-decoded RGBA (held in animation_data) over the on-disk
+        // re-decode of frame 0.
+        let (rgba, w, h): (Vec<u8>, u32, u32) = if let Some(ref anim_data) = loaded.animation_data
+        {
+            let idx = self
+                .image_state
+                .animation
+                .as_ref()
+                .map(|a| a.current_frame)
+                .unwrap_or(0)
+                .min(anim_data.frames.len().saturating_sub(1));
+            let frame_rgba = anim_data.frames[idx].image.to_rgba8();
+            let dims = frame_rgba.dimensions();
+            (frame_rgba.into_raw(), dims.0, dims.1)
+        } else {
+            let Some(ref decoded) = loaded.decoded_rgba8 else {
+                return;
+            };
+            let dims = decoded.dimensions();
+            (decoded.as_raw().clone(), dims.0, dims.1)
+        };
+
+        match crate::gpu::process_pipeline(&rgba, w, h, &params) {
+            Ok((bgra_bytes, out_w, out_h)) => {
+                let bgra_image = match image::RgbaImage::from_raw(out_w, out_h, bgra_bytes) {
+                    Some(img) => img,
+                    None => {
+                        debug_eprintln!(
+                            "[GPU] BGRA buffer size mismatch (out {}x{} expected {} bytes)",
+                            out_w,
+                            out_h,
+                            (out_w * out_h * 4) as usize,
+                        );
+                        return;
+                    }
+                };
+                let frame = image::Frame::new(bgra_image);
+                let render = Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
+                    frame, 1,
+                )));
+                loaded.gpu_pipeline_render = Some(render);
+                loaded.gpu_pipeline_render_size = Some((out_w, out_h));
+                loaded.cached_gpu_pipeline_params = Some(params);
+            }
+            Err(_e) => {
+                debug_eprintln!("[GPU] pipeline error: {_e}");
+                loaded.gpu_pipeline_render = None;
+                loaded.gpu_pipeline_render_size = None;
+                loaded.cached_gpu_pipeline_params = None;
+            }
+        }
+    }
+
+    /// Drop any cached GPU pipeline output.  Called on navigation, reset,
+    /// and when every stage is disabled.
+    pub fn reset_gpu_pipeline(&mut self) {
+        if let Some(loaded) = self.current_image.as_mut() {
+            loaded.gpu_pipeline_render = None;
+            loaded.gpu_pipeline_render_size = None;
+            loaded.cached_gpu_pipeline_params = None;
+        }
+    }
+
+    /// Toggle the GPU pipeline display flag, with zoom/pan rescaled so the
+    /// visible content stays put across the size change (going from a
+    /// resized GPU buffer back to native dimensions, or vice versa).
+    pub fn set_gpu_pipeline_enabled(&mut self, enabled: bool) {
+        if self.gpu_pipeline_enabled == enabled {
+            return;
+        }
+        self.with_size_aware_change(|s| s.gpu_pipeline_enabled = enabled);
     }
 
     /// Kick off (or cancel and restart) local-contrast processing for the
@@ -1776,20 +1981,54 @@ impl ImageViewer {
             .map(|a| a.current_frame);
         self.current_image
             .as_ref()
-            .map(|img| effective_image_size(img, self.lc_enabled, frame_idx))
+            .map(|img| {
+                effective_image_size(img, self.lc_enabled, self.gpu_pipeline_enabled, frame_idx)
+            })
     }
 
-    /// Capture the currently visible image as a `SavedSlot`. Returns `None`
-    /// when there is no image to capture (e.g. empty directory).
-    fn capture_current_display(&mut self) -> Option<SavedSlot> {
+    /// Capture the currently visible image as a `SavedSlot`.  Mirrors the
+    /// display priority used by the renderer (active slot → GPU pipeline →
+    /// per-frame LC → static LC → filtered → raw) so a slot store, or
+    /// `Save File`, captures exactly what's on screen.  Returns `None` when
+    /// there is no image to capture (e.g. empty directory).
+    pub(crate) fn capture_current_display(&mut self) -> Option<SavedSlot> {
         // If a slot is being recalled, clone its data directly.
         if let Some(slot) = self.active_slot {
             let idx = (slot - 3) as usize;
             return self.saved_slots[idx].clone();
         }
+        // Animation frame index, used for per-frame LC lookup.
+        let frame_idx = self
+            .image_state
+            .animation
+            .as_ref()
+            .map(|a| a.current_frame);
         let loaded = self.current_image.as_mut()?;
-        // LC render takes priority, then filtered, then raw source.
+        // GPU pipeline render takes top priority when enabled, then LC,
+        // then filtered, then raw source.
+        if self.gpu_pipeline_enabled
+            && let Some(ref render) = loaded.gpu_pipeline_render
+        {
+            let (w, h) = loaded
+                .gpu_pipeline_render_size
+                .unwrap_or((loaded.width, loaded.height));
+            return Some(SavedSlot {
+                render: render.clone(),
+                width: w,
+                height: h,
+            });
+        }
         if self.lc_enabled {
+            // Animation: prefer the per-frame LC cache for the current frame.
+            if let Some(idx) = frame_idx
+                && let Some(Some((render, size))) = loaded.lc_frame_renders.get(idx)
+            {
+                return Some(SavedSlot {
+                    render: render.clone(),
+                    width: size.0,
+                    height: size.1,
+                });
+            }
             if let Some(ref render) = loaded.lc_render {
                 let (w, h) = loaded
                     .lc_render_size
@@ -2484,13 +2723,19 @@ impl ImageViewer {
         let zoom_level = self.image_state.zoom;
         let is_fit = self.image_state.is_fit_to_window;
 
-        // Priority: saved slot > local-contrast output > B/C/G filtered output > file path.
+        // Priority: saved slot > GPU pipeline output > local-contrast output >
+        //           B/C/G filtered output > file path.
         let slot_candidate = self.active_slot.and_then(|s| {
             self.saved_slots[(s - 3) as usize]
                 .as_ref()
                 .map(|slot| &slot.render)
         });
-        let lc_candidate = if slot_candidate.is_none() && self.lc_enabled {
+        let gpu_candidate = if slot_candidate.is_none() && self.gpu_pipeline_enabled {
+            loaded.gpu_pipeline_render.as_ref()
+        } else {
+            None
+        };
+        let lc_candidate = if slot_candidate.is_none() && gpu_candidate.is_none() && self.lc_enabled {
             // For animations, prefer per-frame LC cache over the generic lc_render.
             if let Some(ref anim) = self.image_state.animation {
                 let idx = anim.current_frame;
@@ -2509,6 +2754,9 @@ impl ImageViewer {
         let (image_source, image_id): (gpui::ImageSource, ElementId) =
             if let Some(render_image) = slot_candidate {
                 let id = ElementId::Name(format!("slot-{}", render_image.id.0).into());
+                (gpui::ImageSource::Render(render_image.clone()), id)
+            } else if let Some(render_image) = gpu_candidate {
+                let id = ElementId::Name(format!("gpu-{}", render_image.id.0).into());
                 (gpui::ImageSource::Render(render_image.clone()), id)
             } else if let Some(render_image) = lc_candidate {
                 let id = ElementId::Name(format!("lc-{}", render_image.id.0).into());
