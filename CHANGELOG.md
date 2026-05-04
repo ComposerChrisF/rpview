@@ -5,6 +5,17 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.2] - 2026-05-04
+
+### Added
+- **Animation frames now run through the GPU pipeline.**  Frame advancement (auto-playback in `app_render.rs`, manual stepping via the next/previous-frame keys in `handle_next_frame`/`handle_previous_frame`) now calls `reapply_gpu_pipeline_if_active` so each new frame is processed under the active GPU stages.  Previously `update_gpu_pipeline` only fired on image switch, so animated GIFs/WEBPs played back showing raw frames even with stages enabled
+- **Per-frame GPU cache** for animations.  New `LoadedImage.gpu_frame_renders: Vec<Option<(Arc<RenderImage>, (u32, u32))>>` mirrors the existing `lc_frame_renders` shape — sized to the frame count, empty for static images.  Looped playback’s first pass populates the cache; the second pass is O(1) `Arc` clones with no GPU work, and scrubbing back to a previously-processed frame is instant.  Cleared whenever the pipeline parameters change (so a stale render from a previous slider position never installs)
+
+### Changed
+- `update_gpu_pipeline` cache key is now frame-aware via `cached_gpu_pipeline_frame_idx: Option<usize>` — a frame change with unchanged params no longer hits the previous frame’s cached render.  Static images carry `frame_idx = None`, which trivially matches across calls so the static-image cache behaviour is unchanged
+- `reset_gpu_pipeline` and the `no_effect` (every stage identity, resize=1×) branch in `update_gpu_pipeline` now also blank `gpu_frame_renders`, so disabling the pipeline really does drop all cached per-frame output
+- `TODO.md`: marked the two Phase 18 functional-gap items “GIF/animation playback through the GPU pipeline” and “Animation per-frame GPU cache” as shipped
+
 ## [0.22.1] - 2026-05-03
 
 ### Added

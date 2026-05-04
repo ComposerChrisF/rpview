@@ -285,7 +285,13 @@ impl Render for App {
             };
             if let Some(next) = advance {
                 self.last_frame_update = Instant::now();
-                self.viewer.set_current_frame(next);
+                let frame_changed = self.viewer.set_current_frame(next);
+                // Re-run the GPU pipeline on the freshly displayed frame so
+                // playback shows processed frames (the cached render is keyed
+                // on frame index, so unchanged params still re-process).
+                if frame_changed {
+                    self.reapply_gpu_pipeline_if_active(cx);
+                }
             }
 
             // Request next animation frame (GPUI's pattern for continuous animation)

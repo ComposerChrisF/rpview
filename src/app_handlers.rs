@@ -1360,6 +1360,8 @@ impl App {
         if self.viewer.lc_enabled {
             self.reapply_local_contrast_for_current_frame(cx);
         }
+        // GPU pipeline output is per-frame; re-run on the new frame.
+        self.reapply_gpu_pipeline_if_active(cx);
         cx.notify();
     }
 
@@ -1382,6 +1384,8 @@ impl App {
         if self.viewer.lc_enabled {
             self.reapply_local_contrast_for_current_frame(cx);
         }
+        // GPU pipeline output is per-frame; re-run on the new frame.
+        self.reapply_gpu_pipeline_if_active(cx);
         cx.notify();
     }
 

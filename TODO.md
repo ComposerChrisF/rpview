@@ -2641,8 +2641,8 @@ floating GPU Pipeline window (Shift+Cmd+G).
   - GPU prefix-scan or CPU-side normalization to produce CDF
   - Apply pass that does the CDF lookup and writes back to OKLab
   - UI section in `gpu_pipeline_controls.rs` with Amount + Mode sliders
-- [ ] **GIF/animation playback through the GPU pipeline** — currently `update_gpu_pipeline` only fires on image switch (via `reapply_gpu_pipeline_if_active`).  Frame transitions within an animation don’t process through the pipeline — animated images show raw frames during playback even with GPU stages enabled.  Wire into the per-frame display path so playback runs frames through the pipeline in real-time
-- [ ] **Animation per-frame GPU cache** — mirror CPU LC’s `lc_frame_renders: Vec<Option<...>>` so scrubbing back to a previously-processed frame is instant.  Optionally also disk-persist via `frame_cache` module like CPU LC does
+- [x] **GIF/animation playback through the GPU pipeline** — frame advancement (auto-playback in `app_render.rs` and manual stepping in `handle_next_frame`/`handle_previous_frame`) now calls `reapply_gpu_pipeline_if_active`, and the cache key in `update_gpu_pipeline` includes the current frame index so unchanged params still re-process on a frame change
+- [x] **Animation per-frame GPU cache** — `LoadedImage.gpu_frame_renders: Vec<Option<(Arc<RenderImage>, (u32, u32))>>` mirrors `lc_frame_renders`.  `update_gpu_pipeline` invalidates the whole vec on parameter change; on a frame revisit it installs the cached render directly with no GPU work.  Disk persistence (analogous to CPU LC’s `frame_cache` module) is still TODO if cross-session caching becomes useful
 
 #### Performance
 - [ ] **Background-thread GPU processing** — currently synchronous on the main thread.  Acceptable at preview resize factors (≤½× typically <30 ms), can stutter at full-res 24 MP work (~50–80 ms).  Move behind an mpsc channel like the CPU LC worker pattern
