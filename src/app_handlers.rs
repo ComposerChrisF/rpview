@@ -723,83 +723,133 @@ impl App {
 
     fn handle_save_file_impl(&mut self, default_dir: Option<PathBuf>, cx: &mut Context<Self>) {
         // Only save if we have a current image
-        if let Some(current_path) = self.app_state.current_image() {
-            // Get original filename without extension
-            let original_stem = current_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("image");
+        let Some(current_path) = self.app_state.current_image().cloned() else {
+            return;
+        };
 
-            // Detect whether anything other than the raw source is being
-            // displayed.  The bytes we save will come from
-            // `viewer.capture_current_display()`, which already mirrors
-            // the renderer's priority chain (slot → GPU pipeline → LC →
-            // filtered → raw), so we only need to distinguish "raw
-            // fallback" from "processed/recalled" here.
-            let active_slot = self.viewer.active_slot.is_some();
-            let gpu_pipeline_active = self.viewer.gpu_pipeline_enabled
-                && self
-                    .viewer
-                    .current_image
-                    .as_ref()
-                    .is_some_and(|i| i.gpu_pipeline_render.is_some());
-            let lc_active = self.viewer.lc_enabled
-                && self.viewer.current_image.as_ref().is_some_and(|i| {
-                    i.lc_render.is_some()
-                        || self
-                            .viewer
-                            .image_state
-                            .animation
-                            .as_ref()
-                            .and_then(|a| i.lc_frame_renders.get(a.current_frame))
-                            .and_then(|opt| opt.as_ref())
-                            .is_some()
-                });
-            let filters_active = self.viewer.image_state.filters_enabled
-                && self
-                    .viewer
-                    .current_image
-                    .as_ref()
-                    .is_some_and(|i| i.filtered_render.is_some());
-            let any_processing =
-                active_slot || gpu_pipeline_active || lc_active || filters_active;
+        // Get original filename without extension
+        let original_stem = current_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("image");
 
-            // Determine extension from settings when any processing is active
-            let save_ext = if any_processing {
-                // Use default save format from settings
-                use crate::state::settings::SaveFormat;
-                match self.settings.file_operations.default_save_format {
-                    SaveFormat::SameAsLoaded => {
-                        // Use original extension
-                        current_path
-                            .extension()
-                            .and_then(|e| e.to_str())
-                            .unwrap_or("png")
-                    }
-                    SaveFormat::Png => "png",
-                    SaveFormat::Jpeg => "jpg",
-                    SaveFormat::Bmp => "bmp",
-                    SaveFormat::Tiff => "tiff",
-                    SaveFormat::Webp => "webp",
-                }
-            } else {
-                // Use original extension for unprocessed saves
-                current_path
+        // Detect whether anything other than the raw source is being
+        // displayed.  The bytes we save will come from
+        // `viewer.capture_current_display()`, which already mirrors
+        // the renderer's priority chain (slot → GPU pipeline → LC →
+        // filtered → raw), so we only need to distinguish "raw
+        // fallback" from "processed/recalled" here.
+        let active_slot = self.viewer.active_slot.is_some();
+        let gpu_pipeline_active = self.viewer.gpu_pipeline_enabled
+            && self
+                .viewer
+                .current_image
+                .as_ref()
+                .is_some_and(|i| i.gpu_pipeline_render.is_some());
+        let lc_active = self.viewer.lc_enabled
+            && self.viewer.current_image.as_ref().is_some_and(|i| {
+                i.lc_render.is_some()
+                    || self
+                        .viewer
+                        .image_state
+                        .animation
+                        .as_ref()
+                        .and_then(|a| i.lc_frame_renders.get(a.current_frame))
+                        .and_then(|opt| opt.as_ref())
+                        .is_some()
+            });
+        let filters_active = self.viewer.image_state.filters_enabled
+            && self
+                .viewer
+                .current_image
+                .as_ref()
+                .is_some_and(|i| i.filtered_render.is_some());
+        let any_processing = active_slot || gpu_pipeline_active || lc_active || filters_active;
+
+        // Determine extension from settings when any processing is active
+        let save_ext = if any_processing {
+            use crate::state::settings::SaveFormat;
+            match self.settings.file_operations.default_save_format {
+                SaveFormat::SameAsLoaded => current_path
                     .extension()
                     .and_then(|e| e.to_str())
-                    .unwrap_or("png")
-            };
+                    .unwrap_or("png"),
+                SaveFormat::Png => "png",
+                SaveFormat::Jpeg => "jpg",
+                SaveFormat::Bmp => "bmp",
+                SaveFormat::Tiff => "tiff",
+                SaveFormat::Webp => "webp",
+            }
+        } else {
+            current_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("png")
+        };
 
-            // Generate suggested filename with _filtered suffix if any
-            // processing is active.
-            let suggested_name = if any_processing {
-                format!("{}_filtered.{}", original_stem, save_ext)
-            } else {
-                format!("{}.{}", original_stem, save_ext)
-            };
+        // Generate suggested filename with `_filtered` suffix when processing is active.
+        let suggested_name = if any_processing {
+            format!("{}_filtered.{}", original_stem, save_ext)
+        } else {
+            format!("{}.{}", original_stem, save_ext)
+        };
 
-            // Open save dialog
-            let mut file_dialog = rfd::FileDialog::new()
+        // Resolve directory: arg → settings default → original parent.
+        let directory: Option<PathBuf> = default_dir
+            .or_else(|| self.settings.file_operations.default_save_directory.clone())
+            .or_else(|| current_path.parent().map(PathBuf::from));
+
+        // Capture all bytes needed for the eventual write *now*, while we
+        // still hold `&mut self`.  The async block below cannot reach back
+        // into the viewer to do this — the dialog is non-blocking precisely
+        // so AppKit can dispatch other actions (incl. NextImage on right
+        // arrow) which would race with a re-borrow of `self`.
+        enum SaveSource {
+            Processed {
+                rgba: Vec<u8>,
+                width: u32,
+                height: u32,
+            },
+            OriginalCopy {
+                source_path: PathBuf,
+            },
+        }
+        let source: Option<SaveSource> = if any_processing {
+            self.viewer
+                .capture_current_display()
+                .and_then(|snapshot| {
+                    snapshot.render.as_bytes(0).map(|bgra| {
+                        let mut rgba = bgra.to_vec();
+                        for px in rgba.chunks_exact_mut(4) {
+                            px.swap(0, 2);
+                        }
+                        SaveSource::Processed {
+                            rgba,
+                            width: snapshot.width,
+                            height: snapshot.height,
+                        }
+                    })
+                })
+        } else {
+            self.viewer
+                .current_image
+                .as_ref()
+                .map(|img| SaveSource::OriginalCopy {
+                    source_path: img.path.clone(),
+                })
+        };
+        let Some(source) = source else {
+            eprintln!("[Save] Nothing to save (no current image / no display data)");
+            return;
+        };
+
+        // Hand off the dialog + write to a foreground task.  Returns
+        // immediately, releasing `&mut self` — when AppKit dispatches a key
+        // event during the modal it goes straight to NSSavePanel (which
+        // consumes arrow keys for file-list navigation) instead of trying
+        // to re-enter our action handlers.
+        cx.spawn(async move |_, _cx| {
+            let mut dialog = rfd::AsyncFileDialog::new()
                 .add_filter("PNG", &["png"])
                 .add_filter("JPEG", &["jpg", "jpeg"])
                 .add_filter("BMP", &["bmp"])
@@ -807,131 +857,95 @@ impl App {
                 .add_filter("WEBP", &["webp"])
                 .set_file_name(&suggested_name)
                 .set_title("Save Image");
-
-            // Set default directory based on parameter or settings
-            if let Some(dir) = default_dir {
-                file_dialog = file_dialog.set_directory(dir);
-            } else if let Some(ref default_save_dir) =
-                self.settings.file_operations.default_save_directory
-            {
-                // Use default save directory from settings
-                file_dialog = file_dialog.set_directory(default_save_dir);
-            } else if let Some(parent) = current_path.parent() {
-                // Fall back to current image's parent directory
-                file_dialog = file_dialog.set_directory(parent);
+            if let Some(dir) = directory {
+                dialog = dialog.set_directory(dir);
             }
+            let Some(handle) = dialog.save_file().await else {
+                return;
+            };
+            let save_path = handle.path().to_path_buf();
 
-            if let Some(save_path) = file_dialog.save_file() {
-                let save_result = if any_processing {
-                    // Whatever is on screen — slot recall, GPU pipeline,
-                    // per-frame or static LC, or CPU brightness/contrast/
-                    // gamma — pull the BGRA bytes out of its `RenderImage`
-                    // and serialize them.  `capture_current_display`
-                    // mirrors the renderer's exact priority chain.
-                    match self.viewer.capture_current_display() {
-                        Some(snapshot) => match snapshot.render.as_bytes(0) {
-                            Some(bgra) => {
-                                let mut rgba = bgra.to_vec();
-                                for px in rgba.chunks_exact_mut(4) {
-                                    px.swap(0, 2);
-                                }
-                                match image::RgbaImage::from_raw(
-                                    snapshot.width,
-                                    snapshot.height,
-                                    rgba,
-                                ) {
-                                    Some(img) => {
-                                        let dynamic = image::DynamicImage::ImageRgba8(img);
-                                        self.save_dynamic_image_to_path(&dynamic, &save_path)
-                                    }
-                                    None => {
-                                        Err("Display buffer size mismatch".to_string())
-                                    }
-                                }
-                            }
-                            None => Err("Display has no frame data".to_string()),
-                        },
-                        None => Err("No image to save".to_string()),
-                    }
-                } else {
-                    // Save original image without processing (atomic: copy
-                    // to temp, then rename) so the on-disk bytes are
-                    // preserved exactly — including the original format's
-                    // encoding choices.
-                    if let Some(loaded_image) = &self.viewer.current_image {
-                        let parent = save_path.parent().unwrap_or(&save_path);
-                        tempfile::NamedTempFile::new_in(parent)
-                            .map_err(|e| format!("Failed to create temp file: {}", e))
-                            .and_then(|temp_file| {
-                                std::fs::copy(&loaded_image.path, temp_file.path())
-                                    .map_err(|e| format!("Failed to copy image: {}", e))?;
-                                temp_file
-                                    .persist(&save_path)
-                                    .map(|_| ())
-                                    .map_err(|e| format!("Failed to finalize save: {}", e))
-                            })
-                    } else {
-                        Err("No image loaded".to_string())
-                    }
-                };
-
-                // Handle save result
-                match save_result {
-                    Ok(()) => {
-                        println!("Image saved to: {}", save_path.display());
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to save image: {}", e);
-                    }
+            let result: Result<(), String> = match source {
+                SaveSource::Processed {
+                    rgba,
+                    width,
+                    height,
+                } => match image::RgbaImage::from_raw(width, height, rgba) {
+                    Some(img) => save_dynamic_image_to_path(
+                        &image::DynamicImage::ImageRgba8(img),
+                        &save_path,
+                    ),
+                    None => Err("Display buffer size mismatch".to_string()),
+                },
+                SaveSource::OriginalCopy { source_path } => {
+                    let parent = save_path.parent().unwrap_or(&save_path);
+                    tempfile::NamedTempFile::new_in(parent)
+                        .map_err(|e| format!("Failed to create temp file: {}", e))
+                        .and_then(|temp_file| {
+                            std::fs::copy(&source_path, temp_file.path())
+                                .map_err(|e| format!("Failed to copy image: {}", e))?;
+                            temp_file
+                                .persist(&save_path)
+                                .map(|_| ())
+                                .map_err(|e| format!("Failed to finalize save: {}", e))
+                        })
                 }
+            };
+
+            match result {
+                Ok(()) => println!("Image saved to: {}", save_path.display()),
+                Err(e) => eprintln!("Failed to save image: {}", e),
             }
+        })
+        .detach();
+    }
+
+}
+
+/// Write `image_data` to `save_path` atomically (temp file + rename) using
+/// the format inferred from `save_path`'s extension.  Free function — has
+/// no `&self` dependency, callable from spawned futures that don't hold an
+/// App borrow.
+fn save_dynamic_image_to_path(
+    image_data: &image::DynamicImage,
+    save_path: &Path,
+) -> Result<(), String> {
+    let parent = save_path.parent().unwrap_or(save_path);
+    let temp_file = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    let temp_path = temp_file.path().to_path_buf();
+
+    let extension = save_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png")
+        .to_lowercase();
+
+    let save_result = match extension.as_str() {
+        "png" => image_data.save_with_format(&temp_path, image::ImageFormat::Png),
+        "jpg" | "jpeg" => {
+            // JPEG has no alpha channel.
+            image_data
+                .to_rgb8()
+                .save_with_format(&temp_path, image::ImageFormat::Jpeg)
         }
+        "bmp" => image_data.save_with_format(&temp_path, image::ImageFormat::Bmp),
+        "tiff" | "tif" => image_data.save_with_format(&temp_path, image::ImageFormat::Tiff),
+        "webp" => image_data.save_with_format(&temp_path, image::ImageFormat::WebP),
+        // Default to PNG for unknown extensions.
+        _ => image_data.save_with_format(&temp_path, image::ImageFormat::Png),
+    };
 
-        cx.notify();
-    }
+    save_result.map_err(|e| format!("Failed to save image: {}", e))?;
 
-    fn save_dynamic_image_to_path(
-        &self,
-        image_data: &image::DynamicImage,
-        save_path: &Path,
-    ) -> Result<(), String> {
-        let parent = save_path.parent().unwrap_or(save_path);
-        let temp_file = tempfile::NamedTempFile::new_in(parent)
-            .map_err(|e| format!("Failed to create temp file: {}", e))?;
-        let temp_path = temp_file.path().to_path_buf();
+    // Atomic rename to final destination.
+    temp_file
+        .persist(save_path)
+        .map(|_| ())
+        .map_err(|e| format!("Failed to finalize save: {}", e))
+}
 
-        // Determine output format from file extension
-        let extension = save_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("png")
-            .to_lowercase();
-
-        let save_result = match extension.as_str() {
-            "png" => image_data.save_with_format(&temp_path, image::ImageFormat::Png),
-            "jpg" | "jpeg" => {
-                // Convert to RGB for JPEG (no alpha channel)
-                let rgb_image = image_data.to_rgb8();
-                rgb_image.save_with_format(&temp_path, image::ImageFormat::Jpeg)
-            }
-            "bmp" => image_data.save_with_format(&temp_path, image::ImageFormat::Bmp),
-            "tiff" | "tif" => image_data.save_with_format(&temp_path, image::ImageFormat::Tiff),
-            "webp" => image_data.save_with_format(&temp_path, image::ImageFormat::WebP),
-            _ => {
-                // Default to PNG for unknown extensions
-                image_data.save_with_format(&temp_path, image::ImageFormat::Png)
-            }
-        };
-
-        save_result.map_err(|e| format!("Failed to save image: {}", e))?;
-
-        // Atomic rename to final destination
-        temp_file
-            .persist(save_path)
-            .map(|_| ())
-            .map_err(|e| format!("Failed to finalize save: {}", e))
-    }
-
+impl App {
     pub(crate) fn handle_open_in_external_viewer(
         &mut self,
         _window: &mut Window,

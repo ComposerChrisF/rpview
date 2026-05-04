@@ -16,6 +16,12 @@ pub enum GpuError {
     BufferMap(String),
     #[error("device poll failed: {0}")]
     DevicePoll(String),
+    /// Requested output dimensions exceed the device's max texture
+    /// dimension.  Surfaced as `Err` from `process_pipeline` so the worker
+    /// can fall back gracefully — much better than letting wgpu's
+    /// `create_texture` panic deep inside the rayon thread.
+    #[error("output {width}×{height} exceeds GPU max texture dimension {max}")]
+    OutputTooLarge { width: u32, height: u32, max: u32 },
 }
 
 pub struct GpuContext {
@@ -53,10 +59,18 @@ fn try_init() -> Result<GpuContext, GpuError> {
         compatible_surface: None,
     }))
     .map_err(|_| GpuError::NoAdapter)?;
+    // Use the adapter's full limits rather than `Limits::default()` (which
+    // caps at the conservative WebGPU spec: 8192 textures, 256 MB buffers).
+    // Apple M-series supports 16384 textures and multi-GB buffers — that
+    // headroom is needed for legitimate large operations like 4× upscale of
+    // a multi-MP image.  Without this, `create_texture` panics on
+    // validation failure deep in the rayon worker (see crash report
+    // 2026-05-04 13:05).
+    let adapter_limits = adapter.limits();
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("rpview-gpu"),
         required_features: wgpu::Features::empty(),
-        required_limits: wgpu::Limits::default(),
+        required_limits: adapter_limits,
         memory_hints: wgpu::MemoryHints::Performance,
         trace: wgpu::Trace::Off,
     }))

@@ -209,6 +209,21 @@ struct HueUniforms {
     _pad: [f32; 3],
 }
 
+/// Uniforms for both Lanczos passes (H and V share the layout — only the
+/// shader differs).  `dst_w`/`dst_h` are the destination dimensions for
+/// bounds checking; `src_filter_dim` is the source size along the axis
+/// being filtered (`src_w` for H, `src_h` for V); `filter_scale` is
+/// `max(1, src_filter_dim / dst_filter_dim)` so the kernel widens for
+/// downscaling.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct LanczosUniforms {
+    dst_w: f32,
+    dst_h: f32,
+    src_filter_dim: f32,
+    filter_scale: f32,
+}
+
 // --- Lazy pipeline cache --------------------------------------------------
 
 fn lc_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
@@ -227,42 +242,21 @@ fn hue_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
     static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
     P.get_or_init(|| pipeline::build_stage_pipeline(ctx, "hue", include_str!("shaders/hue.wgsl")))
 }
-
-// --- CPU bilinear pre-resize ----------------------------------------------
-
-fn resize_rgba8_bilinear(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Vec<u8> {
-    let mut out = vec![0u8; (dst_w * dst_h * 4) as usize];
-    let x_ratio = src_w as f32 / dst_w as f32;
-    let y_ratio = src_h as f32 / dst_h as f32;
-    for y in 0..dst_h {
-        let sy = (y as f32 + 0.5) * y_ratio - 0.5;
-        let sy0 = sy.floor().max(0.0) as u32;
-        let sy1 = (sy0 + 1).min(src_h - 1);
-        let fy = (sy - sy0 as f32).clamp(0.0, 1.0);
-        for x in 0..dst_w {
-            let sx = (x as f32 + 0.5) * x_ratio - 0.5;
-            let sx0 = sx.floor().max(0.0) as u32;
-            let sx1 = (sx0 + 1).min(src_w - 1);
-            let fx = (sx - sx0 as f32).clamp(0.0, 1.0);
-            let mut px = [0u8; 4];
-            for c in 0..4usize {
-                let i00 = ((sy0 * src_w + sx0) as usize) * 4 + c;
-                let i01 = ((sy0 * src_w + sx1) as usize) * 4 + c;
-                let i10 = ((sy1 * src_w + sx0) as usize) * 4 + c;
-                let i11 = ((sy1 * src_w + sx1) as usize) * 4 + c;
-                let p00 = src[i00] as f32;
-                let p01 = src[i01] as f32;
-                let p10 = src[i10] as f32;
-                let p11 = src[i11] as f32;
-                let top = p00 + fx * (p01 - p00);
-                let bot = p10 + fx * (p11 - p10);
-                px[c] = (top + fy * (bot - top)).round().clamp(0.0, 255.0) as u8;
-            }
-            let i = ((y * dst_w + x) * 4) as usize;
-            out[i..i + 4].copy_from_slice(&px);
-        }
-    }
-    out
+fn lanczos_h_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_stage_pipeline(ctx, "lanczos h", include_str!("shaders/lanczos_h.wgsl"))
+    })
+}
+fn lanczos_v_oklab_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_stage_pipeline_with_oklab(
+            ctx,
+            "lanczos v oklab",
+            include_str!("shaders/lanczos_v_oklab.wgsl"),
+        )
+    })
 }
 
 fn rgba_to_bgra_passthrough(rgba: &[u8]) -> Vec<u8> {
@@ -291,28 +285,48 @@ pub fn process_pipeline(
         return Ok((rgba_to_bgra_passthrough(rgba), width, height));
     }
 
-    // Optional CPU pre-resize.
-    let owned;
-    let (rgba_resized, out_w, out_h) = if resize {
+    // Resize is now done on the GPU (separable Lanczos-3, see lanczos_h.wgsl
+    // and lanczos_v_oklab.wgsl).  When `resize` is true, the H pass writes
+    // into the cached intermediate texture at `(out_w, src_h)` and the V
+    // pass folds the linear→OKLab decode into its second sweep — so on the
+    // resize path the standalone `decode_oklab` dispatch is skipped.  When
+    // `resize` is false, source dims equal output dims and the original
+    // `encode_decode` runs straight from source into `buf_a`.
+    let (out_w, out_h) = if resize {
         let w2 = ((width as f32) * params.resize_factor).round().max(1.0) as u32;
         let h2 = ((height as f32) * params.resize_factor).round().max(1.0) as u32;
-        owned = resize_rgba8_bilinear(rgba, width, height, w2, h2);
-        (owned.as_slice(), w2, h2)
+        (w2, h2)
     } else {
-        (rgba, width, height)
+        (width, height)
     };
 
     let ctx = get_context().ok_or(GpuError::NoAdapter)?;
 
-    // The four textures + readback buffer come from a `(w, h)`-keyed LRU,
-    // so the typical workflow (one preview-resize image at a time) hits the
-    // cache after the first call and skips the alloc entirely.
+    // Defensive: refuse outputs that would exceed the device's texture-dim
+    // ceiling.  Without this, `create_texture` panics on validation failure
+    // deep inside the rayon worker (e.g. 4× upscale of a multi-MP image
+    // pushes past 16384 even on Apple-M-series headroom).  Surfaces as
+    // `Err` so the worker logs and skips the install — no crash.
+    let max_dim = ctx.device.limits().max_texture_dimension_2d;
+    let largest = width.max(height).max(out_w).max(out_h);
+    if largest > max_dim {
+        return Err(GpuError::OutputTooLarge {
+            width: out_w,
+            height: out_h,
+            max: max_dim,
+        });
+    }
+
+    // Three cached LRUs (source / intermediate / output), see `cache.rs`.
     let bgra = cache::with_textures(
         ctx,
+        width,
+        height,
         out_w,
         out_h,
-        |textures| -> Result<Vec<u8>, GpuError> {
-            pipeline::write_source_srgb(ctx, &textures.source, rgba_resized, out_w, out_h);
+        resize,
+        |source, intermediate, outputs| -> Result<Vec<u8>, GpuError> {
+            pipeline::write_source_srgb(ctx, source, rgba, width, height);
 
             let mut encoder = ctx
                 .device
@@ -320,24 +334,68 @@ pub fn process_pipeline(
                     label: Some("rpview-gpu unified encoder"),
                 });
 
-            // Decode: source → buf_a.  After this, "current" is buf_a.
-            pipeline::encode_decode(
-                ctx,
-                &mut encoder,
-                &textures.source,
-                &textures.buf_a,
-                out_w,
-                out_h,
-            );
+            // Front-end: source → buf_a (in OKLab).  Resize path runs
+            // separable Lanczos-3 with linear→OKLab folded into the V
+            // pass; non-resize path uses the original sRGB→OKLab decode.
+            if let Some(intermediate) = intermediate {
+                let h_filter_scale = (width as f32 / out_w as f32).max(1.0);
+                let h_uniforms = LanczosUniforms {
+                    dst_w: out_w as f32,
+                    dst_h: height as f32,
+                    src_filter_dim: width as f32,
+                    filter_scale: h_filter_scale,
+                };
+                let h_buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&h_uniforms));
+                pipeline::encode_stage(
+                    ctx,
+                    &mut encoder,
+                    lanczos_h_pipeline(ctx),
+                    source,
+                    intermediate,
+                    &h_buf,
+                    out_w,
+                    height,
+                    "lanczos h",
+                );
+
+                let v_filter_scale = (height as f32 / out_h as f32).max(1.0);
+                let v_uniforms = LanczosUniforms {
+                    dst_w: out_w as f32,
+                    dst_h: out_h as f32,
+                    src_filter_dim: height as f32,
+                    filter_scale: v_filter_scale,
+                };
+                let v_buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&v_uniforms));
+                pipeline::encode_stage(
+                    ctx,
+                    &mut encoder,
+                    lanczos_v_oklab_pipeline(ctx),
+                    intermediate,
+                    &outputs.buf_a,
+                    &v_buf,
+                    out_w,
+                    out_h,
+                    "lanczos v oklab",
+                );
+            } else {
+                pipeline::encode_decode(
+                    ctx,
+                    &mut encoder,
+                    source,
+                    &outputs.buf_a,
+                    out_w,
+                    out_h,
+                );
+            }
             let mut current_in_a = true;
 
             // Each ping-pong helper picks the right (src, dst) pair given which
             // buffer currently holds the live OKLab data.
             let pingpong = |current_in_a: bool| -> (&wgpu::Texture, &wgpu::Texture) {
                 if current_in_a {
-                    (&textures.buf_a, &textures.buf_b)
+                    (&outputs.buf_a, &outputs.buf_b)
                 } else {
-                    (&textures.buf_b, &textures.buf_a)
+                    (&outputs.buf_b, &outputs.buf_a)
                 }
             };
 
@@ -466,10 +524,10 @@ pub fn process_pipeline(
 
             // Encode: current OKLab buffer → BGRA output.
             let (current, _) = pingpong(current_in_a);
-            pipeline::encode_encode(ctx, &mut encoder, current, &textures.output, out_w, out_h);
+            pipeline::encode_encode(ctx, &mut encoder, current, &outputs.output, out_w, out_h);
 
             ctx.queue.submit(Some(encoder.finish()));
-            readback::read_into(ctx, &textures.output, &textures.readback, out_w, out_h)
+            readback::read_into(ctx, &outputs.output, &outputs.readback, out_w, out_h)
         },
     )?;
     Ok((bgra, out_w, out_h))

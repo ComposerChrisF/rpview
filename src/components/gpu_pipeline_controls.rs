@@ -210,6 +210,27 @@ impl GpuPipelineControls {
         best
     }
 
+    /// `true` when picking `factor` for the current image would produce
+    /// dimensions that exceed the GPU's `max_texture_dimension_2d`.  The
+    /// `process_pipeline` guard already turns this into a graceful no-op
+    /// rather than a crash, but the UI also gates the offending buttons
+    /// so the user gets clear "this won't work" feedback instead of a
+    /// silent click.  Returns `false` (button enabled) when image
+    /// dimensions or the GPU context aren't yet available — the worker's
+    /// guard remains the safety net.
+    pub fn factor_exceeds_gpu_limits(&self, factor: f32) -> bool {
+        let Some((w, h)) = self.image_dimensions else {
+            return false;
+        };
+        let Some(ctx) = crate::gpu::device::get_context() else {
+            return false;
+        };
+        let max_dim = ctx.device.limits().max_texture_dimension_2d;
+        let out_w = ((w as f32) * factor).round().max(1.0) as u32;
+        let out_h = ((h as f32) * factor).round().max(1.0) as u32;
+        out_w > max_dim || out_h > max_dim || w > max_dim || h > max_dim
+    }
+
     /// Build `UnifiedParams` from the current slider/checkbox state.
     ///
     /// Per-slider transformations:
@@ -367,26 +388,38 @@ where
 }
 
 /// Build one resize button.  Caller wires its own cx.listener so the captured
-/// factor goes through GPUI's listener machinery cleanly.
+/// factor goes through GPUI's listener machinery cleanly.  When `disabled`
+/// is true the button renders dimmed and ignores clicks — used for resize
+/// factors that would push the output past the GPU's max texture dim.
 fn resize_button(
     label: &'static str,
     active: bool,
+    disabled: bool,
     font_size_scale: f32,
     on_click: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    div()
+    let mut button = div()
         .id(SharedString::from(format!("gpu-rs-{label}")))
         .px(px(8.0))
         .py(px(3.0))
         .border_1()
-        .border_color(rgb(0x666666))
         .rounded(px(3.0))
-        .cursor_pointer()
-        .when(active, |d| d.bg(rgb(0x4080FF)))
         .text_size(scaled_text_size(11.0, font_size_scale))
-        .text_color(Colors::text())
-        .child(label)
-        .on_mouse_down(MouseButton::Left, on_click)
+        .child(label);
+    if disabled {
+        button = button
+            .border_color(rgb(0x3a3a3a))
+            .text_color(rgb(0x666666))
+            .cursor_default();
+    } else {
+        button = button
+            .border_color(rgb(0x666666))
+            .text_color(Colors::text())
+            .cursor_pointer()
+            .when(active, |d| d.bg(rgb(0x4080FF)))
+            .on_mouse_down(MouseButton::Left, on_click);
+    }
+    button
 }
 
 impl Render for GpuPipelineControls {
@@ -409,9 +442,11 @@ impl Render for GpuPipelineControls {
         let mut button_row = div().flex().items_center().gap(px(4.0));
         for &f in RESIZE_CHOICES.iter() {
             let active = !auto_on && (selected_factor - f).abs() < 0.001;
+            let disabled = self.factor_exceeds_gpu_limits(f);
             button_row = button_row.child(resize_button(
                 label_for(f),
                 active,
+                disabled,
                 fs,
                 cx.listener(move |this, _evt: &MouseDownEvent, _window, cx| {
                     this.resize_auto = false;
