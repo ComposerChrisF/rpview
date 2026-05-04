@@ -159,6 +159,29 @@ impl LcJob {
     }
 }
 
+/// In-flight unified-GPU-pipeline job.  The wgpu dispatch itself can't be
+/// cancelled mid-flight, so `cancel` is a "should I install this result?"
+/// flag — set when a newer request arrives, checked in `check_gpu_processing`
+/// so the stale render gets dropped instead of briefly flashing on screen.
+pub(crate) struct GpuJob {
+    pub handle: std::sync::mpsc::Receiver<LcResult>,
+    pub cancel: Arc<std::sync::atomic::AtomicBool>,
+    /// Params the worker was launched with — copied onto
+    /// `LoadedImage.cached_gpu_pipeline_params` when the result is installed.
+    pub params: crate::gpu::UnifiedParams,
+    /// Animation frame index the worker is processing.  `None` for static
+    /// images.  Used at install time to write the result into the correct
+    /// `gpu_frame_renders` slot.
+    pub frame_idx: Option<usize>,
+}
+
+impl GpuJob {
+    pub fn request_cancel(&self) {
+        self.cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// Loaded image data
 ///
 /// # Animation Frame Caching Strategy
@@ -346,6 +369,17 @@ pub struct ImageViewer {
     /// is instant.
     pub(crate) gpu_pipeline_enabled: bool,
 
+    // --- GPU pipeline processing ---
+    /// In-flight GPU-pipeline job (cancel flag, result channel, params).
+    /// `None` when no worker thread is running.  Mirrors `lc_job`.
+    pub(crate) gpu_job: Option<GpuJob>,
+    /// Params queued for a follow-on GPU run.  Populated when
+    /// `update_gpu_pipeline` is called while a worker is already in flight —
+    /// `check_gpu_processing` re-enters `update_gpu_pipeline` with these
+    /// once the current job finishes, so latest-queued wins on slider spam
+    /// without piling up worker threads.
+    pub(crate) pending_gpu_params: Option<crate::gpu::UnifiedParams>,
+
     // --- Saved snapshots ---
     /// User-saved image snapshots: indices 0..6 correspond to keys 3..9.
     pub(crate) saved_slots: [Option<SavedSlot>; 7],
@@ -403,6 +437,8 @@ impl ImageViewer {
             lc_batch_job: None,
             lc_enabled: false,
             gpu_pipeline_enabled: true,
+            gpu_job: None,
+            pending_gpu_params: None,
             saved_slots: Default::default(),
             active_slot: None,
             svg_reraster_path: None,
@@ -1149,42 +1185,34 @@ impl ImageViewer {
         let resize_active = (params.resize_factor - 1.0).abs() > 0.001;
         let no_effect = params.is_identity() && !resize_active;
 
-        // Adjust zoom so the same source-image content keeps the same
-        // on-screen size across resize-factor and on/off transitions.
-        //
-        // The displayed pixel width is `effective_image_size * zoom`.
-        // `effective_image_size` follows the GPU output's `resize_factor`
-        // when a GPU result is present, native otherwise.  To preserve
-        // the visible size we keep `eff * zoom` constant by scaling
-        // `zoom *= old_eff / new_eff`.
-        //
-        // Works in both fit-to-window and free-zoom modes — in fit mode the
-        // new `zoom` equals what `fit_to_window()` would recompute for the
-        // new effective size, so the image stays visually fit.
-        let old_eff_factor = if loaded.gpu_pipeline_render.is_some() {
-            loaded
-                .cached_gpu_pipeline_params
-                .as_ref()
-                .map(|p| p.resize_factor)
-                .unwrap_or(1.0)
-        } else {
-            1.0
-        };
-        let new_eff_factor = if no_effect {
-            1.0
-        } else {
-            params.resize_factor
-        };
-        if (old_eff_factor - new_eff_factor).abs() > 0.001 && new_eff_factor > 0.0 {
-            self.image_state.zoom *= old_eff_factor / new_eff_factor;
-        }
+        // Zoom rescale (so the image stays visually anchored across changes
+        // in displayed pixel dimensions) is deferred to the install path:
+        // `check_gpu_processing` wraps the install in `with_size_aware_change`,
+        // and the `no_effect` clear path below does the same.  Doing it
+        // eagerly here would double-rescale on `with_size_aware_change`.
+        // Cost: while a worker runs, the visible image keeps its old apparent
+        // size — the snap to the new resize factor happens on completion.
+        // That's the right call: an in-flight resize-factor change shouldn't
+        // visually glitch (image flashing 4× larger or smaller for ~50ms)
+        // before snapping back.
 
         if no_effect {
-            loaded.gpu_pipeline_render = None;
-            loaded.gpu_pipeline_render_size = None;
-            loaded.cached_gpu_pipeline_params = None;
-            loaded.cached_gpu_pipeline_frame_idx = None;
-            loaded.gpu_frame_renders.iter_mut().for_each(|s| *s = None);
+            // Cancel any in-flight worker — its result would be installed
+            // moments after we wiped the cache, then immediately overwritten
+            // by the next user action.  Saves a flicker.
+            if let Some(job) = self.gpu_job.take() {
+                job.request_cancel();
+            }
+            self.pending_gpu_params = None;
+            self.with_size_aware_change(|s| {
+                if let Some(loaded) = s.current_image.as_mut() {
+                    loaded.gpu_pipeline_render = None;
+                    loaded.gpu_pipeline_render_size = None;
+                    loaded.cached_gpu_pipeline_params = None;
+                    loaded.cached_gpu_pipeline_frame_idx = None;
+                    loaded.gpu_frame_renders.iter_mut().for_each(|s| *s = None);
+                }
+            });
             return;
         }
 
@@ -1215,15 +1243,32 @@ impl ImageViewer {
 
         // Per-frame cache hit on a previously-processed frame (animated
         // playback's second loop, or scrubbing back to an earlier frame).
-        // Install the cached render directly — no GPU work.
+        // Install the cached render directly — no GPU work.  Wrapped in
+        // `with_size_aware_change` because animated images can have
+        // variable per-frame dimensions (GIFs especially).
         if let Some(idx) = frame_idx
             && !params_changed
             && idx < loaded.gpu_frame_renders.len()
             && let Some((render, size)) = loaded.gpu_frame_renders[idx].clone()
         {
-            loaded.gpu_pipeline_render = Some(render);
-            loaded.gpu_pipeline_render_size = Some(size);
-            loaded.cached_gpu_pipeline_frame_idx = Some(idx);
+            self.with_size_aware_change(|s| {
+                if let Some(loaded) = s.current_image.as_mut() {
+                    loaded.gpu_pipeline_render = Some(render);
+                    loaded.gpu_pipeline_render_size = Some(size);
+                    loaded.cached_gpu_pipeline_frame_idx = Some(idx);
+                }
+            });
+            return;
+        }
+
+        // Worker already busy?  Stash these params and let `check_gpu_processing`
+        // pick them up when the current job exits.  Cancel signal tells the
+        // result handler to drop the in-flight result instead of flashing it
+        // on screen (a stale render briefly visible before the new one
+        // installs).  At most one worker is ever in flight.
+        if let Some(job) = self.gpu_job.as_ref() {
+            job.request_cancel();
+            self.pending_gpu_params = Some(params);
             return;
         }
 
@@ -1259,42 +1304,122 @@ impl ImageViewer {
             (decoded.as_raw().clone(), dims.0, dims.1)
         };
 
-        match crate::gpu::process_pipeline(&rgba, w, h, &params) {
-            Ok((bgra_bytes, out_w, out_h)) => {
-                let bgra_image = match image::RgbaImage::from_raw(out_w, out_h, bgra_bytes) {
-                    Some(img) => img,
-                    None => {
-                        debug_eprintln!(
-                            "[GPU] BGRA buffer size mismatch (out {}x{} expected {} bytes)",
-                            out_w,
-                            out_h,
-                            (out_w * out_h * 4) as usize,
-                        );
-                        return;
+        self.spawn_gpu_worker(rgba, w, h, params, frame_idx);
+    }
+
+    /// Spawn a worker thread that runs `crate::gpu::process_pipeline` and
+    /// sends the resulting `RenderImage` back via mpsc.  Precondition:
+    /// `self.gpu_job` is `None`.  The worker constructs the `RenderImage`
+    /// itself (gpui's `RenderImage` is `Send`) so the main thread only does
+    /// O(1) work on completion — pulling the Arc out and stashing it.
+    fn spawn_gpu_worker(
+        &mut self,
+        rgba: Vec<u8>,
+        w: u32,
+        h: u32,
+        params: crate::gpu::UnifiedParams,
+        frame_idx: Option<usize>,
+    ) {
+        use std::sync::atomic::AtomicBool;
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let params_for_thread = params.clone();
+        self.gpu_job = Some(GpuJob {
+            handle: rx,
+            cancel,
+            params,
+            frame_idx,
+        });
+
+        rayon::spawn(move || {
+            debug_eprintln!("[GPU_THREAD] start (frame {:?}, {}x{})", frame_idx, w, h);
+            let result: LcResult = match crate::gpu::process_pipeline(
+                &rgba,
+                w,
+                h,
+                &params_for_thread,
+            ) {
+                Ok((bgra_bytes, out_w, out_h)) => {
+                    match image::RgbaImage::from_raw(out_w, out_h, bgra_bytes) {
+                        Some(bgra_image) => {
+                            let frame = image::Frame::new(bgra_image);
+                            let render = Arc::new(gpui::RenderImage::new(
+                                smallvec::SmallVec::from_elem(frame, 1),
+                            ));
+                            Some((render, (out_w, out_h)))
+                        }
+                        None => {
+                            debug_eprintln!(
+                                "[GPU] BGRA buffer size mismatch (out {}x{} expected {} bytes)",
+                                out_w,
+                                out_h,
+                                (out_w * out_h * 4) as usize,
+                            );
+                            None
+                        }
                     }
-                };
-                let frame = image::Frame::new(bgra_image);
-                let render = Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
-                    frame, 1,
-                )));
-                loaded.gpu_pipeline_render = Some(render.clone());
-                loaded.gpu_pipeline_render_size = Some((out_w, out_h));
-                loaded.cached_gpu_pipeline_params = Some(params);
-                loaded.cached_gpu_pipeline_frame_idx = frame_idx;
-                if let Some(idx) = frame_idx
-                    && idx < loaded.gpu_frame_renders.len()
-                {
-                    loaded.gpu_frame_renders[idx] = Some((render, (out_w, out_h)));
                 }
-            }
-            Err(_e) => {
-                debug_eprintln!("[GPU] pipeline error: {_e}");
-                loaded.gpu_pipeline_render = None;
-                loaded.gpu_pipeline_render_size = None;
-                loaded.cached_gpu_pipeline_params = None;
-                loaded.cached_gpu_pipeline_frame_idx = None;
-            }
+                Err(_e) => {
+                    debug_eprintln!("[GPU] pipeline error: {_e}");
+                    None
+                }
+            };
+            debug_eprintln!("[GPU_THREAD] done, produced={}", result.is_some());
+            let _ = tx.send(result);
+        });
+    }
+
+    /// `true` while a GPU worker thread is running.
+    pub fn is_processing_gpu(&self) -> bool {
+        self.gpu_job.is_some()
+    }
+
+    /// Drain a completed GPU pipeline result, install it on the current
+    /// image, and kick off any queued follow-on request.  Returns `true`
+    /// when a result was installed (caller should `cx.notify()`).
+    pub fn check_gpu_processing(&mut self) -> bool {
+        let Some(job) = self.gpu_job.as_ref() else {
+            return false;
+        };
+        let Ok(result) = job.handle.try_recv() else {
+            return false;
+        };
+        let Some(completed_job) = self.gpu_job.take() else {
+            return false;
+        };
+
+        // If a newer request came in while this worker was running, drop
+        // the result instead of installing a now-stale render.  The
+        // pending-params re-entry below kicks off the replacement.
+        let cancelled = completed_job
+            .cancel
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        let installed = if !cancelled
+            && let Some((render, size)) = result
+        {
+            self.with_size_aware_change(|s| {
+                if let Some(loaded) = s.current_image.as_mut() {
+                    loaded.gpu_pipeline_render = Some(render.clone());
+                    loaded.gpu_pipeline_render_size = Some(size);
+                    loaded.cached_gpu_pipeline_params = Some(completed_job.params);
+                    loaded.cached_gpu_pipeline_frame_idx = completed_job.frame_idx;
+                    if let Some(idx) = completed_job.frame_idx
+                        && idx < loaded.gpu_frame_renders.len()
+                    {
+                        loaded.gpu_frame_renders[idx] = Some((render, size));
+                    }
+                }
+            });
+            true
+        } else {
+            false
+        };
+
+        if let Some(pending) = self.pending_gpu_params.take() {
+            self.update_gpu_pipeline(pending);
         }
+        installed
     }
 
     /// Drop any cached GPU pipeline output.  Called on navigation, reset,

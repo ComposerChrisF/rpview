@@ -141,6 +141,15 @@ impl Render for App {
             window.request_animation_frame();
         }
 
+        // GPU pipeline worker: install the result on completion and keep the
+        // render loop ticking while a worker is in flight, same pattern as LC.
+        if self.viewer.check_gpu_processing() {
+            cx.notify();
+        }
+        if self.viewer.is_processing_gpu() {
+            window.request_animation_frame();
+        }
+
         // Poll batch LC processing (all animation frames).
         if let Some((current, total)) = self.viewer.check_lc_batch_processing() {
             self.local_contrast_controls.update(cx, |c, cx| {
