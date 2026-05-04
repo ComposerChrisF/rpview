@@ -212,6 +212,12 @@ pub struct Appearance {
     /// Whether the Local Contrast window was open when the app last quit
     #[serde(default)]
     pub local_contrast_window_open: bool,
+    /// Last-known bounds of the floating GPU Pipeline window
+    #[serde(default)]
+    pub gpu_pipeline_window_bounds: Option<PersistedWindowBounds>,
+    /// Whether the GPU Pipeline window was open when the app last quit
+    #[serde(default)]
+    pub gpu_pipeline_window_open: bool,
 }
 
 /// Serializable window bounds (position + size, in display pixels).
@@ -273,6 +279,8 @@ impl Default for Appearance {
             filter_window_open: false,
             local_contrast_window_bounds: None,
             local_contrast_window_open: false,
+            gpu_pipeline_window_bounds: None,
+            gpu_pipeline_window_open: false,
         }
     }
 }
@@ -483,6 +491,13 @@ mod tests {
         let a = Appearance::default();
         assert!(a.filter_window_bounds.is_none());
         assert!(!a.filter_window_open);
+    }
+
+    #[test]
+    fn test_appearance_default_gpu_pipeline_window_off() {
+        let a = Appearance::default();
+        assert!(a.gpu_pipeline_window_bounds.is_none());
+        assert!(!a.gpu_pipeline_window_open);
     }
 
     #[test]
