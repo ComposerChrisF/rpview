@@ -235,6 +235,18 @@ pub struct LoadedImage {
     pub gpu_pipeline_render_size: Option<(u32, u32)>,
     /// Params used to produce `gpu_pipeline_render` (for change detection).
     pub cached_gpu_pipeline_params: Option<crate::gpu::UnifiedParams>,
+    /// Animation frame index `gpu_pipeline_render` was produced from.
+    /// `None` for static images.  Combined with `cached_gpu_pipeline_params`
+    /// to form the cache key — a frame change with unchanged params still
+    /// counts as a cache miss so playback re-processes each new frame.
+    pub cached_gpu_pipeline_frame_idx: Option<usize>,
+    /// Per-frame GPU pipeline renders for animated images, indexed by frame
+    /// number.  `None` at an index means that frame hasn't been processed
+    /// (or the cache was just invalidated by a parameter change).  Empty
+    /// vec for static images.  Mirrors `lc_frame_renders` — revisiting an
+    /// already-processed frame during looped playback is a cache hit and
+    /// avoids the ~30–80 ms pipeline run.
+    pub gpu_frame_renders: Vec<LcResult>,
     /// Pending per-frame LC renders during an atomic-swap rebuild. When
     /// `Some`, the active batch job is writing here instead of into
     /// `lc_frame_renders`; the swap happens only once every slot is filled.
@@ -840,6 +852,8 @@ impl ImageViewer {
                     gpu_pipeline_render: None,
                     gpu_pipeline_render_size: None,
                     cached_gpu_pipeline_params: None,
+                    cached_gpu_pipeline_frame_idx: None,
+                    gpu_frame_renders: vec![None; lc_frame_count],
                     animation_data,
                     frame_cache_paths,
                     image_key,
@@ -953,6 +967,8 @@ impl ImageViewer {
                             gpu_pipeline_render: None,
                             gpu_pipeline_render_size: None,
                             cached_gpu_pipeline_params: None,
+                            cached_gpu_pipeline_frame_idx: None,
+                            gpu_frame_renders: vec![None; lc_frame_count],
                             animation_data: data.animation_data,
                             frame_cache_paths,
                             image_key: data.image_key,
@@ -1167,13 +1183,47 @@ impl ImageViewer {
             loaded.gpu_pipeline_render = None;
             loaded.gpu_pipeline_render_size = None;
             loaded.cached_gpu_pipeline_params = None;
+            loaded.cached_gpu_pipeline_frame_idx = None;
+            loaded.gpu_frame_renders.iter_mut().for_each(|s| *s = None);
             return;
         }
 
-        // Cache hit?
-        if loaded.cached_gpu_pipeline_params.as_ref() == Some(&params)
+        // Frame-aware cache key: for animated images, processing depends on
+        // both the params AND the currently displayed frame.  Static images
+        // have `frame_idx == None`, which trivially matches across calls.
+        let frame_idx = self
+            .image_state
+            .animation
+            .as_ref()
+            .map(|a| a.current_frame);
+
+        // Parameter change invalidates every cached per-frame render — a
+        // revisit must re-process under the new params, not install a stale
+        // result from the previous param set.
+        let params_changed = loaded.cached_gpu_pipeline_params.as_ref() != Some(&params);
+        if params_changed {
+            loaded.gpu_frame_renders.iter_mut().for_each(|s| *s = None);
+        }
+
+        // Currently-displayed render already matches?
+        if !params_changed
+            && loaded.cached_gpu_pipeline_frame_idx == frame_idx
             && loaded.gpu_pipeline_render.is_some()
         {
+            return;
+        }
+
+        // Per-frame cache hit on a previously-processed frame (animated
+        // playback's second loop, or scrubbing back to an earlier frame).
+        // Install the cached render directly — no GPU work.
+        if let Some(idx) = frame_idx
+            && !params_changed
+            && idx < loaded.gpu_frame_renders.len()
+            && let Some((render, size)) = loaded.gpu_frame_renders[idx].clone()
+        {
+            loaded.gpu_pipeline_render = Some(render);
+            loaded.gpu_pipeline_render_size = Some(size);
+            loaded.cached_gpu_pipeline_frame_idx = Some(idx);
             return;
         }
 
@@ -1195,11 +1245,7 @@ impl ImageViewer {
         // re-decode of frame 0.
         let (rgba, w, h): (Vec<u8>, u32, u32) = if let Some(ref anim_data) = loaded.animation_data
         {
-            let idx = self
-                .image_state
-                .animation
-                .as_ref()
-                .map(|a| a.current_frame)
+            let idx = frame_idx
                 .unwrap_or(0)
                 .min(anim_data.frames.len().saturating_sub(1));
             let frame_rgba = anim_data.frames[idx].image.to_rgba8();
@@ -1231,15 +1277,22 @@ impl ImageViewer {
                 let render = Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
                     frame, 1,
                 )));
-                loaded.gpu_pipeline_render = Some(render);
+                loaded.gpu_pipeline_render = Some(render.clone());
                 loaded.gpu_pipeline_render_size = Some((out_w, out_h));
                 loaded.cached_gpu_pipeline_params = Some(params);
+                loaded.cached_gpu_pipeline_frame_idx = frame_idx;
+                if let Some(idx) = frame_idx
+                    && idx < loaded.gpu_frame_renders.len()
+                {
+                    loaded.gpu_frame_renders[idx] = Some((render, (out_w, out_h)));
+                }
             }
             Err(_e) => {
                 debug_eprintln!("[GPU] pipeline error: {_e}");
                 loaded.gpu_pipeline_render = None;
                 loaded.gpu_pipeline_render_size = None;
                 loaded.cached_gpu_pipeline_params = None;
+                loaded.cached_gpu_pipeline_frame_idx = None;
             }
         }
     }
@@ -1251,6 +1304,8 @@ impl ImageViewer {
             loaded.gpu_pipeline_render = None;
             loaded.gpu_pipeline_render_size = None;
             loaded.cached_gpu_pipeline_params = None;
+            loaded.cached_gpu_pipeline_frame_idx = None;
+            loaded.gpu_frame_renders.iter_mut().for_each(|s| *s = None);
         }
     }
 
