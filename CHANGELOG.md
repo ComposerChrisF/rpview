@@ -5,6 +5,14 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.1] - 2026-05-03
+
+### Added
+- GPU pipeline auto-applies on image switch when `gpu_pipeline_enabled` (the “show processed” side of the 1/2 toggle) and the params have a real effect (some stage enabled or `resize_factor != 1.0`).  Pressing `1` to view the source remains a sticky “compare against source as I navigate” mode — the auto-apply is skipped silently in that state.  New `reapply_gpu_pipeline_if_active` in `app_handlers.rs`, called immediately after `reapply_local_contrast_if_active` in the post-load completion block
+
+### Changed
+- `TODO.md`: added Phase 18 (GPU Pixel-Shader Pipeline) section with a 17-item shipped checklist (v0.22.0 surface) and a deferred-work backlog organized into Functional gaps (GPU Equalize, animation playback through the pipeline, per-frame GPU cache), Performance (background-thread processing, texture allocation cache, GPU Lanczos resize), and Polish (persisted window bounds, CPU LC save audit, presets) buckets
+
 ## [0.22.0] - 2026-05-02
 
 ### Added

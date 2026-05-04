@@ -21,6 +21,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 - **Phase 14** (Testing & Quality): ✅ Complete
 - **Phase 15**: ⏳ Planned
 - **Phase 17** (Persistent Frame Cache): ✅ Complete
+- **Phase 18** (GPU Pixel-Shader Pipeline): 🚧 In Progress — core pipeline + UI shipped in v0.22.0; deferred polish/perf items below
 
 ## Phase 1: Project Foundation & Basic Structure ✅
 
@@ -2605,3 +2606,50 @@ fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
 **Next Steps:**
 - Phase 16.6: Advanced features (optional - settings profiles, import/export, keyboard customization)
 - Phase 15: Documentation & Release (final polish, packages, crates.io publish)
+
+## Phase 18: GPU Pixel-Shader Pipeline 🚧
+
+A standalone wgpu-based pipeline running WGSL compute shaders ported from
+PixelShaderPaint3, providing OKLab-space adjustments (LC, BC, Vibrance,
+Hue Rotation, planned Equalize).  Lives in `src/gpu/`, exposed via the
+floating GPU Pipeline window (Shift+Cmd+G).
+
+### Shipped (v0.22.0)
+- [x] Standalone wgpu device/instance/queue independent of GPUI’s renderer
+- [x] Unified OKLab pipeline: single sRGB→OKLab decode + single OKLab→sRGB encode bracketing all stages
+- [x] Local Contrast (PSP3 algorithm: Gaussian-blur-of-OKLab-L deviation enhancement, separable two-pass)
+- [x] Brightness/Contrast (OKLab math, Midpoint-pivoted)
+- [x] Vibrance with merged Saturation
+- [x] Hue Rotation (OKLCh)
+- [x] Per-pipeline `resize_factor` with explicit ¼×/½×/1×/2×/4×/Auto buttons
+- [x] Logarithmic Radius slider (4–1000 px), resize-aware
+- [x] Hue centered on 0.5 = 0° with ±180° travel
+- [x] Shared Midpoint pivot between LC and Global Contrast
+- [x] Resize always applies (works even with all stages off)
+- [x] Visual stability across resize changes (zoom auto-rescales `old_eff/new_eff`)
+- [x] Collapsible per-stage UI sections with enable checkboxes
+- [x] Scrollable controls panel (`scrollable_vertical` + `ScrollHandle`)
+- [x] Integration with 1/2 disable/enable toggle and 3-9 slot recall
+- [x] Save File serializes whatever is on screen (slot, GPU, LC, filters)
+- [x] Auto-apply on image switch when `gpu_pipeline_enabled`
+
+### Deferred (post-v0.22.0)
+
+#### Functional gaps
+- [ ] **GPU Equalize** — `gpu::equalize::process_equalize` is stubbed; needs:
+  - Histogram-build compute shader with atomic increments into a 256-bin storage buffer
+  - GPU prefix-scan or CPU-side normalization to produce CDF
+  - Apply pass that does the CDF lookup and writes back to OKLab
+  - UI section in `gpu_pipeline_controls.rs` with Amount + Mode sliders
+- [ ] **GIF/animation playback through the GPU pipeline** — currently `update_gpu_pipeline` only fires on image switch (via `reapply_gpu_pipeline_if_active`).  Frame transitions within an animation don’t process through the pipeline — animated images show raw frames during playback even with GPU stages enabled.  Wire into the per-frame display path so playback runs frames through the pipeline in real-time
+- [ ] **Animation per-frame GPU cache** — mirror CPU LC’s `lc_frame_renders: Vec<Option<...>>` so scrubbing back to a previously-processed frame is instant.  Optionally also disk-persist via `frame_cache` module like CPU LC does
+
+#### Performance
+- [ ] **Background-thread GPU processing** — currently synchronous on the main thread.  Acceptable at preview resize factors (≤½× typically <30 ms), can stutter at full-res 24 MP work (~50–80 ms).  Move behind an mpsc channel like the CPU LC worker pattern
+- [ ] **Texture allocation cache** — keyed on `(width, height)`, reuse the OKLab ping-pong + source + output textures across pipeline runs.  Eliminates ~16 MB × 2 alloc per call.  Biggest single perf win when realtime GIF processing lands
+- [ ] **GPU Lanczos resize** — replace the CPU bilinear pre-resize with a small WGSL compute shader.  Visible quality difference at large downscales (e.g. ¼× of a 24 MP photo); also avoids the CPU→GPU upload of the smaller buffer
+
+#### Polish
+- [ ] **Persisted GPU Pipeline window bounds + open state** — match the CPU LC window’s `local_contrast_window_bounds` / `local_contrast_window_open` settings persistence so position+size+open-state survive across sessions
+- [ ] **CPU LC fallback save support** — `capture_current_display` already works for LC, so save should work too via the unified path; if any gaps remain (e.g., per-frame LC cases that don’t surface through `as_bytes(0)`), close them
+- [ ] **Presets** — analogous to `lc_presets` module for the GPU pipeline.  Save/load named parameter sets via the controls panel
