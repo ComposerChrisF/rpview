@@ -5,6 +5,20 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.5] - 2026-05-04
+
+### Added
+- **GPU Lanczos resize** replaces the CPU bilinear pre-resize.  New `shaders/lanczos_h.wgsl` (horizontal pass: `Rgba8UnormSrgb` source via hardware sRGB→linear on `textureLoad` → `Rgba16Float` linear intermediate at `(out_w, src_h)`) and `shaders/lanczos_v_oklab.wgsl` (vertical pass folds `linear_srgb_to_oklab` into the second sweep, writing `Rgba16Float` OKLab `buf_a` directly — so the resize path skips the standalone decode dispatch entirely).  Filter scale widens the kernel for downscaling (`max(1, src/dst)` per axis), so a ¼× downscale samples 24 source pixels per output pixel per axis instead of 6.  Visible quality improvement at large downscales; also avoids the CPU→GPU re-upload of the smaller buffer
+- `Cmd+Shift+S` (and `Ctrl+Shift+S` on Win/Linux) is now an unadvertised alias for `Save File` — most apps use Cmd+Shift+S for “Save As…”, and rpview’s `Save` already opens a file-name prompt every time, so the muscle-memory shortcut now does what users expect
+
+### Changed
+- **Save dialog now runs asynchronously**, fixing a crash when keystrokes (e.g. arrow keys) reach the menu key-equivalent system while the modal `NSSavePanel` is up.  Root cause: `rfd::FileDialog::save_file()` blocks the main thread synchronously while `&mut App` is held; AppKit then dispatches the keystroke through GPUI’s action system, which tries to re-borrow `&mut App` for `handle_next_image` → BorrowMutError → abort.  Fix: synchronously snapshot all dialog inputs + the bytes-to-save into a `SaveSource` enum, hand off to `cx.spawn(...).detach()` which awaits `rfd::AsyncFileDialog::save_file()` and writes the file after the current handler has returned and the borrow is released.  AppKit can then dispatch arrow keys directly to NSSavePanel for file-list navigation, as users expect.  `save_dynamic_image_to_path` promoted from `&self` method to free function (it never used `self`)
+- `gpu/cache.rs` split into three independent LRUs (each capacity 4): `sources` keyed on `(src_w, src_h)`, `intermediates` keyed on `(out_w, src_h)`, `outputs` keyed on `(out_w, out_h)`.  Resize-factor scrubbing on a single image (e.g. 1×/½×/¼× toggle) no longer duplicates the source texture across cache entries
+- `gpu/device.rs` now requests `adapter.limits()` instead of `Limits::default()` — gives the device the hardware’s full headroom (16384 textures and multi-GB buffers on Apple-M-series, vs. the conservative WebGPU spec defaults of 8192 textures and 256 MB buffers).  Without this, 4× upscale of a multi-MP image was crashing on `create_texture` validation failure deep in the rayon worker
+- New `GpuError::OutputTooLarge { width, height, max }` variant; `process_pipeline` early-returns it when source or output dimensions exceed `device.limits().max_texture_dimension_2d`.  The worker thread already handles `Err` gracefully (logs and skips installation), so what was a hard crash is now a no-op
+- `gpu_pipeline_controls.rs`: `factor_exceeds_gpu_limits(factor)` checks each resize-button choice against the device’s max texture dim given the current image dimensions; the resize-button helper grew a `disabled: bool` parameter that renders dimmed text and skips the click handler.  2× / 4× buttons now visibly grey out for images where they’d exceed the limit, instead of being clickable but silently no-op
+- `TODO.md`: marked Phase 18 “GPU Lanczos resize” as shipped, completing the perf trifecta (worker thread + texture cache + Lanczos)
+
 ## [0.22.4] - 2026-05-04
 
 ### Changed

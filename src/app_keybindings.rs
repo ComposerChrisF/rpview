@@ -99,6 +99,12 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         // File operations
         KeyBinding::new("cmd-o", OpenFile, None),
         KeyBinding::new("cmd-s", SaveFile, None),
+        // Most apps use Cmd+Shift+S for "Save As..."; rpview's `Save File`
+        // already opens a Save As dialog every time, so we accept the same
+        // shortcut as a friendly alias for users who reach for it on muscle
+        // memory.  Not advertised in the menu (Cmd+S is the published
+        // shortcut), just available.
+        KeyBinding::new("shift-cmd-s", SaveFile, None),
         KeyBinding::new("cmd-alt-s", SaveFileToDownloads, None),
         KeyBinding::new("cmd-r", RevealInFinder, None),
         // External viewer
@@ -154,6 +160,8 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("ctrl-o", OpenFile, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-s", SaveFile, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-s", SaveFile, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-alt-s", SaveFileToDownloads, None),
         #[cfg(not(target_os = "macos"))]

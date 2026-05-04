@@ -234,6 +234,17 @@ pub fn build_stage_pipeline(ctx: &GpuContext, label: &str, body: &str) -> wgpu::
     build_pipeline(ctx, label, body, false, stage_layout(ctx))
 }
 
+/// Like [`build_stage_pipeline`] but prepends `oklab.wgsl` so the shader can
+/// call `linear_srgb_to_oklab` and friends.  Used by the V-pass Lanczos
+/// shader, which folds the linear→OKLab conversion into the resampling.
+pub fn build_stage_pipeline_with_oklab(
+    ctx: &GpuContext,
+    label: &str,
+    body: &str,
+) -> wgpu::ComputePipeline {
+    build_pipeline(ctx, label, body, true, stage_layout(ctx))
+}
+
 pub fn decode_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
     static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
     P.get_or_init(|| {
