@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.6] - 2026-05-04
+
+### Fixed
+- Closing the main window now quits the app even when floating panels (GPU Pipeline, Local Contrast, Filter) are still open.  `cx.on_window_closed` previously checked `cx.windows().is_empty()` and never fired `cx.quit()` while a secondary window held the windows list non-empty.  Registration moved to after the main window opens so the closure can capture its `WindowHandle` and probe liveness via `update(...).is_err()` — when the main entity has been dropped the app quits, which tears down the remaining secondary windows automatically
+
 ## [0.22.5] - 2026-05-04
 
 ### Added

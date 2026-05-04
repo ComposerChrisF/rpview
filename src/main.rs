@@ -262,13 +262,6 @@ fn main() {
     application.run(move |cx: &mut gpui::App| {
         ccf_gpui_widgets::register_all_keybindings(cx);
 
-        cx.on_window_closed(|cx| {
-            if cx.windows().is_empty() {
-                cx.quit();
-            }
-        })
-        .detach();
-
         app_keybindings::setup_key_bindings(cx);
         app_keybindings::setup_menus(cx);
 
@@ -595,6 +588,18 @@ fn main() {
                 return;
             }
         };
+
+        // Closing the main window quits the app, even if floating panels
+        // (Filter / Local Contrast / GPU Pipeline) are still open.  Probe
+        // the main window's liveness via `update` — when it returns `Err`
+        // the entity has been dropped, and any remaining secondary windows
+        // are about to be torn down by `cx.quit()` anyway.
+        cx.on_window_closed(move |cx| {
+            if main_window.update(cx, |_, _, _| ()).is_err() {
+                cx.quit();
+            }
+        })
+        .detach();
 
         // Reopen the floating filter window if it was open when the app last quit.
         if reopen_filter_window {
