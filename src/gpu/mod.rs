@@ -19,6 +19,7 @@
 //! `Err(GpuError::NoAdapter)`.  Callers should grey out the corresponding
 //! UI / fall back to CPU paths where they exist.
 
+mod cache;
 pub mod device;
 mod pipeline;
 mod readback;

@@ -17,13 +17,12 @@ pub fn dispatch_count(width: u32, height: u32) -> (u32, u32, u32) {
 
 // --- Texture allocation ---------------------------------------------------
 
-pub fn upload_source_srgb(
-    ctx: &GpuContext,
-    rgba: &[u8],
-    width: u32,
-    height: u32,
-) -> wgpu::Texture {
-    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+/// Allocate the sRGB source texture (`Rgba8UnormSrgb`, `TEXTURE_BINDING |
+/// COPY_DST`).  Content uninitialised — call [`write_source_srgb`] before
+/// the decode pass dispatch.  Split from upload so the texture cache can
+/// hold the allocation across pipeline runs and only the bytes change.
+pub fn make_source_srgb(ctx: &GpuContext, width: u32, height: u32) -> wgpu::Texture {
+    ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("rpview-gpu source srgb"),
         size: wgpu::Extent3d {
             width,
@@ -36,10 +35,21 @@ pub fn upload_source_srgb(
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
-    });
+    })
+}
+
+/// Upload `rgba` (RGBA8, exactly `width * height * 4` bytes) into a
+/// previously-allocated source texture.
+pub fn write_source_srgb(
+    ctx: &GpuContext,
+    texture: &wgpu::Texture,
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+) {
     ctx.queue.write_texture(
         wgpu::TexelCopyTextureInfo {
-            texture: &texture,
+            texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
@@ -56,7 +66,6 @@ pub fn upload_source_srgb(
             depth_or_array_layers: 1,
         },
     );
-    texture
 }
 
 /// OKLab working buffer: rgba16float storing (L, a, b, alpha) per pixel.

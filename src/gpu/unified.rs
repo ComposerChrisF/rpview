@@ -17,6 +17,7 @@ use std::sync::OnceLock;
 
 use bytemuck::{Pod, Zeroable};
 
+use crate::gpu::cache;
 use crate::gpu::device::{GpuContext, GpuError, get_context};
 use crate::gpu::{pipeline, readback};
 
@@ -303,141 +304,173 @@ pub fn process_pipeline(
 
     let ctx = get_context().ok_or(GpuError::NoAdapter)?;
 
-    // Allocate buffers.  Two ping-pong OKLab buffers cover any plausible
-    // sequence of stages, including LC's two internal passes.
-    let source = pipeline::upload_source_srgb(ctx, rgba_resized, out_w, out_h);
-    let buf_a = pipeline::make_oklab_buffer(ctx, out_w, out_h);
-    let buf_b = pipeline::make_oklab_buffer(ctx, out_w, out_h);
-    let output = pipeline::make_bgra_output(ctx, out_w, out_h);
+    // The four textures + readback buffer come from a `(w, h)`-keyed LRU,
+    // so the typical workflow (one preview-resize image at a time) hits the
+    // cache after the first call and skips the alloc entirely.
+    let bgra = cache::with_textures(
+        ctx,
+        out_w,
+        out_h,
+        |textures| -> Result<Vec<u8>, GpuError> {
+            pipeline::write_source_srgb(ctx, &textures.source, rgba_resized, out_w, out_h);
 
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("rpview-gpu unified encoder"),
-        });
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("rpview-gpu unified encoder"),
+                });
 
-    // Decode: source → buf_a.  After this, "current" is buf_a.
-    pipeline::encode_decode(ctx, &mut encoder, &source, &buf_a, out_w, out_h);
-    let mut current_in_a = true;
+            // Decode: source → buf_a.  After this, "current" is buf_a.
+            pipeline::encode_decode(
+                ctx,
+                &mut encoder,
+                &textures.source,
+                &textures.buf_a,
+                out_w,
+                out_h,
+            );
+            let mut current_in_a = true;
 
-    // Each ping-pong helper picks the right (src, dst) pair given which
-    // buffer currently holds the live OKLab data.
-    let pingpong = |current_in_a: bool| -> (&wgpu::Texture, &wgpu::Texture) {
-        if current_in_a {
-            (&buf_a, &buf_b)
-        } else {
-            (&buf_b, &buf_a)
-        }
-    };
+            // Each ping-pong helper picks the right (src, dst) pair given which
+            // buffer currently holds the live OKLab data.
+            let pingpong = |current_in_a: bool| -> (&wgpu::Texture, &wgpu::Texture) {
+                if current_in_a {
+                    (&textures.buf_a, &textures.buf_b)
+                } else {
+                    (&textures.buf_b, &textures.buf_a)
+                }
+            };
 
-    // Stage: LC (two ping-pong dispatches).
-    if let Some(lc) = params.lc
-        && !lc.is_identity()
-    {
-        let make_u = |axis: f32| LcUniforms {
-            radius: lc.radius,
-            strength: lc.strength,
-            shadow_lift: lc.shadow_lift,
-            highlight_darken: lc.highlight_darken,
-            midpoint: lc.midpoint,
-            axis,
-            image_width: out_w as f32,
-            image_height: out_h as f32,
-        };
-        let u0 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(0.0)));
-        let u1 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(1.0)));
-        let pl = lc_pipeline(ctx);
+            // Stage: LC (two ping-pong dispatches).
+            if let Some(lc) = params.lc
+                && !lc.is_identity()
+            {
+                let make_u = |axis: f32| LcUniforms {
+                    radius: lc.radius,
+                    strength: lc.strength,
+                    shadow_lift: lc.shadow_lift,
+                    highlight_darken: lc.highlight_darken,
+                    midpoint: lc.midpoint,
+                    axis,
+                    image_width: out_w as f32,
+                    image_height: out_h as f32,
+                };
+                let u0 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(0.0)));
+                let u1 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(1.0)));
+                let pl = lc_pipeline(ctx);
 
-        let (src, dst) = pingpong(current_in_a);
-        pipeline::encode_stage(ctx, &mut encoder, pl, src, dst, &u0, out_w, out_h, "lc pass1");
-        current_in_a = !current_in_a;
+                let (src, dst) = pingpong(current_in_a);
+                pipeline::encode_stage(
+                    ctx,
+                    &mut encoder,
+                    pl,
+                    src,
+                    dst,
+                    &u0,
+                    out_w,
+                    out_h,
+                    "lc pass1",
+                );
+                current_in_a = !current_in_a;
 
-        let (src, dst) = pingpong(current_in_a);
-        pipeline::encode_stage(ctx, &mut encoder, pl, src, dst, &u1, out_w, out_h, "lc pass2");
-        current_in_a = !current_in_a;
-    }
+                let (src, dst) = pingpong(current_in_a);
+                pipeline::encode_stage(
+                    ctx,
+                    &mut encoder,
+                    pl,
+                    src,
+                    dst,
+                    &u1,
+                    out_w,
+                    out_h,
+                    "lc pass2",
+                );
+                current_in_a = !current_in_a;
+            }
 
-    // Stage: BC (Brightness/Contrast).
-    if let Some(bc) = params.bc
-        && !bc.is_identity()
-    {
-        let u = BcUniforms {
-            brightness: bc.brightness,
-            contrast: bc.contrast,
-            midpoint: bc.midpoint,
-            _pad: 0.0,
-        };
-        let buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
-        let (src, dst) = pingpong(current_in_a);
-        pipeline::encode_stage(
-            ctx,
-            &mut encoder,
-            bc_pipeline(ctx),
-            src,
-            dst,
-            &buf,
-            out_w,
-            out_h,
-            "bc",
-        );
-        current_in_a = !current_in_a;
-    }
+            // Stage: BC (Brightness/Contrast).
+            if let Some(bc) = params.bc
+                && !bc.is_identity()
+            {
+                let u = BcUniforms {
+                    brightness: bc.brightness,
+                    contrast: bc.contrast,
+                    midpoint: bc.midpoint,
+                    _pad: 0.0,
+                };
+                let buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
+                let (src, dst) = pingpong(current_in_a);
+                pipeline::encode_stage(
+                    ctx,
+                    &mut encoder,
+                    bc_pipeline(ctx),
+                    src,
+                    dst,
+                    &buf,
+                    out_w,
+                    out_h,
+                    "bc",
+                );
+                current_in_a = !current_in_a;
+            }
 
-    // Stage: Vibrance (with merged Saturation).
-    if let Some(v) = params.vibrance
-        && !v.is_identity()
-    {
-        let u = VibranceUniforms {
-            amount: v.amount,
-            saturation: v.saturation,
-            _pad0: 0.0,
-            _pad1: 0.0,
-        };
-        let buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
-        let (src, dst) = pingpong(current_in_a);
-        pipeline::encode_stage(
-            ctx,
-            &mut encoder,
-            vibrance_pipeline(ctx),
-            src,
-            dst,
-            &buf,
-            out_w,
-            out_h,
-            "vibrance",
-        );
-        current_in_a = !current_in_a;
-    }
+            // Stage: Vibrance (with merged Saturation).
+            if let Some(v) = params.vibrance
+                && !v.is_identity()
+            {
+                let u = VibranceUniforms {
+                    amount: v.amount,
+                    saturation: v.saturation,
+                    _pad0: 0.0,
+                    _pad1: 0.0,
+                };
+                let buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
+                let (src, dst) = pingpong(current_in_a);
+                pipeline::encode_stage(
+                    ctx,
+                    &mut encoder,
+                    vibrance_pipeline(ctx),
+                    src,
+                    dst,
+                    &buf,
+                    out_w,
+                    out_h,
+                    "vibrance",
+                );
+                current_in_a = !current_in_a;
+            }
 
-    // Stage: Hue.
-    if let Some(h) = params.hue
-        && !h.is_identity()
-    {
-        let u = HueUniforms {
-            hue: h.hue,
-            _pad: [0.0; 3],
-        };
-        let buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
-        let (src, dst) = pingpong(current_in_a);
-        pipeline::encode_stage(
-            ctx,
-            &mut encoder,
-            hue_pipeline(ctx),
-            src,
-            dst,
-            &buf,
-            out_w,
-            out_h,
-            "hue",
-        );
-        current_in_a = !current_in_a;
-    }
+            // Stage: Hue.
+            if let Some(h) = params.hue
+                && !h.is_identity()
+            {
+                let u = HueUniforms {
+                    hue: h.hue,
+                    _pad: [0.0; 3],
+                };
+                let buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
+                let (src, dst) = pingpong(current_in_a);
+                pipeline::encode_stage(
+                    ctx,
+                    &mut encoder,
+                    hue_pipeline(ctx),
+                    src,
+                    dst,
+                    &buf,
+                    out_w,
+                    out_h,
+                    "hue",
+                );
+                current_in_a = !current_in_a;
+            }
 
-    // Encode: current OKLab buffer → BGRA output.
-    let (current, _) = pingpong(current_in_a);
-    pipeline::encode_encode(ctx, &mut encoder, current, &output, out_w, out_h);
+            // Encode: current OKLab buffer → BGRA output.
+            let (current, _) = pingpong(current_in_a);
+            pipeline::encode_encode(ctx, &mut encoder, current, &textures.output, out_w, out_h);
 
-    ctx.queue.submit(Some(encoder.finish()));
-    let bgra = readback::read_texture_8bpp(ctx, &output, out_w, out_h)?;
+            ctx.queue.submit(Some(encoder.finish()));
+            readback::read_into(ctx, &textures.output, &textures.readback, out_w, out_h)
+        },
+    )?;
     Ok((bgra, out_w, out_h))
 }
