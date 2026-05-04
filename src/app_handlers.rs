@@ -496,7 +496,14 @@ impl App {
         if self.gpu_pipeline_window.is_some() {
             return;
         }
-        let bounds = gpui::Bounds::centered(None, gpui::size(gpui::px(340.0), gpui::px(620.0)), cx);
+        let bounds = self
+            .settings
+            .appearance
+            .gpu_pipeline_window_bounds
+            .map(|b| b.to_bounds())
+            .unwrap_or_else(|| {
+                gpui::Bounds::centered(None, gpui::size(gpui::px(340.0), gpui::px(620.0)), cx)
+            });
         let controls = self.gpu_pipeline_controls.clone();
         let weak_app = cx.weak_entity();
 
@@ -529,13 +536,32 @@ impl App {
                         inner_cx,
                     )
                 });
-                // Clear the handle when the view (window) drops.
-                let weak_for_close = weak_app.clone();
+
+                // Persist bounds on move/resize.
+                let weak_for_bounds = weak_app.clone();
                 view.update(cx, |_, inner_cx| {
+                    inner_cx
+                        .observe_window_bounds(window, move |_, window, cx| {
+                            let bounds = window.bounds();
+                            let _ = weak_for_bounds.update(cx, |app, _| {
+                                app.settings.appearance.gpu_pipeline_window_bounds = Some(
+                                    crate::state::settings::PersistedWindowBounds::from_bounds(
+                                        bounds,
+                                    ),
+                                );
+                                crate::utils::settings_io::save_settings_debounced(&app.settings);
+                            });
+                        })
+                        .detach();
+
+                    // Clear the handle + persisted-open flag when the view (window) drops.
+                    let weak_for_close = weak_app.clone();
                     inner_cx
                         .on_release(move |_, app_cx| {
                             let _ = weak_for_close.update(app_cx, |app, _| {
                                 app.gpu_pipeline_window = None;
+                                app.settings.appearance.gpu_pipeline_window_open = false;
+                                let _ = crate::utils::settings_io::save_settings(&app.settings);
                             });
                         })
                         .detach();
@@ -546,6 +572,8 @@ impl App {
         match result {
             Ok(handle) => {
                 self.gpu_pipeline_window = Some(handle);
+                self.settings.appearance.gpu_pipeline_window_open = true;
+                let _ = crate::utils::settings_io::save_settings(&self.settings);
             }
             Err(e) => eprintln!("Failed to open GPU Pipeline window: {:?}", e),
         }
@@ -554,6 +582,8 @@ impl App {
     pub(crate) fn close_gpu_pipeline_window(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.gpu_pipeline_window.take() {
             let _ = handle.update(cx, |_, window, _| window.remove_window());
+            self.settings.appearance.gpu_pipeline_window_open = false;
+            let _ = crate::utils::settings_io::save_settings(&self.settings);
         }
     }
 

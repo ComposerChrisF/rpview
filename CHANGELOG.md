@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.7] - 2026-05-04
+
+### Added
+- **Persisted GPU Pipeline window bounds + open state.**  New `Appearance.gpu_pipeline_window_bounds: Option<PersistedWindowBounds>` and `gpu_pipeline_window_open: bool` mirror the existing Local Contrast pattern.  `open_gpu_pipeline_window` reads the saved bounds (falling back to a centered 340×620 default) and registers `observe_window_bounds` to persist on move/resize via `save_settings_debounced`.  `on_release` clears the open flag, `close_gpu_pipeline_window` does the same on explicit close, and `main.rs` reopens the panel on launch when it was open at last quit.  Position + size + open-state now survive across sessions
+
 ## [0.22.6] - 2026-05-04
 
 ### Fixed

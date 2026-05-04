@@ -273,6 +273,7 @@ fn main() {
 
         let reopen_filter_window = settings.appearance.filter_window_open;
         let reopen_lc_window = settings.appearance.local_contrast_window_open;
+        let reopen_gpu_pipeline_window = settings.appearance.gpu_pipeline_window_open;
         let main_window = match cx.open_window(
             WindowOptions {
                 ..Default::default()
@@ -615,6 +616,15 @@ fn main() {
             cx.defer(move |cx| {
                 let _ = main_window.update(cx, |app, _window, app_cx| {
                     app.open_local_contrast_window(app_cx);
+                });
+            });
+        }
+
+        // Same for the GPU Pipeline window.
+        if reopen_gpu_pipeline_window {
+            cx.defer(move |cx| {
+                let _ = main_window.update(cx, |app, _window, app_cx| {
+                    app.open_gpu_pipeline_window(app_cx);
                 });
             });
         }
