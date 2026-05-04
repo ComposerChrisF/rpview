@@ -1669,6 +1669,25 @@ impl App {
         }
     }
 
+    /// Re-run the GPU pipeline on the current image when the user is on
+    /// the "show processed" side of the 1/2 toggle (`gpu_pipeline_enabled`)
+    /// and the pipeline has a real effect (some stage enabled or resize
+    /// != 1×).  Called after every successful image load so the GPU
+    /// pipeline "follows" the user across images.  When the user has
+    /// pressed `1` to view the source, this is a no-op — that's the whole
+    /// point of the toggle: it expresses intent across navigation.
+    pub(crate) fn reapply_gpu_pipeline_if_active(&mut self, cx: &mut Context<Self>) {
+        if !self.viewer.gpu_pipeline_enabled {
+            return;
+        }
+        let params = self.gpu_pipeline_controls.read(cx).get_params(cx);
+        let resize_active = (params.resize_factor - 1.0).abs() > 0.001;
+        if params.is_identity() && !resize_active {
+            return;
+        }
+        self.viewer.update_gpu_pipeline(params);
+    }
+
     /// Re-trigger LC processing on the current image when the user has any
     /// non-neutral LC knob and auto-process is enabled for this image.
     /// Called after every successful image load so the sliders "follow"

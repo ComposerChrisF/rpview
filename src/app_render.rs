@@ -52,6 +52,12 @@ impl Render for App {
                 // this can rehydrate the per-frame LC cache from disk too.
                 self.reapply_local_contrast_if_active(cx);
 
+                // Re-apply the GPU pipeline if the user is on the "show
+                // processed" side of the 1/2 toggle.  Skipped silently
+                // when `gpu_pipeline_enabled` is false (they pressed `1`)
+                // or every stage is identity with resize=1× (nothing to do).
+                self.reapply_gpu_pipeline_if_active(cx);
+
                 if !(self.settings.viewer_behavior.remember_per_image_state
                     && self.app_state.image_states.contains_key(&path))
                 {
