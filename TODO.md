@@ -2646,7 +2646,7 @@ floating GPU Pipeline window (Shift+Cmd+G).
 
 #### Performance
 - [x] **Background-thread GPU processing** — `GpuJob` + `spawn_gpu_worker` + `check_gpu_processing` mirror the CPU LC pattern.  `update_gpu_pipeline` queues work, `app_render.rs` polls the mpsc each tick and `request_animation_frame()`s while a worker is in flight.  Slider spam coalesces via `pending_gpu_params`; cancel-flag drops stale results so newer renders don’t flicker behind older ones.  Zoom rescale moved into the install path (`with_size_aware_change`) so resize-factor switches stay visually anchored across the in-flight period
-- [ ] **Texture allocation cache** — keyed on `(width, height)`, reuse the OKLab ping-pong + source + output textures across pipeline runs.  Eliminates ~16 MB × 2 alloc per call.  Biggest single perf win when realtime GIF processing lands
+- [x] **Texture allocation cache** — `gpu/cache.rs` holds a `Mutex`-guarded LRU (capacity 4) keyed on `(width, height)`, each entry the full `TextureSet { source, buf_a, buf_b, output, readback }`.  `process_pipeline` runs entirely inside `cache::with_textures`; the source texture and readback buffer are now split into `make_*` (alloc) and `write_*`/`read_into` (per-call) so the cache can hold the allocation while bytes change per call.  All entries are write-before-read within a pipeline run, so reuse needs no clear step
 - [ ] **GPU Lanczos resize** — replace the CPU bilinear pre-resize with a small WGSL compute shader.  Visible quality difference at large downscales (e.g. ¼× of a 24 MP photo); also avoids the CPU→GPU upload of the smaller buffer
 
 #### Polish

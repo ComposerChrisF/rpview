@@ -5,26 +5,40 @@ use crate::gpu::device::{GpuContext, GpuError};
 
 const ROW_ALIGN: u32 = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
 
-/// Copy an `Rgba8Unorm`/`Bgra8Unorm` texture out to a `Vec<u8>` of `width * height * 4`
-/// bytes, stripping the per-row padding the GPU required during the copy.
-pub fn read_texture_8bpp(
-    ctx: &GpuContext,
-    texture: &wgpu::Texture,
-    width: u32,
-    height: u32,
-) -> Result<Vec<u8>, GpuError> {
-    let bytes_per_pixel = 4u32;
-    let unpadded_bytes_per_row = width * bytes_per_pixel;
-    let padding = (ROW_ALIGN - unpadded_bytes_per_row % ROW_ALIGN) % ROW_ALIGN;
-    let padded_bytes_per_row = unpadded_bytes_per_row + padding;
-    let buffer_size = u64::from(padded_bytes_per_row) * u64::from(height);
+/// Padded bytes-per-row for a `width`-pixel × 4-bytes-per-pixel texture,
+/// rounded up to wgpu's 256-byte row alignment requirement.
+fn padded_row_bytes(width: u32) -> u32 {
+    let unpadded = width * 4;
+    let padding = (ROW_ALIGN - unpadded % ROW_ALIGN) % ROW_ALIGN;
+    unpadded + padding
+}
 
-    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+/// Allocate a readback buffer sized for an 8 bits-per-channel `width × height`
+/// texture (`COPY_DST | MAP_READ`).  Sized to the padded row stride so it can
+/// be reused across calls — buffers can be unmapped and re-mapped.  Split from
+/// the read so the texture cache can hold the buffer alongside the textures.
+pub fn make_readback_buffer(ctx: &GpuContext, width: u32, height: u32) -> wgpu::Buffer {
+    let buffer_size = u64::from(padded_row_bytes(width)) * u64::from(height);
+    ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("rpview-gpu readback"),
         size: buffer_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    })
+}
+
+/// Copy an `Rgba8Unorm`/`Bgra8Unorm` texture into `buffer` (which must have
+/// been allocated via [`make_readback_buffer`] with the same `width`/`height`),
+/// then map and return the unpadded `width * height * 4` bytes.  Buffer is
+/// unmapped on the way out so callers can reuse it on the next call.
+pub fn read_into(
+    ctx: &GpuContext,
+    texture: &wgpu::Texture,
+    buffer: &wgpu::Buffer,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, GpuError> {
+    let padded_bytes_per_row = padded_row_bytes(width);
 
     let mut encoder = ctx
         .device
@@ -39,7 +53,7 @@ pub fn read_texture_8bpp(
             aspect: wgpu::TextureAspect::All,
         },
         wgpu::TexelCopyBufferInfo {
-            buffer: &buffer,
+            buffer,
             layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(padded_bytes_per_row),
@@ -67,7 +81,7 @@ pub fn read_texture_8bpp(
         .map_err(|e| GpuError::BufferMap(format!("map: {e:?}")))?;
 
     let mapped = slice.get_mapped_range();
-    let row_bytes = unpadded_bytes_per_row as usize;
+    let row_bytes = (width * 4) as usize;
     let padded_row_bytes = padded_bytes_per_row as usize;
     let mut out = Vec::with_capacity(row_bytes * height as usize);
     for row in 0..height as usize {

@@ -5,6 +5,15 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.4] - 2026-05-04
+
+### Changed
+- **Texture allocation cache for the GPU pipeline.**  New `gpu/cache.rs` holds a `Mutex`-guarded LRU (capacity 4) keyed on `(width, height)`, each entry the full `TextureSet { source, buf_a, buf_b, output, readback }` a pipeline run needs.  `process_pipeline` runs entirely inside `cache::with_textures` — first call at a new size still allocates; subsequent calls at the same size reuse all five resources.  Eliminates the four-texture + readback-buffer alloc/free cycle that dominated what was left after async dispatch (v0.22.3) took the GPU work off the main thread.  Capacity 4 covers the typical workload (animation playback at one resize factor, user toggling between ¼×/½×/1×, navigating between a couple differently-sized images); LRU evicts on overflow so memory stays bounded
+- `gpu/pipeline.rs`: split `upload_source_srgb` into `make_source_srgb` (allocation only) and `write_source_srgb` (per-call `queue.write_texture`), so the cache can hold the texture across runs with only the bytes changing
+- `gpu/readback.rs`: split `read_texture_8bpp` into `make_readback_buffer` (allocation only) and `read_into` (per-call copy / map / unpadded copy-out / unmap), with a shared `padded_row_bytes` helper.  Readback buffers can be re-mapped after `unmap()`, so the cached buffer cycles through this on every call
+- All cached resources are write-before-read within a single pipeline run (source via `queue.write_texture`, buf_a/b via the decode + stage passes, output via the encode pass, readback as `COPY_DST` sink), so reuse needs no explicit clear step
+- `TODO.md`: marked the Phase 18 Performance item “Texture allocation cache” as shipped
+
 ## [0.22.3] - 2026-05-04
 
 ### Changed
