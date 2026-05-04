@@ -5,6 +5,15 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.3] - 2026-05-04
+
+### Changed
+- **GPU pipeline now runs on a worker thread.**  `update_gpu_pipeline` queues work via `spawn_gpu_worker` (rayon) and returns immediately; `check_gpu_processing`, polled each render tick from `app_render.rs`, drains the mpsc and installs the result.  Slider spam coalesces through `pending_gpu_params` (latest queued wins on completion); a cancel `AtomicBool` lets the result handler drop a stale render so a newer dispatch doesn’t briefly flash the previous params on screen.  At most one worker is in flight at a time, mirroring the CPU LC pattern.  Acceptable cost at preview resize factors stays in the same 30 ms ballpark; full-res 24 MP work no longer stutters the main thread
+- New `GpuJob` struct + `gpu_job: Option<GpuJob>` and `pending_gpu_params: Option<UnifiedParams>` fields on `ImageViewer`.  Result type reuses `LcResult` (`Option<(Arc<RenderImage>, (u32, u32))>`) since both async paths produce the same payload shape
+- Zoom rescale moved from an eager pre-spawn adjustment to the install path (`with_size_aware_change` in `check_gpu_processing` and the `no_effect` clear path).  Avoids a ~50 ms in-flight visual glitch where a resize-factor switch used to flash the image at the new zoom against the old buffer before snapping back; tradeoff is that the apparent zoom now updates when the worker completes rather than the moment of the click
+- `app_render.rs` calls `check_gpu_processing` each render tick and `request_animation_frame()`s while `is_processing_gpu()` so the channel gets polled promptly after slider release
+- `TODO.md`: marked the Phase 18 Performance item “Background-thread GPU processing” as shipped
+
 ## [0.22.2] - 2026-05-04
 
 ### Added
