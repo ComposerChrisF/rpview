@@ -39,6 +39,18 @@ pub struct GpuPreset {
 
     pub hue_enabled: bool,
     pub hue_value: f32,
+
+    /// Equalize stage was added in v0.22.9.  `#[serde(default)]` lets older
+    /// preset JSON (without these keys) load cleanly — the stage simply
+    /// stays disabled at its default Amount.
+    #[serde(default)]
+    pub equalize_enabled: bool,
+    #[serde(default = "default_equalize_amount")]
+    pub equalize_amount: f32,
+}
+
+fn default_equalize_amount() -> f32 {
+    0.5
 }
 
 fn presets_dir() -> PathBuf {
@@ -143,6 +155,8 @@ mod tests {
             vibrance_saturation: 0.0,
             hue_enabled: false,
             hue_value: 0.5,
+            equalize_enabled: false,
+            equalize_amount: 0.5,
         }
     }
 
@@ -229,6 +243,33 @@ mod tests {
     #[test]
     fn custom_preset_label_is_reserved_name() {
         assert_eq!(CUSTOM_PRESET_LABEL, "(Custom)");
+    }
+
+    /// JSON written before v0.22.9 (no `equalize_*` keys) must still
+    /// deserialise — the `#[serde(default)]` attributes carry the load.
+    #[test]
+    fn legacy_preset_without_equalize_fields_loads() {
+        let legacy_json = r#"{
+            "resize_factor": 1.0,
+            "lc_enabled": false,
+            "lc_radius_t": 0.5,
+            "lc_strength": 0.5,
+            "lc_shadow_lift": 0.0,
+            "lc_highlight_darken": 0.0,
+            "lc_midpoint": 0.5,
+            "bc_enabled": false,
+            "bc_brightness": 0.0,
+            "bc_contrast": 0.0,
+            "vibrance_enabled": false,
+            "vibrance_amount": 0.5,
+            "vibrance_saturation": 0.0,
+            "hue_enabled": false,
+            "hue_value": 0.5
+        }"#;
+        let parsed: GpuPreset =
+            serde_json::from_str(legacy_json).expect("legacy preset must parse");
+        assert!(!parsed.equalize_enabled);
+        assert!((parsed.equalize_amount - 0.5).abs() < f32::EPSILON);
     }
 
     #[test]

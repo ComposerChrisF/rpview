@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.9] - 2026-05-04
+
+### Added
+- **GPU Equalize stage.**  Histogram equalization on OKLab L joins LC, BC, Vibrance, and Hue as the fifth (and last) stage in the unified GPU pipeline.  Two-pass implementation: `shaders/equalize_histogram.wgsl` does `atomicAdd` into a 256-bin storage buffer; the CPU reads it back, normalizes into a 256-element CDF (`cumulative / total`, with an identity-CDF fallback when the histogram is empty), and uploads it as an f32 LUT; `shaders/equalize_apply.wgsl` does a linearly-interpolated CDF lookup and `mix(L, eq_L, Amount)` per pixel.  Chroma and alpha pass through untouched — equalization is luminance-only and preserves hue.  Stage runs last so the histogram is built on the final perceptual L the user sees after every other adjustment.  Whenever Equalize is enabled the encoder splits around the CPU readback into two submits; every other code path remains single-submit.  New `EqualizeParams { amount: f32 }` (`is_identity` for amount=0) wired through `UnifiedParams` and the GPU Pipeline panel (Equalize section after Hue with an Amount slider).  Three small image-size-independent buffers (256 × 4 = 1 KB each) are cached in a `OnceLock` for the lifetime of the GPU context.  `GpuPreset` extended with `equalize_enabled` and `equalize_amount` (both `#[serde(default)]`) so existing preset files load cleanly without these keys.  Mode slider (per-channel vs L-only) is deferred — L-only is the simpler v1.  Two new GPU tests (zero-amount no-op + full-amount completes) plus a backward-compat preset test bring the suite to 9 GPU tests + 11 preset tests, all passing
+
 ## [0.22.8] - 2026-05-04
 
 ### Added

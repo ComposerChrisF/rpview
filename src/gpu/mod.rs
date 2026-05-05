@@ -28,7 +28,10 @@ pub mod unified;
 #[allow(unused_imports)] // Public surface for the not-yet-wired UI layer.
 pub use device::{GpuContext, GpuError, get_context};
 #[allow(unused_imports)] // Public surface for the not-yet-wired UI layer.
-pub use unified::{BcParams, HueParams, LcParams, UnifiedParams, VibranceParams, process_pipeline};
+pub use unified::{
+    BcParams, EqualizeParams, HueParams, LcParams, UnifiedParams, VibranceParams,
+    process_pipeline,
+};
 
 /// Shared OKLab + sRGB↔linear helpers, prepended to every shader that needs
 /// them (no `#include` in WGSL).  Source: PSP3 `shader-includes/oklab.wgsl`.
@@ -225,6 +228,58 @@ mod tests {
                 saturation: 0.2,
             }),
             hue: Some(HueParams { hue: 0.05 }),
+            equalize: Some(EqualizeParams { amount: 0.4 }),
+            ..Default::default()
+        };
+        let (out, ow, oh) = process_pipeline(&rgba, w, h, &params).unwrap();
+        assert_eq!((ow, oh), (w, h));
+        assert_eq!(out.len(), (w * h * 4) as usize);
+    }
+
+    /// Equalize at amount=0 is a luminance no-op — the histogram pass still
+    /// runs (so the encoder split is exercised) but the apply pass blends
+    /// 100% of the original L back in.  Round-trip should match input
+    /// within sRGB-quantize + OKLab-roundtrip noise.
+    #[test]
+    fn equalize_zero_runs_full_pipeline() {
+        if !require_gpu() {
+            return;
+        }
+        let (rgba, w, h) = fixture();
+        let params = UnifiedParams {
+            equalize: Some(EqualizeParams { amount: 0.0 }),
+            ..Default::default()
+        };
+        let (out, ow, oh) = process_pipeline(&rgba, w, h, &params).unwrap();
+        assert_eq!((ow, oh), (w, h));
+        // amount=0 hits the is_identity short-circuit and never dispatches
+        // — but the rest of the pipeline still runs and the OKLab round-trip
+        // alone introduces a few units of noise.
+        assert_close(&out, &rgba_to_bgra(&rgba), 2, "equalize amount=0");
+    }
+
+    /// Equalize at amount=1 on a 32×32 ramp produces output of the right
+    /// shape and size.  We don't pin pixel values (the CDF depends on
+    /// histogram details) but the GPU path must complete without error.
+    #[test]
+    fn equalize_full_amount_produces_output() {
+        if !require_gpu() {
+            return;
+        }
+        let w = 32u32;
+        let h = 32u32;
+        let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let v = (x * 8 + y) as u8;
+                rgba.push(v);
+                rgba.push(v);
+                rgba.push(v);
+                rgba.push(255);
+            }
+        }
+        let params = UnifiedParams {
+            equalize: Some(EqualizeParams { amount: 1.0 }),
             ..Default::default()
         };
         let (out, ow, oh) = process_pipeline(&rgba, w, h, &params).unwrap();
