@@ -122,6 +122,18 @@ pub fn register_open_files_handler() {
             Imp,
         >(handle_open_files);
 
-        let _success = class_addMethod(cls as *mut _, sel, imp, types.as_ptr());
+        let success = class_addMethod(cls as *mut _, sel, imp, types.as_ptr());
+        if !success.as_bool() {
+            // class_addMethod returns false when the class already implements
+            // the selector. If a future GPUI version adds its own
+            // application:openFiles: handler, our override is silently dropped
+            // and "Open With" from Finder breaks with no diagnostic — surface
+            // it here so the cause is visible in dev builds.
+            crate::debug_eprintln!(
+                "[macos_open_handler] class_addMethod for application:openFiles: \
+                 returned false; GPUIApplicationDelegate already implements this \
+                 selector. \"Open With\" handler NOT installed."
+            );
+        }
     }
 }
