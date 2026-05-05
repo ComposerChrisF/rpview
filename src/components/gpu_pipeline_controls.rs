@@ -13,8 +13,11 @@
 //!   * `ResetRequested` clears every stage to its default and disables it.
 
 use crate::gpu::{BcParams, HueParams, LcParams, UnifiedParams, VibranceParams};
+use crate::utils::gpu_presets::{self, GpuPreset};
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
-use ccf_gpui_widgets::prelude::{Slider, SliderEvent, scrollable_vertical};
+use ccf_gpui_widgets::prelude::{
+    Dropdown, DropdownEvent, Slider, SliderEvent, TextInput, TextInputEvent, scrollable_vertical,
+};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -96,6 +99,13 @@ pub struct GpuPipelineControls {
     pub hue_enabled: bool,
     pub hue_expanded: bool,
     pub hue_value: Entity<Slider>,
+
+    // --- Presets ---
+    pub preset_dropdown: Entity<Dropdown>,
+    pub preset_name_input: Entity<TextInput>,
+    /// Currently-loaded preset name (None = custom / unsaved).  Drives
+    /// the dropdown's selected value and gates the Del button.
+    pub current_preset: Option<String>,
 }
 
 impl EventEmitter<GpuPipelineControlsEvent> for GpuPipelineControls {}
@@ -152,6 +162,22 @@ impl GpuPipelineControls {
         // 1.0 = +180°.  get_params subtracts 0.5 to produce shader turns.
         let hue_value = slider(cx, 0.5, 0.0, 1.0, 0.001, 3);
 
+        let preset_dropdown = Self::build_preset_dropdown(None, cx);
+        cx.subscribe(&preset_dropdown, Self::on_preset_dropdown_change)
+            .detach();
+
+        let preset_name_input = cx.new(|cx| TextInput::new(cx).placeholder("Preset name…"));
+        cx.subscribe(
+            &preset_name_input,
+            |this, input, event: &TextInputEvent, cx| {
+                if let TextInputEvent::Enter = event {
+                    let name = input.read(cx).content().to_string();
+                    this.save_current_as_preset(&name, cx);
+                }
+            },
+        )
+        .detach();
+
         Self {
             font_size_scale,
             scroll_handle: ScrollHandle::new(),
@@ -176,6 +202,9 @@ impl GpuPipelineControls {
             hue_enabled: false,
             hue_expanded: true,
             hue_value,
+            preset_dropdown,
+            preset_name_input,
+            current_preset: None,
         }
     }
 
@@ -231,8 +260,124 @@ impl GpuPipelineControls {
         out_w > max_dim || out_h > max_dim || w > max_dim || h > max_dim
     }
 
-    /// Build `UnifiedParams` from the current slider/checkbox state.
-    ///
+    // --- Preset support -----------------------------------------------------
+
+    fn build_preset_dropdown(selected: Option<&str>, cx: &mut Context<Self>) -> Entity<Dropdown> {
+        let names = gpu_presets::list_preset_names();
+        let mut choices = vec![gpu_presets::CUSTOM_PRESET_LABEL.to_string()];
+        choices.extend(names);
+        cx.new(|cx| {
+            let mut d = Dropdown::new(cx).choices(choices);
+            if let Some(name) = selected {
+                d = d.with_selected_value(name);
+            }
+            d
+        })
+    }
+
+    fn on_preset_dropdown_change(
+        &mut self,
+        _dd: Entity<Dropdown>,
+        event: &DropdownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if let DropdownEvent::Change(name) = event {
+            if name == gpu_presets::CUSTOM_PRESET_LABEL {
+                self.current_preset = None;
+                return;
+            }
+            if let Some(preset) = gpu_presets::load_preset(name) {
+                self.apply_preset(&preset, cx);
+                self.current_preset = Some(name.clone());
+                cx.emit(GpuPipelineControlsEvent::ParametersChanged);
+            }
+        }
+    }
+
+    /// Snapshot the full panel state into a `GpuPreset`, suitable for
+    /// JSON serialisation.
+    fn to_preset(&self, cx: &App) -> GpuPreset {
+        GpuPreset {
+            resize_factor: self.resize_factor,
+            lc_enabled: self.lc_enabled,
+            lc_radius_t: self.lc_radius.read(cx).value() as f32,
+            lc_strength: self.lc_strength.read(cx).value() as f32,
+            lc_shadow_lift: self.lc_shadow_lift.read(cx).value() as f32,
+            lc_highlight_darken: self.lc_highlight_darken.read(cx).value() as f32,
+            lc_midpoint: self.lc_midpoint.read(cx).value() as f32,
+            bc_enabled: self.bc_enabled,
+            bc_brightness: self.bc_brightness.read(cx).value() as f32,
+            bc_contrast: self.bc_contrast.read(cx).value() as f32,
+            vibrance_enabled: self.vibrance_enabled,
+            vibrance_amount: self.vibrance_amount.read(cx).value() as f32,
+            vibrance_saturation: self.vibrance_saturation.read(cx).value() as f32,
+            hue_enabled: self.hue_enabled,
+            hue_value: self.hue_value.read(cx).value() as f32,
+        }
+    }
+
+    /// Restore the panel to a saved `GpuPreset`.  Pushes every value back
+    /// onto its slider entity and resets `resize_auto` so the explicit
+    /// factor takes precedence.
+    fn apply_preset(&mut self, p: &GpuPreset, cx: &mut Context<Self>) {
+        self.resize_factor = p.resize_factor;
+        self.resize_auto = false;
+        self.lc_enabled = p.lc_enabled;
+        self.lc_radius
+            .update(cx, |s, cx| s.set_value(p.lc_radius_t as f64, cx));
+        self.lc_strength
+            .update(cx, |s, cx| s.set_value(p.lc_strength as f64, cx));
+        self.lc_shadow_lift
+            .update(cx, |s, cx| s.set_value(p.lc_shadow_lift as f64, cx));
+        self.lc_highlight_darken
+            .update(cx, |s, cx| s.set_value(p.lc_highlight_darken as f64, cx));
+        self.lc_midpoint
+            .update(cx, |s, cx| s.set_value(p.lc_midpoint as f64, cx));
+        self.bc_enabled = p.bc_enabled;
+        self.bc_brightness
+            .update(cx, |s, cx| s.set_value(p.bc_brightness as f64, cx));
+        self.bc_contrast
+            .update(cx, |s, cx| s.set_value(p.bc_contrast as f64, cx));
+        self.vibrance_enabled = p.vibrance_enabled;
+        self.vibrance_amount
+            .update(cx, |s, cx| s.set_value(p.vibrance_amount as f64, cx));
+        self.vibrance_saturation
+            .update(cx, |s, cx| s.set_value(p.vibrance_saturation as f64, cx));
+        self.hue_enabled = p.hue_enabled;
+        self.hue_value
+            .update(cx, |s, cx| s.set_value(p.hue_value as f64, cx));
+    }
+
+    fn save_current_as_preset(&mut self, name: &str, cx: &mut Context<Self>) {
+        let name = name.trim();
+        if name.is_empty() || name == gpu_presets::CUSTOM_PRESET_LABEL {
+            return;
+        }
+        let preset = self.to_preset(cx);
+        if let Err(e) = gpu_presets::save_preset(name, &preset) {
+            eprintln!("Failed to save GPU preset: {}", e);
+            return;
+        }
+        self.current_preset = Some(name.to_string());
+        self.rebuild_preset_dropdown(cx);
+    }
+
+    fn delete_current_preset(&mut self, cx: &mut Context<Self>) {
+        let Some(name) = self.current_preset.take() else {
+            return;
+        };
+        let _ = gpu_presets::delete_preset(&name);
+        self.rebuild_preset_dropdown(cx);
+    }
+
+    fn rebuild_preset_dropdown(&mut self, cx: &mut Context<Self>) {
+        let selected = self.current_preset.as_deref();
+        self.preset_dropdown = Self::build_preset_dropdown(selected, cx);
+        cx.subscribe(&self.preset_dropdown, Self::on_preset_dropdown_change)
+            .detach();
+        cx.notify();
+    }
+
     /// Per-slider transformations:
     /// * **Radius** is logarithmic in slider position (fine control near the
     ///   low end) and is interpreted as a radius in *source* pixels.  We
@@ -496,6 +641,83 @@ impl Render for GpuPipelineControls {
             )
             .child(button_row);
 
+        // --- Presets section ---
+        // Dropdown on its own line; name input + Save / Del on the next.
+        // Mirrors the LC controls' preset block.
+        let preset_section = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .text_size(scaled_text_size(13.0, fs))
+                    .text_color(Colors::text())
+                    .font_weight(FontWeight::BOLD)
+                    .child("Presets"),
+            )
+            .child(self.preset_dropdown.clone())
+            .child(
+                div()
+                    .flex()
+                    .gap(px(4.0))
+                    .items_center()
+                    .child(div().flex_grow().child(self.preset_name_input.clone()))
+                    .child(
+                        div()
+                            .id("gpu-preset-save")
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(3.0))
+                            .border_1()
+                            .border_color(rgba(0x55_55_55_FF))
+                            .cursor_pointer()
+                            .text_size(scaled_text_size(10.0, fs))
+                            .text_color(Colors::text())
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _evt: &MouseDownEvent, _window, cx| {
+                                    let name = this
+                                        .preset_name_input
+                                        .read(cx)
+                                        .content()
+                                        .to_string();
+                                    this.save_current_as_preset(&name, cx);
+                                }),
+                            )
+                            .child("Save"),
+                    )
+                    .child(
+                        div()
+                            .id("gpu-preset-del")
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(3.0))
+                            .border_1()
+                            .border_color(rgba(0x55_55_55_FF))
+                            .cursor_pointer()
+                            .text_size(scaled_text_size(10.0, fs))
+                            .text_color(Colors::text())
+                            .when(self.current_preset.is_some(), |el| {
+                                el.on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(|this, _evt: &MouseDownEvent, _window, cx| {
+                                        this.delete_current_preset(cx);
+                                    }),
+                                )
+                            })
+                            .when(self.current_preset.is_none(), |el| {
+                                el.text_color(rgb(0x666666))
+                            })
+                            .child("Del"),
+                    ),
+            );
+
         // --- LC section ---
         let lc_radius_t = self.lc_radius.read(cx).value() as f32;
         let lc_radius_displayed = radius_t_to_displayed(lc_radius_t);
@@ -673,6 +895,8 @@ impl Render for GpuPipelineControls {
                         .gap(Spacing::md())
                         .px(Spacing::lg())
                         .pb(Spacing::lg())
+                        .child(sep())
+                        .child(preset_section)
                         .child(sep())
                         .child(resize_section)
                         .child(sep())

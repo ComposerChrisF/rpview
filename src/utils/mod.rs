@@ -4,6 +4,7 @@ pub mod file_scanner;
 pub mod filters;
 pub mod float_map;
 pub mod frame_cache;
+pub mod gpu_presets;
 pub mod image_loader;
 pub mod lc_presets;
 pub mod local_contrast;
