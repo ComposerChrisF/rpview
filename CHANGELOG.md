@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.10] - 2026-05-04
+
+### Changed
+- `macos_open_handler::register_open_files_handler` now logs (via `debug_eprintln!`) when `class_addMethod` returns false, surfacing the case where a future GPUI version adds its own `application:openFiles:` handler and silently shadows ours.  Previously the BOOL return was discarded into `_success`, leaving “Open With” from Finder broken with no diagnostic.  Code-review followup; no behavior change in current GPUI
+
 ## [0.22.9] - 2026-05-04
 
 ### Added
