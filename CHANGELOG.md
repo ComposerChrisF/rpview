@@ -5,6 +5,14 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.8] - 2026-05-04
+
+### Added
+- **GPU Pipeline presets.**  New `utils/gpu_presets.rs` mirrors the LC presets module: per-preset JSON files in `{settings_dir}/gpu-presets/`, with a `GpuPreset` struct that captures the full panel state (resize factor + per-stage enable flags + every slider value).  Disabled stages keep their slider values across save/load, so toggling a stage on after applying a preset restores the values it had at save time.  GPU Pipeline panel grew a Presets section at the top: dropdown of saved names with `(Custom)` as the sentinel for unsaved state, name-input + Save / Del buttons.  Enter in the name input saves under that name; Del greys out when no preset is selected.  10 unit tests cover round-trip, name sanitization, sorted listing, overwrite, deletion, and the reserved label
+
+### Changed
+- **CPU LC save audit (no code change).**  Verified that `Save File` correctly produces the displayed image for every CPU-LC display state — static `lc_render`, per-frame `lc_frame_renders[current]` (animated), and the resize-aware variants — by tracing the `handle_save_file_impl` → `capture_current_display` → `RenderImage::as_bytes(0)` path against the renderer’s priority chain.  The two paths agree on which render to surface, the per-frame `RenderImage` is constructed identically to the static one (so `as_bytes(0)` returns the right bytes), and `snapshot.width/height` come from the per-frame size tuple so resize-factor LC outputs save at the correct dimensions
+
 ## [0.22.7] - 2026-05-04
 
 ### Added
