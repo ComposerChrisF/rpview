@@ -2636,11 +2636,7 @@ floating GPU Pipeline window (Shift+Cmd+G).
 ### Deferred (post-v0.22.0)
 
 #### Functional gaps
-- [ ] **GPU Equalize** — `gpu::equalize::process_equalize` is stubbed; needs:
-  - Histogram-build compute shader with atomic increments into a 256-bin storage buffer
-  - GPU prefix-scan or CPU-side normalization to produce CDF
-  - Apply pass that does the CDF lookup and writes back to OKLab
-  - UI section in `gpu_pipeline_controls.rs` with Amount + Mode sliders
+- [x] **GPU Equalize** (v0.22.9) — two-pass histogram equalization on OKLab L, joining LC/BC/Vibrance/Hue as the fifth (and last) stage in the unified pipeline.  `shaders/equalize_histogram.wgsl` does atomicAdd into a 256-bin storage buffer; the CPU reads it back, computes a CDF (`cumulative / total`, identity fallback for empty), and uploads the 256-element f32 LUT; `shaders/equalize_apply.wgsl` does a linearly-interpolated CDF lookup and `mix(L, eq_L, Amount)` per pixel (chroma + alpha pass through, so equalization is luminance-only and preserves hue).  The CPU readback splits the encoder into two submits — every other path stays single-submit.  `EqualizeParams { amount }` joins the OKLab pipeline; UI section + Amount slider in `gpu_pipeline_controls.rs`; `GpuPreset` extended with `equalize_enabled` + `equalize_amount` (both `#[serde(default)]` so older preset JSON loads cleanly).  Mode slider deferred — L-only is the simpler v1
 - [x] **GIF/animation playback through the GPU pipeline** — frame advancement (auto-playback in `app_render.rs` and manual stepping in `handle_next_frame`/`handle_previous_frame`) now calls `reapply_gpu_pipeline_if_active`, and the cache key in `update_gpu_pipeline` includes the current frame index so unchanged params still re-process on a frame change
 - [x] **Animation per-frame GPU cache** — `LoadedImage.gpu_frame_renders: Vec<Option<(Arc<RenderImage>, (u32, u32))>>` mirrors `lc_frame_renders`.  `update_gpu_pipeline` invalidates the whole vec on parameter change; on a frame revisit it installs the cached render directly with no GPU work.  Disk persistence (analogous to CPU LC’s `frame_cache` module) is still TODO if cross-session caching becomes useful
 

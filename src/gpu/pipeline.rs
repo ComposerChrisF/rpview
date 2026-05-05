@@ -191,6 +191,50 @@ pub fn stage_layout(ctx: &GpuContext) -> &'static wgpu::BindGroupLayout {
     })
 }
 
+fn storage_buffer_entry(binding: u32, read_only: bool) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
+/// Histogram-pass layout: rgba16float input texture + atomic storage buffer.
+/// Used by `equalize_histogram.wgsl` to count OKLab-L pixels per bin.
+pub fn histogram_layout(ctx: &GpuContext) -> &'static wgpu::BindGroupLayout {
+    static L: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+    L.get_or_init(|| {
+        ctx.device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("rpview-gpu histogram layout"),
+                entries: &[texture_entry(0), storage_buffer_entry(1, false)],
+            })
+    })
+}
+
+/// Equalize-apply layout: rgba16float input + rgba16float storage out + CDF
+/// storage buffer (read-only) + uniform.
+pub fn equalize_apply_layout(ctx: &GpuContext) -> &'static wgpu::BindGroupLayout {
+    static L: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+    L.get_or_init(|| {
+        ctx.device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("rpview-gpu equalize apply layout"),
+                entries: &[
+                    texture_entry(0),
+                    storage_entry(1, wgpu::TextureFormat::Rgba16Float),
+                    storage_buffer_entry(2, true),
+                    uniform_entry(3),
+                ],
+            })
+    })
+}
+
 // --- Pipeline construction ------------------------------------------------
 
 fn build_pipeline(
@@ -243,6 +287,18 @@ pub fn build_stage_pipeline_with_oklab(
     body: &str,
 ) -> wgpu::ComputePipeline {
     build_pipeline(ctx, label, body, true, stage_layout(ctx))
+}
+
+/// Compile a pipeline against an arbitrary bind-group layout.  Used by the
+/// equalize stage, whose histogram and apply passes have unique bindings
+/// (storage buffers) outside the standard `stage_layout` shape.
+pub fn build_pipeline_with_layout(
+    ctx: &GpuContext,
+    label: &str,
+    body: &str,
+    layout: &wgpu::BindGroupLayout,
+) -> wgpu::ComputePipeline {
+    build_pipeline(ctx, label, body, false, layout)
 }
 
 pub fn decode_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
@@ -348,6 +404,125 @@ pub fn encode_encode(
         timestamp_writes: None,
     });
     pass.set_pipeline(encode_pipeline(ctx));
+    pass.set_bind_group(0, &bind, &[]);
+    let (gx, gy, gz) = dispatch_count(width, height);
+    pass.dispatch_workgroups(gx, gy, gz);
+}
+
+/// Allocate the 256 × u32 atomic histogram buffer used by the equalize
+/// stage's pass-1 dispatch.  Caller is responsible for zeroing it
+/// (`queue.write_buffer` with 1024 zeros) before each dispatch — atomicAdd
+/// accumulates over the previous run otherwise.
+pub fn make_histogram_buffer(ctx: &GpuContext) -> wgpu::Buffer {
+    ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("rpview-gpu histogram"),
+        size: 256 * 4,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_SRC
+            | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+/// Mappable readback companion to `make_histogram_buffer`.
+pub fn make_histogram_readback(ctx: &GpuContext) -> wgpu::Buffer {
+    ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("rpview-gpu histogram readback"),
+        size: 256 * 4,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    })
+}
+
+/// 256 × f32 storage buffer that holds the CPU-computed CDF for the
+/// equalize-apply pass.  Filled per call via `queue.write_buffer`.
+pub fn make_cdf_buffer(ctx: &GpuContext) -> wgpu::Buffer {
+    ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("rpview-gpu cdf"),
+        size: 256 * 4,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+/// Dispatch the histogram pass: count OKLab L bins into `histogram` for
+/// every pixel of `src`.  Caller must have zeroed `histogram` first.
+pub fn encode_histogram(
+    ctx: &GpuContext,
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    src: &wgpu::Texture,
+    histogram: &wgpu::Buffer,
+    width: u32,
+    height: u32,
+) {
+    let src_view = src.create_view(&wgpu::TextureViewDescriptor::default());
+    let bind = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("rpview-gpu histogram bind"),
+        layout: histogram_layout(ctx),
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&src_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: histogram.as_entire_binding(),
+            },
+        ],
+    });
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("rpview-gpu histogram pass"),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(pipeline);
+    pass.set_bind_group(0, &bind, &[]);
+    let (gx, gy, gz) = dispatch_count(width, height);
+    pass.dispatch_workgroups(gx, gy, gz);
+}
+
+/// Dispatch the equalize-apply pass: per-pixel CDF lookup blended with the
+/// original L by `Amount`.  Chroma + alpha pass through.
+pub fn encode_equalize_apply(
+    ctx: &GpuContext,
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    src: &wgpu::Texture,
+    dst: &wgpu::Texture,
+    cdf: &wgpu::Buffer,
+    uniform: &wgpu::Buffer,
+    width: u32,
+    height: u32,
+) {
+    let src_view = src.create_view(&wgpu::TextureViewDescriptor::default());
+    let dst_view = dst.create_view(&wgpu::TextureViewDescriptor::default());
+    let bind = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("rpview-gpu equalize apply bind"),
+        layout: equalize_apply_layout(ctx),
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&src_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&dst_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: cdf.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: uniform.as_entire_binding(),
+            },
+        ],
+    });
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("rpview-gpu equalize apply pass"),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(pipeline);
     pass.set_bind_group(0, &bind, &[]);
     let (gx, gy, gz) = dispatch_count(width, height);
     pass.dispatch_workgroups(gx, gy, gz);

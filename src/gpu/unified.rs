@@ -5,13 +5,19 @@
 //! "Vibrance only" run is exactly one filter dispatch plus the unavoidable
 //! decode/encode bookends.
 //!
-//! Pipeline order is fixed: **LC → BC → Vibrance(+Saturation) → Hue**.  The
-//! order matters a little (Saturation runs after Vibrance so the
-//! chroma-weighted vibrance scaling sees pre-saturation chroma magnitudes);
+//! Pipeline order is fixed: **LC → BC → Vibrance(+Saturation) → Hue →
+//! Equalize**.  The order matters a little (Saturation runs after Vibrance
+//! so the chroma-weighted vibrance scaling sees pre-saturation chroma
+//! magnitudes; Equalize runs last so the histogram is built on the final
+//! perceptual L after every other adjustment, which is what the user sees);
 //! tying it to a stable order keeps presets reproducible.
 //!
-//! Equalize is reserved as a future stage; it isn't part of this struct yet
-//! because its histogram-build pass hasn't shipped.
+//! Equalize is the only stage that needs a CPU readback mid-pipeline: pass 1
+//! builds a 256-bin histogram of OKLab L into an atomic storage buffer, the
+//! CPU normalizes it into a 256-element CDF, and pass 2 looks up the CDF
+//! per pixel and blends with the original L by `Amount`.  Whenever Equalize
+//! is enabled, `process_pipeline` submits the encoder twice (once before
+//! the readback, once after) — every other path stays single-submit.
 
 use std::sync::OnceLock;
 
@@ -129,6 +135,25 @@ impl HueParams {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EqualizeParams {
+    /// Blend between the original L and the histogram-equalized L.
+    /// 0 = no change, 1 = full equalization.
+    pub amount: f32,
+}
+
+impl Default for EqualizeParams {
+    fn default() -> Self {
+        Self { amount: 0.5 }
+    }
+}
+
+impl EqualizeParams {
+    pub fn is_identity(&self) -> bool {
+        self.amount.abs() < 0.0005
+    }
+}
+
 // --- The unified-pipeline struct ------------------------------------------
 
 #[derive(Debug, Clone, PartialEq)]
@@ -143,6 +168,7 @@ pub struct UnifiedParams {
     pub bc: Option<BcParams>,
     pub vibrance: Option<VibranceParams>,
     pub hue: Option<HueParams>,
+    pub equalize: Option<EqualizeParams>,
 }
 
 impl Default for UnifiedParams {
@@ -153,6 +179,7 @@ impl Default for UnifiedParams {
             bc: None,
             vibrance: None,
             hue: None,
+            equalize: None,
         }
     }
 }
@@ -166,6 +193,7 @@ impl UnifiedParams {
             && self.bc.is_none_or(|p| p.is_identity())
             && self.vibrance.is_none_or(|p| p.is_identity())
             && self.hue.is_none_or(|p| p.is_identity())
+            && self.equalize.is_none_or(|p| p.is_identity())
     }
 }
 
@@ -206,6 +234,13 @@ struct VibranceUniforms {
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct HueUniforms {
     hue: f32,
+    _pad: [f32; 3],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct EqualizeUniforms {
+    amount: f32,
     _pad: [f32; 3],
 }
 
@@ -257,6 +292,86 @@ fn lanczos_v_oklab_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline 
             include_str!("shaders/lanczos_v_oklab.wgsl"),
         )
     })
+}
+
+fn histogram_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_pipeline_with_layout(
+            ctx,
+            "equalize histogram",
+            include_str!("shaders/equalize_histogram.wgsl"),
+            pipeline::histogram_layout(ctx),
+        )
+    })
+}
+
+fn equalize_apply_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_pipeline_with_layout(
+            ctx,
+            "equalize apply",
+            include_str!("shaders/equalize_apply.wgsl"),
+            pipeline::equalize_apply_layout(ctx),
+        )
+    })
+}
+
+/// Image-size-independent buffers used by the equalize stage.  Three small
+/// buffers (256 × 4 = 1 KB each) cached for the lifetime of the GPU
+/// context — the equalize stage refills them per call via
+/// `queue.write_buffer` and a `copy_buffer_to_buffer` for the readback.
+struct EqualizeBuffers {
+    histogram: wgpu::Buffer,
+    histogram_readback: wgpu::Buffer,
+    cdf: wgpu::Buffer,
+}
+
+fn equalize_buffers(ctx: &GpuContext) -> &'static EqualizeBuffers {
+    static B: OnceLock<EqualizeBuffers> = OnceLock::new();
+    B.get_or_init(|| EqualizeBuffers {
+        histogram: pipeline::make_histogram_buffer(ctx),
+        histogram_readback: pipeline::make_histogram_readback(ctx),
+        cdf: pipeline::make_cdf_buffer(ctx),
+    })
+}
+
+/// Read 256 × u32 from `readback` and turn it into a 256-element CDF in
+/// [0, 1].  Empty histogram → identity CDF (`i / 255`), so an Equalize
+/// dispatch on a transparent / empty buffer is a no-op rather than NaN.
+fn read_cdf(ctx: &GpuContext, readback: &wgpu::Buffer) -> Result<[f32; 256], GpuError> {
+    let slice = readback.slice(..);
+    let (tx, rx) = std::sync::mpsc::channel();
+    slice.map_async(wgpu::MapMode::Read, move |r| {
+        let _ = tx.send(r);
+    });
+    ctx.device
+        .poll(wgpu::PollType::Wait)
+        .map_err(|e| GpuError::DevicePoll(format!("{e:?}")))?;
+    rx.recv()
+        .map_err(|e| GpuError::BufferMap(format!("recv: {e}")))?
+        .map_err(|e| GpuError::BufferMap(format!("map: {e:?}")))?;
+
+    let mapped = slice.get_mapped_range();
+    let mut hist = [0u32; 256];
+    for (i, chunk) in mapped.chunks_exact(4).take(256).enumerate() {
+        hist[i] = u32::from_le_bytes(chunk.try_into().expect("4-byte chunk"));
+    }
+    drop(mapped);
+    readback.unmap();
+
+    let total: u64 = hist.iter().map(|&v| u64::from(v)).sum();
+    if total == 0 {
+        return Ok(std::array::from_fn(|i| i as f32 / 255.0));
+    }
+    let mut cdf = [0.0f32; 256];
+    let mut cumulative: u64 = 0;
+    for i in 0..256 {
+        cumulative += u64::from(hist[i]);
+        cdf[i] = cumulative as f32 / total as f32;
+    }
+    Ok(cdf)
 }
 
 fn rgba_to_bgra_passthrough(rgba: &[u8]) -> Vec<u8> {
@@ -518,6 +633,66 @@ pub fn process_pipeline(
                     out_w,
                     out_h,
                     "hue",
+                );
+                current_in_a = !current_in_a;
+            }
+
+            // Stage: Equalize (last — operates on the final perceptual L).
+            // Splits the encoder around a CPU readback: pass 1 builds a
+            // histogram, the CPU normalizes it into a CDF, pass 2 applies
+            // it.  When equalize is disabled this whole block is skipped
+            // and the single-encoder fast path remains.
+            if let Some(eq) = params.equalize
+                && !eq.is_identity()
+            {
+                let bufs = equalize_buffers(ctx);
+                ctx.queue.write_buffer(&bufs.histogram, 0, &[0u8; 256 * 4]);
+
+                let (src_for_hist, _) = pingpong(current_in_a);
+                pipeline::encode_histogram(
+                    ctx,
+                    &mut encoder,
+                    histogram_pipeline(ctx),
+                    src_for_hist,
+                    &bufs.histogram,
+                    out_w,
+                    out_h,
+                );
+                encoder.copy_buffer_to_buffer(
+                    &bufs.histogram,
+                    0,
+                    &bufs.histogram_readback,
+                    0,
+                    256 * 4,
+                );
+                ctx.queue.submit(Some(encoder.finish()));
+
+                let cdf = read_cdf(ctx, &bufs.histogram_readback)?;
+                ctx.queue
+                    .write_buffer(&bufs.cdf, 0, bytemuck::cast_slice(&cdf));
+
+                encoder = ctx
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("rpview-gpu unified encoder (post-equalize)"),
+                    });
+
+                let u = EqualizeUniforms {
+                    amount: eq.amount,
+                    _pad: [0.0; 3],
+                };
+                let uniform_buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
+                let (src, dst) = pingpong(current_in_a);
+                pipeline::encode_equalize_apply(
+                    ctx,
+                    &mut encoder,
+                    equalize_apply_pipeline(ctx),
+                    src,
+                    dst,
+                    &bufs.cdf,
+                    &uniform_buf,
+                    out_w,
+                    out_h,
                 );
                 current_in_a = !current_in_a;
             }

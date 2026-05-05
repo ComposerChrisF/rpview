@@ -12,7 +12,7 @@
 //!     and feeds the viewer.
 //!   * `ResetRequested` clears every stage to its default and disables it.
 
-use crate::gpu::{BcParams, HueParams, LcParams, UnifiedParams, VibranceParams};
+use crate::gpu::{BcParams, EqualizeParams, HueParams, LcParams, UnifiedParams, VibranceParams};
 use crate::utils::gpu_presets::{self, GpuPreset};
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
 use ccf_gpui_widgets::prelude::{
@@ -100,6 +100,10 @@ pub struct GpuPipelineControls {
     pub hue_expanded: bool,
     pub hue_value: Entity<Slider>,
 
+    pub equalize_enabled: bool,
+    pub equalize_expanded: bool,
+    pub equalize_amount: Entity<Slider>,
+
     // --- Presets ---
     pub preset_dropdown: Entity<Dropdown>,
     pub preset_name_input: Entity<TextInput>,
@@ -162,6 +166,8 @@ impl GpuPipelineControls {
         // 1.0 = +180°.  get_params subtracts 0.5 to produce shader turns.
         let hue_value = slider(cx, 0.5, 0.0, 1.0, 0.001, 3);
 
+        let equalize_amount = slider(cx, 0.5, 0.0, 1.0, 0.01, 2);
+
         let preset_dropdown = Self::build_preset_dropdown(None, cx);
         cx.subscribe(&preset_dropdown, Self::on_preset_dropdown_change)
             .detach();
@@ -202,6 +208,9 @@ impl GpuPipelineControls {
             hue_enabled: false,
             hue_expanded: true,
             hue_value,
+            equalize_enabled: false,
+            equalize_expanded: true,
+            equalize_amount,
             preset_dropdown,
             preset_name_input,
             current_preset: None,
@@ -313,6 +322,8 @@ impl GpuPipelineControls {
             vibrance_saturation: self.vibrance_saturation.read(cx).value() as f32,
             hue_enabled: self.hue_enabled,
             hue_value: self.hue_value.read(cx).value() as f32,
+            equalize_enabled: self.equalize_enabled,
+            equalize_amount: self.equalize_amount.read(cx).value() as f32,
         }
     }
 
@@ -346,6 +357,9 @@ impl GpuPipelineControls {
         self.hue_enabled = p.hue_enabled;
         self.hue_value
             .update(cx, |s, cx| s.set_value(p.hue_value as f64, cx));
+        self.equalize_enabled = p.equalize_enabled;
+        self.equalize_amount
+            .update(cx, |s, cx| s.set_value(p.equalize_amount as f64, cx));
     }
 
     fn save_current_as_preset(&mut self, name: &str, cx: &mut Context<Self>) {
@@ -414,6 +428,9 @@ impl GpuPipelineControls {
             hue: self.hue_enabled.then(|| HueParams {
                 hue: self.hue_value.read(cx).value() as f32 - 0.5,
             }),
+            equalize: self.equalize_enabled.then(|| EqualizeParams {
+                amount: self.equalize_amount.read(cx).value() as f32,
+            }),
         }
     }
 
@@ -425,6 +442,7 @@ impl GpuPipelineControls {
         self.bc_enabled = false;
         self.vibrance_enabled = false;
         self.hue_enabled = false;
+        self.equalize_enabled = false;
 
         self.lc_radius.update(cx, |s, cx| {
             s.set_value(radius_displayed_to_t(DEFAULT_DISPLAYED_RADIUS) as f64, cx)
@@ -440,6 +458,7 @@ impl GpuPipelineControls {
         self.vibrance_saturation
             .update(cx, |s, cx| s.set_value(0.0, cx));
         self.hue_value.update(cx, |s, cx| s.set_value(0.5, cx));
+        self.equalize_amount.update(cx, |s, cx| s.set_value(0.5, cx));
         cx.emit(GpuPipelineControlsEvent::ResetRequested);
     }
 }
@@ -847,6 +866,36 @@ impl Render for GpuPipelineControls {
                 ))
             });
 
+        // --- Equalize section ---
+        let eq_v = self.equalize_amount.read(cx).value();
+        let equalize_section = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(stage_header(
+                "Equalize",
+                self.equalize_enabled,
+                self.equalize_expanded,
+                fs,
+                cx.listener(|this, _evt: &MouseDownEvent, _, cx| {
+                    this.equalize_enabled = !this.equalize_enabled;
+                    cx.emit(GpuPipelineControlsEvent::ParametersChanged);
+                    cx.notify();
+                }),
+                cx.listener(|this, _evt: &MouseDownEvent, _, cx| {
+                    this.equalize_expanded = !this.equalize_expanded;
+                    cx.notify();
+                }),
+            ))
+            .when(self.equalize_expanded, |d| {
+                d.child(slider_row(
+                    "Amount",
+                    format!("{:.2}", eq_v),
+                    self.equalize_amount.clone(),
+                    fs,
+                ))
+            });
+
         // --- Reset row ---
         let reset_row = div().flex().justify_end().child(
             div()
@@ -907,6 +956,8 @@ impl Render for GpuPipelineControls {
                         .child(vibrance_section)
                         .child(sep())
                         .child(hue_section)
+                        .child(sep())
+                        .child(equalize_section)
                         .child(sep())
                         .child(reset_row),
                 )
