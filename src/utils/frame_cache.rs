@@ -95,9 +95,7 @@ pub fn lc_frame_path(
 pub fn purge_image(image_key: &str) -> Result<u64, String> {
     let root = cache_root()?;
     let mut freed = 0u64;
-    for entry in
-        std::fs::read_dir(&root).map_err(|e| format!("read {}: {}", root.display(), e))?
-    {
+    for entry in std::fs::read_dir(&root).map_err(|e| format!("read {}: {}", root.display(), e))? {
         let entry = match entry {
             Ok(e) => e,
             Err(_) => continue,
@@ -123,10 +121,8 @@ pub fn purge_image(image_key: &str) -> Result<u64, String> {
 pub fn purge_all() -> Result<u64, String> {
     let root = cache_root()?;
     let freed = total_size(&root).unwrap_or(0);
-    std::fs::remove_dir_all(&root)
-        .map_err(|e| format!("remove {}: {}", root.display(), e))?;
-    std::fs::create_dir_all(&root)
-        .map_err(|e| format!("create {}: {}", root.display(), e))?;
+    std::fs::remove_dir_all(&root).map_err(|e| format!("remove {}: {}", root.display(), e))?;
+    std::fs::create_dir_all(&root).map_err(|e| format!("create {}: {}", root.display(), e))?;
     Ok(freed)
 }
 

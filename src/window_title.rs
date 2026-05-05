@@ -162,8 +162,7 @@ mod tests {
     #[test]
     fn test_expand_template_unknown_placeholder_preserved() {
         let mut settings = AppSettings::default();
-        settings.appearance.window_title_format =
-            "{filename} {unknown} {index}".to_string();
+        settings.appearance.window_title_format = "{filename} {unknown} {index}".to_string();
         let path = Path::new("test.png");
 
         let title = format_window_title(Some(path), 0, 1, SortMode::Alphabetical, &settings);

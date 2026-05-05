@@ -21,7 +21,7 @@ This document outlines the development roadmap for rpview, organized by implemen
 - **Phase 14** (Testing & Quality): ✅ Complete
 - **Phase 15**: ⏳ Planned
 - **Phase 17** (Persistent Frame Cache): ✅ Complete
-- **Phase 18** (GPU Pixel-Shader Pipeline): 🚧 In Progress — core pipeline + UI shipped in v0.22.0; deferred polish/perf items below
+- **Phase 18** (GPU Pixel-Shader Pipeline): ✅ Complete — core pipeline + UI shipped in v0.22.0; all five OKLab stages (LC, BC, Vibrance, Hue, Equalize) plus polish/perf items shipped through v0.22.9
 
 ## Phase 1: Project Foundation & Basic Structure ✅
 
@@ -2607,7 +2607,7 @@ fn open_in_system_viewer(&self, image_path: &PathBuf) -> Result<(), String> {
 - Phase 16.6: Advanced features (optional - settings profiles, import/export, keyboard customization)
 - Phase 15: Documentation & Release (final polish, packages, crates.io publish)
 
-## Phase 18: GPU Pixel-Shader Pipeline 🚧
+## Phase 18: GPU Pixel-Shader Pipeline ✅
 
 A standalone wgpu-based pipeline running WGSL compute shaders ported from
 PixelShaderPaint3, providing OKLab-space adjustments (LC, BC, Vibrance,

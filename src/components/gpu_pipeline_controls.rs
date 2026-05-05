@@ -454,11 +454,13 @@ impl GpuPipelineControls {
         self.lc_midpoint.update(cx, |s, cx| s.set_value(0.5, cx));
         self.bc_brightness.update(cx, |s, cx| s.set_value(0.0, cx));
         self.bc_contrast.update(cx, |s, cx| s.set_value(0.0, cx));
-        self.vibrance_amount.update(cx, |s, cx| s.set_value(0.5, cx));
+        self.vibrance_amount
+            .update(cx, |s, cx| s.set_value(0.5, cx));
         self.vibrance_saturation
             .update(cx, |s, cx| s.set_value(0.0, cx));
         self.hue_value.update(cx, |s, cx| s.set_value(0.5, cx));
-        self.equalize_amount.update(cx, |s, cx| s.set_value(0.5, cx));
+        self.equalize_amount
+            .update(cx, |s, cx| s.set_value(0.5, cx));
         cx.emit(GpuPipelineControlsEvent::ResetRequested);
     }
 }
@@ -698,11 +700,8 @@ impl Render for GpuPipelineControls {
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _evt: &MouseDownEvent, _window, cx| {
-                                    let name = this
-                                        .preset_name_input
-                                        .read(cx)
-                                        .content()
-                                        .to_string();
+                                    let name =
+                                        this.preset_name_input.read(cx).content().to_string();
                                     this.save_current_as_preset(&name, cx);
                                 }),
                             )
@@ -764,11 +763,36 @@ impl Render for GpuPipelineControls {
                 }),
             ))
             .when(self.lc_expanded, |d| {
-                d.child(slider_row("Radius", format!("{:.0} px", lc_radius_displayed), self.lc_radius.clone(), fs))
-                    .child(slider_row("Strength", format!("{:.2}", lc_strength_v), self.lc_strength.clone(), fs))
-                    .child(slider_row("Shadow Lift", format!("{:.2}", lc_shadow_v), self.lc_shadow_lift.clone(), fs))
-                    .child(slider_row("Highlight Darken", format!("{:.2}", lc_highlight_v), self.lc_highlight_darken.clone(), fs))
-                    .child(slider_row("Midpoint (BC pivot)", format!("{:.2}", lc_midpoint_v), self.lc_midpoint.clone(), fs))
+                d.child(slider_row(
+                    "Radius",
+                    format!("{:.0} px", lc_radius_displayed),
+                    self.lc_radius.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Strength",
+                    format!("{:.2}", lc_strength_v),
+                    self.lc_strength.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Shadow Lift",
+                    format!("{:.2}", lc_shadow_v),
+                    self.lc_shadow_lift.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Highlight Darken",
+                    format!("{:.2}", lc_highlight_v),
+                    self.lc_highlight_darken.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Midpoint (BC pivot)",
+                    format!("{:.2}", lc_midpoint_v),
+                    self.lc_midpoint.clone(),
+                    fs,
+                ))
             });
 
         // --- BC section ---
@@ -794,8 +818,18 @@ impl Render for GpuPipelineControls {
                 }),
             ))
             .when(self.bc_expanded, |d| {
-                d.child(slider_row("Brightness", format!("{:+.2}", bc_bright_v), self.bc_brightness.clone(), fs))
-                    .child(slider_row("Contrast", format!("{:+.2}", bc_cont_v), self.bc_contrast.clone(), fs))
+                d.child(slider_row(
+                    "Brightness",
+                    format!("{:+.2}", bc_bright_v),
+                    self.bc_brightness.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Contrast",
+                    format!("{:+.2}", bc_cont_v),
+                    self.bc_contrast.clone(),
+                    fs,
+                ))
             });
 
         // --- Vibrance section (with Saturation) ---

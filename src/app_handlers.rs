@@ -487,7 +487,8 @@ impl App {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.gpu_pipeline_controls.update(cx, |c, cx| c.reset_all(cx));
+        self.gpu_pipeline_controls
+            .update(cx, |c, cx| c.reset_all(cx));
         self.viewer.reset_gpu_pipeline();
         cx.notify();
     }
@@ -845,21 +846,19 @@ impl App {
             },
         }
         let source: Option<SaveSource> = if any_processing {
-            self.viewer
-                .capture_current_display()
-                .and_then(|snapshot| {
-                    snapshot.render.as_bytes(0).map(|bgra| {
-                        let mut rgba = bgra.to_vec();
-                        for px in rgba.chunks_exact_mut(4) {
-                            px.swap(0, 2);
-                        }
-                        SaveSource::Processed {
-                            rgba,
-                            width: snapshot.width,
-                            height: snapshot.height,
-                        }
-                    })
+            self.viewer.capture_current_display().and_then(|snapshot| {
+                snapshot.render.as_bytes(0).map(|bgra| {
+                    let mut rgba = bgra.to_vec();
+                    for px in rgba.chunks_exact_mut(4) {
+                        px.swap(0, 2);
+                    }
+                    SaveSource::Processed {
+                        rgba,
+                        width: snapshot.width,
+                        height: snapshot.height,
+                    }
                 })
+            })
         } else {
             self.viewer
                 .current_image
@@ -929,7 +928,6 @@ impl App {
         })
         .detach();
     }
-
 }
 
 /// Write `image_data` to `save_path` atomically (temp file + rename) using

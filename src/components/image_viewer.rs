@@ -597,11 +597,7 @@ impl ImageViewer {
     /// alone. `apparent_width = width * zoom` stays constant, and because
     /// `pan` is the screen position of the image's top-left corner, it
     /// doesn't shift when only the pixel grid underneath resamples.
-    pub(crate) fn rescale_for_size_change(
-        &mut self,
-        old_eff: (u32, u32),
-        new_eff: (u32, u32),
-    ) {
+    pub(crate) fn rescale_for_size_change(&mut self, old_eff: (u32, u32), new_eff: (u32, u32)) {
         if old_eff == new_eff || new_eff.0 == 0 || old_eff.0 == 0 {
             return;
         }
@@ -800,7 +796,8 @@ impl ImageViewer {
 
                 // Cache first 3 frames immediately for instant display, rest will load in background
                 let mut frame_cache_paths = Vec::new();
-                if let (Some(anim_data), Some(key)) = (animation_data.as_ref(), image_key.as_ref()) {
+                if let (Some(anim_data), Some(key)) = (animation_data.as_ref(), image_key.as_ref())
+                {
                     let initial_cache_count = std::cmp::min(3, anim_data.frames.len());
                     debug_eprintln!(
                         "[LOAD] Caching first {} frames for immediate display...",
@@ -812,7 +809,8 @@ impl ImageViewer {
                             Err(_e) => {
                                 debug_eprintln!(
                                     "[ERROR] Failed to resolve cache path for frame {}: {}",
-                                    i, _e
+                                    i,
+                                    _e
                                 );
                                 frame_cache_paths.push(PathBuf::new());
                                 continue;
@@ -868,10 +866,7 @@ impl ImageViewer {
                     self.image_state.animation = None;
                 }
 
-                let lc_frame_count = animation_data
-                    .as_ref()
-                    .map(|a| a.frame_count)
-                    .unwrap_or(0);
+                let lc_frame_count = animation_data.as_ref().map(|a| a.frame_count).unwrap_or(0);
                 self.current_image = Some(LoadedImage {
                     path: path.clone(),
                     width,
@@ -1219,11 +1214,7 @@ impl ImageViewer {
         // Frame-aware cache key: for animated images, processing depends on
         // both the params AND the currently displayed frame.  Static images
         // have `frame_idx == None`, which trivially matches across calls.
-        let frame_idx = self
-            .image_state
-            .animation
-            .as_ref()
-            .map(|a| a.current_frame);
+        let frame_idx = self.image_state.animation.as_ref().map(|a| a.current_frame);
 
         // Parameter change invalidates every cached per-frame render — a
         // revisit must re-process under the new params, not install a stale
@@ -1288,8 +1279,7 @@ impl ImageViewer {
         // For animated images, prefer the currently-displayed frame's
         // already-decoded RGBA (held in animation_data) over the on-disk
         // re-decode of frame 0.
-        let (rgba, w, h): (Vec<u8>, u32, u32) = if let Some(ref anim_data) = loaded.animation_data
-        {
+        let (rgba, w, h): (Vec<u8>, u32, u32) = if let Some(ref anim_data) = loaded.animation_data {
             let idx = frame_idx
                 .unwrap_or(0)
                 .min(anim_data.frames.len().saturating_sub(1));
@@ -1333,37 +1323,33 @@ impl ImageViewer {
 
         rayon::spawn(move || {
             debug_eprintln!("[GPU_THREAD] start (frame {:?}, {}x{})", frame_idx, w, h);
-            let result: LcResult = match crate::gpu::process_pipeline(
-                &rgba,
-                w,
-                h,
-                &params_for_thread,
-            ) {
-                Ok((bgra_bytes, out_w, out_h)) => {
-                    match image::RgbaImage::from_raw(out_w, out_h, bgra_bytes) {
-                        Some(bgra_image) => {
-                            let frame = image::Frame::new(bgra_image);
-                            let render = Arc::new(gpui::RenderImage::new(
-                                smallvec::SmallVec::from_elem(frame, 1),
-                            ));
-                            Some((render, (out_w, out_h)))
-                        }
-                        None => {
-                            debug_eprintln!(
-                                "[GPU] BGRA buffer size mismatch (out {}x{} expected {} bytes)",
-                                out_w,
-                                out_h,
-                                (out_w * out_h * 4) as usize,
-                            );
-                            None
+            let result: LcResult =
+                match crate::gpu::process_pipeline(&rgba, w, h, &params_for_thread) {
+                    Ok((bgra_bytes, out_w, out_h)) => {
+                        match image::RgbaImage::from_raw(out_w, out_h, bgra_bytes) {
+                            Some(bgra_image) => {
+                                let frame = image::Frame::new(bgra_image);
+                                let render = Arc::new(gpui::RenderImage::new(
+                                    smallvec::SmallVec::from_elem(frame, 1),
+                                ));
+                                Some((render, (out_w, out_h)))
+                            }
+                            None => {
+                                debug_eprintln!(
+                                    "[GPU] BGRA buffer size mismatch (out {}x{} expected {} bytes)",
+                                    out_w,
+                                    out_h,
+                                    (out_w * out_h * 4) as usize,
+                                );
+                                None
+                            }
                         }
                     }
-                }
-                Err(_e) => {
-                    debug_eprintln!("[GPU] pipeline error: {_e}");
-                    None
-                }
-            };
+                    Err(_e) => {
+                        debug_eprintln!("[GPU] pipeline error: {_e}");
+                        None
+                    }
+                };
             debug_eprintln!("[GPU_THREAD] done, produced={}", result.is_some());
             let _ = tx.send(result);
         });
@@ -1395,9 +1381,7 @@ impl ImageViewer {
             .cancel
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        let installed = if !cancelled
-            && let Some((render, size)) = result
-        {
+        let installed = if !cancelled && let Some((render, size)) = result {
             self.with_size_aware_change(|s| {
                 if let Some(loaded) = s.current_image.as_mut() {
                     loaded.gpu_pipeline_render = Some(render.clone());
@@ -1743,8 +1727,7 @@ impl ImageViewer {
         let Some(loaded) = self.current_image.as_ref() else {
             return false;
         };
-        !loaded.lc_frame_renders.is_empty()
-            && loaded.lc_frame_renders.iter().all(|s| s.is_some())
+        !loaded.lc_frame_renders.is_empty() && loaded.lc_frame_renders.iter().all(|s| s.is_some())
     }
 
     /// Kick off batch LC processing for all animation frames.
@@ -1921,9 +1904,8 @@ impl ImageViewer {
                         current_clone.store(idx, Ordering::Relaxed);
                         let fmap = crate::utils::float_map::FloatMap::from_rgba8(&rgba);
                         let cancel_for_feedback = cancel_clone.clone();
-                        let feedback: Box<FeedbackFn> = Box::new(move |_p, _msg| {
-                            cancel_for_feedback.load(Ordering::Relaxed)
-                        });
+                        let feedback: Box<FeedbackFn> =
+                            Box::new(move |_p, _msg| cancel_for_feedback.load(Ordering::Relaxed));
                         let out = crate::utils::local_contrast::locally_normalize_luminance(
                             &fmap,
                             &params_clone,
@@ -2027,8 +2009,7 @@ impl ImageViewer {
                                 return;
                             };
                             if idx < loaded.lc_frame_renders.len() {
-                                loaded.lc_frame_renders[idx] =
-                                    Some((render.clone(), size));
+                                loaded.lc_frame_renders[idx] = Some((render.clone(), size));
                             }
                             if let Some(ref anim) = s.image_state.animation
                                 && idx == anim.current_frame
@@ -2154,16 +2135,10 @@ impl ImageViewer {
             let idx = (slot - 3) as usize;
             return self.saved_slots[idx].as_ref().map(|s| (s.width, s.height));
         }
-        let frame_idx = self
-            .image_state
-            .animation
-            .as_ref()
-            .map(|a| a.current_frame);
-        self.current_image
-            .as_ref()
-            .map(|img| {
-                effective_image_size(img, self.lc_enabled, self.gpu_pipeline_enabled, frame_idx)
-            })
+        let frame_idx = self.image_state.animation.as_ref().map(|a| a.current_frame);
+        self.current_image.as_ref().map(|img| {
+            effective_image_size(img, self.lc_enabled, self.gpu_pipeline_enabled, frame_idx)
+        })
     }
 
     /// Capture the currently visible image as a `SavedSlot`.  Mirrors the
@@ -2178,11 +2153,7 @@ impl ImageViewer {
             return self.saved_slots[idx].clone();
         }
         // Animation frame index, used for per-frame LC lookup.
-        let frame_idx = self
-            .image_state
-            .animation
-            .as_ref()
-            .map(|a| a.current_frame);
+        let frame_idx = self.image_state.animation.as_ref().map(|a| a.current_frame);
         let loaded = self.current_image.as_mut()?;
         // GPU pipeline render takes top priority when enabled, then LC,
         // then filtered, then raw source.
@@ -2605,7 +2576,8 @@ impl ImageViewer {
             Err(_e) => {
                 debug_eprintln!(
                     "[ERROR] Failed to resolve cache path for frame {}: {}",
-                    frame_index, _e
+                    frame_index,
+                    _e
                 );
                 return false;
             }
@@ -2838,59 +2810,58 @@ impl ImageViewer {
         // cached PNG when available — so the LC priority chain has the
         // correct per-frame source as a fallback when there's no LC render
         // yet (streaming-process state, or post-navigation rehydration).
-        let path =
-            if let Some(ref anim_state) = self.image_state.animation {
-                let frame_index = anim_state.current_frame;
+        let path = if let Some(ref anim_state) = self.image_state.animation {
+            let frame_index = anim_state.current_frame;
 
-                if frame_index >= loaded.frame_cache_paths.len() {
-                    return div()
-                        .size_full()
-                        .child(cx.new(|_cx| ErrorDisplay::new("Invalid frame index".to_string())))
-                        .into_any_element();
-                }
-                let cached_path = &loaded.frame_cache_paths[frame_index];
-                let path_ok = !cached_path.as_os_str().is_empty() && cached_path.exists();
+            if frame_index >= loaded.frame_cache_paths.len() {
+                return div()
+                    .size_full()
+                    .child(cx.new(|_cx| ErrorDisplay::new("Invalid frame index".to_string())))
+                    .into_any_element();
+            }
+            let cached_path = &loaded.frame_cache_paths[frame_index];
+            let path_ok = !cached_path.as_os_str().is_empty() && cached_path.exists();
 
-                // Whether we have a per-frame LC render that will take
-                // priority below — if so the path itself is unused.
-                let has_lc_render = self.lc_enabled
-                    && loaded
-                        .lc_frame_renders
-                        .get(frame_index)
-                        .and_then(|s| s.as_ref())
-                        .is_some();
+            // Whether we have a per-frame LC render that will take
+            // priority below — if so the path itself is unused.
+            let has_lc_render = self.lc_enabled
+                && loaded
+                    .lc_frame_renders
+                    .get(frame_index)
+                    .and_then(|s| s.as_ref())
+                    .is_some();
 
-                if path_ok {
-                    cached_path.clone()
-                } else if has_lc_render {
-                    // Path is unused — lc_candidate has the pixels.
-                    PathBuf::new()
-                } else if self.lc_enabled {
-                    // LC is on but no per-frame render yet AND raw frame not
-                    // cached. Fall back to the GIF file (shows frame 0 — not
-                    // ideal, but better than erroring; cache_frame should
-                    // typically have populated this slot already).
-                    loaded.path.clone()
-                } else {
-                    return div()
-                        .size_full()
-                        .child(cx.new(|_cx| {
-                            ErrorDisplay::new("Failed to load image frame".to_string())
-                        }))
-                        .into_any_element();
-                }
+            if path_ok {
+                cached_path.clone()
+            } else if has_lc_render {
+                // Path is unused — lc_candidate has the pixels.
+                PathBuf::new()
+            } else if self.lc_enabled {
+                // LC is on but no per-frame render yet AND raw frame not
+                // cached. Fall back to the GIF file (shows frame 0 — not
+                // ideal, but better than erroring; cache_frame should
+                // typically have populated this slot already).
+                loaded.path.clone()
             } else {
-                // Static image priority: full SVG re-raster (no region) → rasterized → original.
-                // The in-memory filtered image is handled below via `filtered_source`.
-                let full_reraster = self
-                    .svg_reraster_path
-                    .as_ref()
-                    .filter(|_| self.svg_reraster_region.is_none());
-                full_reraster
-                    .or(loaded.rasterized_path.as_ref())
-                    .unwrap_or(&loaded.path)
-                    .clone()
-            };
+                return div()
+                    .size_full()
+                    .child(
+                        cx.new(|_cx| ErrorDisplay::new("Failed to load image frame".to_string())),
+                    )
+                    .into_any_element();
+            }
+        } else {
+            // Static image priority: full SVG re-raster (no region) → rasterized → original.
+            // The in-memory filtered image is handled below via `filtered_source`.
+            let full_reraster = self
+                .svg_reraster_path
+                .as_ref()
+                .filter(|_| self.svg_reraster_region.is_none());
+            full_reraster
+                .or(loaded.rasterized_path.as_ref())
+                .unwrap_or(&loaded.path)
+                .clone()
+        };
 
         // Apply zoom to image dimensions
         let zoomed_width = (width as f32 * self.image_state.zoom) as u32;
@@ -2915,7 +2886,8 @@ impl ImageViewer {
         } else {
             None
         };
-        let lc_candidate = if slot_candidate.is_none() && gpu_candidate.is_none() && self.lc_enabled {
+        let lc_candidate = if slot_candidate.is_none() && gpu_candidate.is_none() && self.lc_enabled
+        {
             // For animations, prefer per-frame LC cache over the generic lc_render.
             if let Some(ref anim) = self.image_state.animation {
                 let idx = anim.current_frame;

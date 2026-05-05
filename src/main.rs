@@ -73,9 +73,8 @@ mod window_title;
 use cli::Cli;
 use components::{
     DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, FilterWindowView,
-    GpuPipelineControls, GpuPipelineControlsEvent, GpuPipelineWindowView, HelpOverlay,
-    ImageViewer, LocalContrastControls, LocalContrastControlsEvent, LocalContrastWindowView,
-    SettingsWindow,
+    GpuPipelineControls, GpuPipelineControlsEvent, GpuPipelineWindowView, HelpOverlay, ImageViewer,
+    LocalContrastControls, LocalContrastControlsEvent, LocalContrastWindowView, SettingsWindow,
 };
 use state::{AppSettings, AppState};
 use utils::debug_eprintln;
@@ -83,19 +82,18 @@ use utils::settings_io;
 
 // Import all actions from lib.rs (they're defined there to avoid duplication)
 use rpview::{
-    ApplyLocalContrast, ApplyLocalContrastAll, BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ConfirmDelete,
-    ContrastDown, ContrastUp, DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp,
-    NextFrame, NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer,
-    OpenInExternalViewerAndQuit,
-    PanDown, PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
-    PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, RecallSlot3,
-    RecallSlot4, RecallSlot5, RecallSlot6, RecallSlot7, RecallSlot8, RecallSlot9, RequestDelete,
-    RequestPermanentDelete, ResetFilters, ResetGpuPipeline, ResetLocalContrast,
-    ResetSettingsToDefaults, RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical,
-    SortByModified, SortByTypeToggle, StoreSlot3, StoreSlot4, StoreSlot5, StoreSlot6, StoreSlot7,
-    StoreSlot8, StoreSlot9, ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters,
-    ToggleGpuPipeline, ToggleHelp, ToggleLocalContrast, ToggleSettings, ToggleZoomIndicator,
-    ZoomIn, ZoomInFast,
+    ApplyLocalContrast, ApplyLocalContrastAll, BrightnessDown, BrightnessUp, CloseSettings,
+    CloseWindow, ConfirmDelete, ContrastDown, ContrastUp, DisableFilters, EnableFilters,
+    EscapePressed, GammaDown, GammaUp, NextFrame, NextImage, OpenFile, OpenInExternalEditor,
+    OpenInExternalViewer, OpenInExternalViewerAndQuit, PanDown, PanDownFast, PanDownSlow, PanLeft,
+    PanLeftFast, PanLeftSlow, PanRight, PanRightFast, PanRightSlow, PanUp, PanUpFast, PanUpSlow,
+    PreviousFrame, PreviousImage, Quit, RecallSlot3, RecallSlot4, RecallSlot5, RecallSlot6,
+    RecallSlot7, RecallSlot8, RecallSlot9, RequestDelete, RequestPermanentDelete, ResetFilters,
+    ResetGpuPipeline, ResetLocalContrast, ResetSettingsToDefaults, RevealInFinder, SaveFile,
+    SaveFileToDownloads, SortAlphabetical, SortByModified, SortByTypeToggle, StoreSlot3,
+    StoreSlot4, StoreSlot5, StoreSlot6, StoreSlot7, StoreSlot8, StoreSlot9,
+    ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters, ToggleGpuPipeline,
+    ToggleHelp, ToggleLocalContrast, ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast,
     ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow,
     ZoomReset, ZoomResetAndCenter,
 };
@@ -351,10 +349,7 @@ fn main() {
                                     if let Some(loaded) = this.viewer.current_image.as_mut() {
                                         loaded.lc_render = None;
                                         loaded.cached_lc_params = None;
-                                        loaded
-                                            .lc_frame_renders
-                                            .iter_mut()
-                                            .for_each(|s| *s = None);
+                                        loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
                                     }
                                     cx.notify();
                                 }
@@ -375,10 +370,7 @@ fn main() {
                                     cx.notify();
                                 }
                                 LocalContrastControlsEvent::ParametersChanged => {
-                                    let auto = this
-                                        .local_contrast_controls
-                                        .read(cx)
-                                        .auto_process;
+                                    let auto = this.local_contrast_controls.read(cx).auto_process;
                                     // Persist auto-process state per-image (only when it changes).
                                     if this.viewer.image_state.lc_auto_process != auto {
                                         this.viewer.image_state.lc_auto_process = auto;
@@ -399,9 +391,7 @@ fn main() {
                                     // Auto Process on: process and display the result.
                                     this.viewer.set_lc_enabled(true);
                                     // Auto-pause animation when LC is enabled.
-                                    if let Some(ref mut anim) =
-                                        this.viewer.image_state.animation
-                                    {
+                                    if let Some(ref mut anim) = this.viewer.image_state.animation {
                                         anim.is_playing = false;
                                     }
                                     let params =
@@ -427,13 +417,15 @@ fn main() {
                                         .as_ref()
                                         .and_then(|loaded| loaded.image_key.clone());
                                     let toast_msg = match key {
-                                        Some(ref k) => match crate::utils::frame_cache::purge_image(k) {
-                                            Ok(freed) => format!(
-                                                "Cleared cache for current image ({:.2} MB)",
-                                                freed as f64 / (1024.0 * 1024.0)
-                                            ),
-                                            Err(e) => format!("Cache clear failed: {e}"),
-                                        },
+                                        Some(ref k) => {
+                                            match crate::utils::frame_cache::purge_image(k) {
+                                                Ok(freed) => format!(
+                                                    "Cleared cache for current image ({:.2} MB)",
+                                                    freed as f64 / (1024.0 * 1024.0)
+                                                ),
+                                                Err(e) => format!("Cache clear failed: {e}"),
+                                            }
+                                        }
                                         None => "No cache key for current image".to_string(),
                                     };
                                     // Drop in-memory caches so the next batch
@@ -444,10 +436,7 @@ fn main() {
                                         loaded.lc_render = None;
                                         loaded.lc_render_size = None;
                                         loaded.cached_lc_params = None;
-                                        loaded
-                                            .lc_frame_renders
-                                            .iter_mut()
-                                            .for_each(|s| *s = None);
+                                        loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
                                         loaded.lc_pending_frame_renders = None;
                                         for slot in loaded.frame_cache_paths.iter_mut() {
                                             *slot = std::path::PathBuf::new();
@@ -462,23 +451,19 @@ fn main() {
                                     cx.notify();
                                 }
                                 LocalContrastControlsEvent::ClearAllCachesRequested => {
-                                    let toast_msg =
-                                        match crate::utils::frame_cache::purge_all() {
-                                            Ok(freed) => format!(
-                                                "Cleared all cached frames ({:.2} MB)",
-                                                freed as f64 / (1024.0 * 1024.0)
-                                            ),
-                                            Err(e) => format!("Cache clear failed: {e}"),
-                                        };
+                                    let toast_msg = match crate::utils::frame_cache::purge_all() {
+                                        Ok(freed) => format!(
+                                            "Cleared all cached frames ({:.2} MB)",
+                                            freed as f64 / (1024.0 * 1024.0)
+                                        ),
+                                        Err(e) => format!("Cache clear failed: {e}"),
+                                    };
                                     this.viewer.cancel_lc_batch();
                                     if let Some(loaded) = this.viewer.current_image.as_mut() {
                                         loaded.lc_render = None;
                                         loaded.lc_render_size = None;
                                         loaded.cached_lc_params = None;
-                                        loaded
-                                            .lc_frame_renders
-                                            .iter_mut()
-                                            .for_each(|s| *s = None);
+                                        loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
                                         loaded.lc_pending_frame_renders = None;
                                         for slot in loaded.frame_cache_paths.iter_mut() {
                                             *slot = std::path::PathBuf::new();
@@ -506,8 +491,7 @@ fn main() {
                             &gpu_pipeline_controls,
                             |this, _entity, event: &GpuPipelineControlsEvent, cx| match event {
                                 GpuPipelineControlsEvent::ParametersChanged => {
-                                    let params =
-                                        this.gpu_pipeline_controls.read(cx).get_params(cx);
+                                    let params = this.gpu_pipeline_controls.read(cx).get_params(cx);
                                     this.viewer.update_gpu_pipeline(params);
                                     cx.notify();
                                 }
@@ -731,7 +715,10 @@ fn main() {
         forward!(SaveFile, handle_save_file);
         forward!(SaveFileToDownloads, handle_save_file_to_downloads);
         forward!(OpenInExternalViewer, handle_open_in_external_viewer);
-        forward!(OpenInExternalViewerAndQuit, handle_open_in_external_viewer_and_quit);
+        forward!(
+            OpenInExternalViewerAndQuit,
+            handle_open_in_external_viewer_and_quit
+        );
         forward!(OpenInExternalEditor, handle_open_in_external_editor);
         forward!(RevealInFinder, handle_reveal_in_finder);
         forward!(RequestDelete, handle_request_delete);

@@ -226,11 +226,7 @@ impl LocalContrastControls {
     }
 
     /// Update batch processing progress. `None` = not running.
-    pub fn set_batch_progress(
-        &mut self,
-        progress: Option<(usize, usize)>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_batch_progress(&mut self, progress: Option<(usize, usize)>, cx: &mut Context<Self>) {
         self.batch_progress = progress;
         cx.notify();
     }

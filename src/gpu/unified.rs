@@ -263,7 +263,9 @@ struct LanczosUniforms {
 
 fn lc_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
     static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
-    P.get_or_init(|| pipeline::build_stage_pipeline(ctx, "lc", include_str!("shaders/local_contrast.wgsl")))
+    P.get_or_init(|| {
+        pipeline::build_stage_pipeline(ctx, "lc", include_str!("shaders/local_contrast.wgsl"))
+    })
 }
 fn bc_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
     static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
@@ -271,7 +273,9 @@ fn bc_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
 }
 fn vibrance_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
     static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
-    P.get_or_init(|| pipeline::build_stage_pipeline(ctx, "vibrance", include_str!("shaders/vibrance.wgsl")))
+    P.get_or_init(|| {
+        pipeline::build_stage_pipeline(ctx, "vibrance", include_str!("shaders/vibrance.wgsl"))
+    })
 }
 fn hue_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
     static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
@@ -493,14 +497,7 @@ pub fn process_pipeline(
                     "lanczos v oklab",
                 );
             } else {
-                pipeline::encode_decode(
-                    ctx,
-                    &mut encoder,
-                    source,
-                    &outputs.buf_a,
-                    out_w,
-                    out_h,
-                );
+                pipeline::encode_decode(ctx, &mut encoder, source, &outputs.buf_a, out_w, out_h);
             }
             let mut current_in_a = true;
 

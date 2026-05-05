@@ -48,10 +48,7 @@ mod tests {
 
     #[test]
     fn display_invalid_format() {
-        let err = AppError::InvalidFormat(
-            PathBuf::from("photo.heic"),
-            "HEIC not supported".into(),
-        );
+        let err = AppError::InvalidFormat(PathBuf::from("photo.heic"), "HEIC not supported".into());
         let msg = err.to_string();
         assert!(msg.contains("photo.heic"), "got: {msg}");
         assert!(msg.contains("HEIC not supported"), "got: {msg}");
@@ -71,10 +68,7 @@ mod tests {
 
     #[test]
     fn display_image_load_error() {
-        let err = AppError::ImageLoadError(
-            PathBuf::from("bad.png"),
-            "corrupt header".into(),
-        );
+        let err = AppError::ImageLoadError(PathBuf::from("bad.png"), "corrupt header".into());
         let msg = err.to_string();
         assert!(msg.contains("bad.png"), "got: {msg}");
         assert!(msg.contains("corrupt header"), "got: {msg}");

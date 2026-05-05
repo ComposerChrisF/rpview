@@ -263,7 +263,7 @@ mod tests {
         let bgra = m.to_bgra_image();
         let px = bgra.get_pixel(0, 0);
         // BGRA layout: [B, G, R, A]
-        assert_eq!(px[0], 0);   // B channel gets blue (0.0)
+        assert_eq!(px[0], 0); // B channel gets blue (0.0)
         assert_eq!(px[1], 128); // G channel gets green (0.5)
         assert_eq!(px[2], 255); // R channel gets red (1.0)
         assert_eq!(px[3], 255); // A defaults to 1.0 (no alpha plane)
@@ -319,7 +319,12 @@ mod tests {
         // Values should be very close to originals (some Lanczos ringing allowed)
         for i in 0..9 {
             let diff = (m.r[i] - resized.r[i]).abs();
-            assert!(diff < 0.15, "pixel {i}: orig={} resized={}", m.r[i], resized.r[i]);
+            assert!(
+                diff < 0.15,
+                "pixel {i}: orig={} resized={}",
+                m.r[i],
+                resized.r[i]
+            );
         }
     }
 

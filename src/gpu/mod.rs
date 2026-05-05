@@ -29,8 +29,7 @@ pub mod unified;
 pub use device::{GpuContext, GpuError, get_context};
 #[allow(unused_imports)] // Public surface for the not-yet-wired UI layer.
 pub use unified::{
-    BcParams, EqualizeParams, HueParams, LcParams, UnifiedParams, VibranceParams,
-    process_pipeline,
+    BcParams, EqualizeParams, HueParams, LcParams, UnifiedParams, VibranceParams, process_pipeline,
 };
 
 /// Shared OKLab + sRGB↔linear helpers, prepended to every shader that needs

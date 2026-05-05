@@ -261,7 +261,10 @@ mod tests {
             loaded.viewer_behavior.default_zoom_mode,
             settings.viewer_behavior.default_zoom_mode
         );
-        assert_eq!(loaded.appearance.font_size_scale, settings.appearance.font_size_scale);
+        assert_eq!(
+            loaded.appearance.font_size_scale,
+            settings.appearance.font_size_scale
+        );
     }
 
     #[test]
@@ -290,7 +293,10 @@ mod tests {
         let loaded = load_settings_from_path(&test_path);
         assert_eq!(loaded.viewer_behavior.state_cache_size, 42);
         // Untouched sections should match defaults
-        assert_eq!(loaded.performance, crate::state::settings::Performance::default());
+        assert_eq!(
+            loaded.performance,
+            crate::state::settings::Performance::default()
+        );
     }
 
     #[test]
