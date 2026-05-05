@@ -19,6 +19,7 @@ target/
 .env.local
 *.local
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Local cargo config (path overrides for development)
 .cargo/config.toml
