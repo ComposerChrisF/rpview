@@ -68,7 +68,7 @@ fn collect_animation_frames(frames: image::Frames<'_>) -> Result<AnimationData, 
         .map(|frame| {
             let delay = frame.delay();
             let (numer, denom) = delay.numer_denom_ms();
-            let duration_ms = if denom == 0 { 100 } else { numer / denom };
+            let duration_ms = numer.checked_div(denom).unwrap_or(100);
 
             let buffer = frame.into_buffer();
             let image = DynamicImage::ImageRgba8(buffer);
