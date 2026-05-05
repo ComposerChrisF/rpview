@@ -364,7 +364,13 @@ mod tests {
             assert!(approx(l2, 0.5, EPS));
             assert!(approx(c2, 0.1, EPS));
             let h_diff = ((h2 - h).rem_euclid(TAU)).min(TAU - (h2 - h).rem_euclid(TAU));
-            assert!(h_diff < 1e-3, "hue mismatch at deg={}: h={} h2={}", deg, h, h2);
+            assert!(
+                h_diff < 1e-3,
+                "hue mismatch at deg={}: h={} h2={}",
+                deg,
+                h,
+                h2
+            );
         }
     }
 

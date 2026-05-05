@@ -7,7 +7,11 @@ impl Render for App {
         // Auto-resize button can pick the right factor.  Cheap: the setter
         // short-circuits if dims are unchanged and never triggers a re-render
         // on its own.
-        let current_dims = self.viewer.current_image.as_ref().map(|i| (i.width, i.height));
+        let current_dims = self
+            .viewer
+            .current_image
+            .as_ref()
+            .map(|i| (i.width, i.height));
         self.gpu_pipeline_controls
             .update(cx, |c, _| c.set_image_dimensions(current_dims));
 
@@ -270,8 +274,7 @@ impl Render for App {
             let advance: Option<usize> = {
                 if let Some(ref anim_state) = self.viewer.image_state.animation {
                     let now = Instant::now();
-                    let elapsed =
-                        now.duration_since(self.last_frame_update).as_millis() as u32;
+                    let elapsed = now.duration_since(self.last_frame_update).as_millis() as u32;
                     let frame_duration = anim_state
                         .frame_durations
                         .get(anim_state.current_frame)

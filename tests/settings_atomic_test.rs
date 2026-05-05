@@ -115,7 +115,10 @@ fn concurrent_readers_never_see_partial_file() {
                     parsed.is_ok(),
                     "reader observed a partial/corrupt file ({} bytes): {:?}",
                     bytes.len(),
-                    String::from_utf8_lossy(&bytes).chars().take(80).collect::<String>(),
+                    String::from_utf8_lossy(&bytes)
+                        .chars()
+                        .take(80)
+                        .collect::<String>(),
                 );
                 reads += 1;
             }

@@ -130,8 +130,14 @@ mod tests {
     #[test]
     fn save_overwrites_existing() {
         let name = test_name("overwrite");
-        let v1 = Parameters { contrast: 0.01, ..Parameters::default() };
-        let v2 = Parameters { contrast: 0.99, ..Parameters::default() };
+        let v1 = Parameters {
+            contrast: 0.01,
+            ..Parameters::default()
+        };
+        let v2 = Parameters {
+            contrast: 0.99,
+            ..Parameters::default()
+        };
         save_preset(&name, &v1).unwrap();
         save_preset(&name, &v2).unwrap();
         let loaded = load_preset(&name).unwrap();

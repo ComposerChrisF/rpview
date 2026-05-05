@@ -696,8 +696,16 @@ mod tests {
         // Backdate both entries so the subsequent get_current_state refresh
         // produces a strictly newer Instant without needing thread::sleep
         let past = Instant::now() - std::time::Duration::from_secs(1);
-        state.image_states.get_mut(&PathBuf::from("a.png")).unwrap().last_accessed = past;
-        state.image_states.get_mut(&PathBuf::from("b.png")).unwrap().last_accessed = past;
+        state
+            .image_states
+            .get_mut(&PathBuf::from("a.png"))
+            .unwrap()
+            .last_accessed = past;
+        state
+            .image_states
+            .get_mut(&PathBuf::from("b.png"))
+            .unwrap()
+            .last_accessed = past;
 
         // Access a.png to refresh its last_accessed to now (strictly newer than `past`)
         state.current_index = 0;
@@ -942,8 +950,8 @@ mod tests {
         // Assert — GIF group first (alphabetically before PNG), then PNG group.
         // Within each group, newest first.
         assert_eq!(state.image_paths[0], gif_file); // only GIF
-        assert_eq!(state.image_paths[1], png_new);  // newest PNG
-        assert_eq!(state.image_paths[2], png_old);  // oldest PNG
+        assert_eq!(state.image_paths[1], png_new); // newest PNG
+        assert_eq!(state.image_paths[2], png_old); // oldest PNG
     }
 
     // -- new_with_settings: start_path not found ------------------------------

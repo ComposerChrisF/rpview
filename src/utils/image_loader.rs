@@ -160,7 +160,8 @@ pub fn load_image_async(
                     Err(_e) => {
                         debug_eprintln!(
                             "[ASYNC LOAD ERROR] Failed to resolve cache path for frame {}: {}",
-                            i, _e
+                            i,
+                            _e
                         );
                         initial_frame_paths.push(PathBuf::new());
                         continue;
@@ -179,10 +180,7 @@ pub fn load_image_async(
                         initial_frame_paths.push(dest);
                     }
                     Err(_e) => {
-                        debug_eprintln!(
-                            "[ASYNC LOAD ERROR] Failed to cache frame {}: {}",
-                            i, _e
-                        );
+                        debug_eprintln!("[ASYNC LOAD ERROR] Failed to cache frame {}: {}", i, _e);
                         initial_frame_paths.push(PathBuf::new());
                     }
                 }
@@ -380,7 +378,10 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        assert!(matches!(result, Some(LoaderMessage::OversizedImage(_, _, _, _))));
+        assert!(matches!(
+            result,
+            Some(LoaderMessage::OversizedImage(_, _, _, _))
+        ));
     }
 
     #[test]

@@ -97,7 +97,10 @@ fn touch_or_insert<V>(
         }
         entries.push((key, make()));
     }
-    &entries.last().expect("entries non-empty after touch/insert").1
+    &entries
+        .last()
+        .expect("entries non-empty after touch/insert")
+        .1
 }
 
 static TEXTURE_CACHE: Mutex<TextureCache> = Mutex::new(TextureCache::new());

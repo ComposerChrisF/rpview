@@ -483,6 +483,7 @@ pub fn encode_histogram(
 
 /// Dispatch the equalize-apply pass: per-pixel CDF lookup blended with the
 /// original L by `Amount`.  Chroma + alpha pass through.
+#[allow(clippy::too_many_arguments)] // wgpu resources are inherently many.
 pub fn encode_equalize_apply(
     ctx: &GpuContext,
     encoder: &mut wgpu::CommandEncoder,
@@ -529,6 +530,7 @@ pub fn encode_equalize_apply(
 }
 
 /// Dispatch a per-stage filter (OKLab → OKLab, with uniform parameters).
+#[allow(clippy::too_many_arguments)] // wgpu resources are inherently many.
 pub fn encode_stage(
     ctx: &GpuContext,
     encoder: &mut wgpu::CommandEncoder,

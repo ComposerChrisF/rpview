@@ -119,10 +119,7 @@ impl Render for DebugOverlay {
             }
         );
 
-        let pan_str = format!(
-            "({:.1}, {:.1})",
-            self.config.pan.0, self.config.pan.1
-        );
+        let pan_str = format!("({:.1}, {:.1})", self.config.pan.0, self.config.pan.1);
 
         let image_dims_str = if let Some((w, h)) = self.config.image_dimensions {
             format!("{}x{}", w, h)

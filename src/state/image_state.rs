@@ -179,9 +179,21 @@ mod tests {
 
     #[test]
     fn filter_settings_partial_eq() {
-        let a = FilterSettings { brightness: 1.0, contrast: 2.0, gamma: 3.0 };
-        let b = FilterSettings { brightness: 1.0, contrast: 2.0, gamma: 3.0 };
-        let c = FilterSettings { brightness: 1.0, contrast: 2.0, gamma: 3.1 };
+        let a = FilterSettings {
+            brightness: 1.0,
+            contrast: 2.0,
+            gamma: 3.0,
+        };
+        let b = FilterSettings {
+            brightness: 1.0,
+            contrast: 2.0,
+            gamma: 3.0,
+        };
+        let c = FilterSettings {
+            brightness: 1.0,
+            contrast: 2.0,
+            gamma: 3.1,
+        };
         assert_eq!(a, b);
         assert_ne!(a, c);
     }
