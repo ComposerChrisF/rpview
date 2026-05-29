@@ -32,9 +32,18 @@ use crate::gpu::{pipeline, readback};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LcParams {
     /// Spatial scale of the local neighborhood, in pixels.  4–200, default 60.
+    /// Drives both the `strength` Gaussian reach and the CLAHE tile size.
     pub radius: f32,
-    /// Overall intensity. 0–2, default 0.5.
+    /// Overall intensity of the deviation-from-mean local contrast. 0–2,
+    /// default 0.5.
     pub strength: f32,
+    /// CLAHE (local-histogram) equalization faded into the dark tones by
+    /// source luminance.  Brings out subtle detail in the shadows using
+    /// per-tile histograms.  0–1, default 0.
+    pub shadows: f32,
+    /// CLAHE equalization faded into the bright tones by source luminance.
+    /// 0–1, default 0.
+    pub highlights: f32,
 }
 
 impl Default for LcParams {
@@ -42,6 +51,8 @@ impl Default for LcParams {
         Self {
             radius: 60.0,
             strength: 0.5,
+            shadows: 0.0,
+            highlights: 0.0,
         }
     }
 }
@@ -49,6 +60,18 @@ impl Default for LcParams {
 impl LcParams {
     pub fn is_identity(&self) -> bool {
         self.strength.abs() < 0.0005
+            && self.shadows.abs() < 0.0005
+            && self.highlights.abs() < 0.0005
+    }
+
+    /// True when the Gaussian-blur deviation contrast is active.
+    fn has_strength(&self) -> bool {
+        self.strength.abs() >= 0.0005
+    }
+
+    /// True when the CLAHE shadows/highlights sub-stage is active.
+    fn has_clahe(&self) -> bool {
+        self.shadows.abs() >= 0.0005 || self.highlights.abs() >= 0.0005
     }
 }
 
@@ -217,6 +240,22 @@ struct LcUniforms {
     _pad2: f32,
 }
 
+/// Shared uniform for all three LC CLAHE passes (histogram / cdf / apply).
+/// Each pass reads the subset it needs.  Layout matches the `Uniforms` struct
+/// in `lc_clahe_*.wgsl` (8 × 4 bytes = 32, 16-byte aligned).
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct ClaheUniforms {
+    nx: u32,
+    ny: u32,
+    image_w: u32,
+    image_h: u32,
+    clip_limit: f32,
+    shadows: f32,
+    highlights: f32,
+    _pad: f32,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct BcUniforms {
@@ -346,6 +385,82 @@ fn equalize_buffers(ctx: &GpuContext) -> &'static EqualizeBuffers {
         histogram_readback: pipeline::make_histogram_readback(ctx),
         cdf: pipeline::make_cdf_buffer(ctx),
     })
+}
+
+// --- LC CLAHE (local-histogram) sub-stage ---------------------------------
+
+/// Max tiles per axis for the LC CLAHE grid.  16×16 = 256 tiles → the tile
+/// histogram/CDF buffers are 256 × 256 × 4 = 256 KB each, allocated once.
+const CLAHE_MAX_TILES_PER_AXIS: u32 = 16;
+const CLAHE_MAX_TILES: u32 = CLAHE_MAX_TILES_PER_AXIS * CLAHE_MAX_TILES_PER_AXIS;
+/// Contrast-limit factor (the "CL" in CLAHE): each histogram bin is clipped to
+/// this multiple of the flat mean before the CDF is built, and the clipped
+/// mass is redistributed.  2.5 is a gentle limit that tames shadow noise
+/// without flattening genuine local contrast.
+const CLAHE_CLIP_LIMIT: f32 = 2.5;
+
+fn clahe_histogram_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_pipeline_with_layout(
+            ctx,
+            "lc clahe histogram",
+            include_str!("shaders/lc_clahe_histogram.wgsl"),
+            pipeline::clahe_histogram_layout(ctx),
+        )
+    })
+}
+
+fn clahe_cdf_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_pipeline_with_layout(
+            ctx,
+            "lc clahe cdf",
+            include_str!("shaders/lc_clahe_cdf.wgsl"),
+            pipeline::clahe_cdf_layout(ctx),
+        )
+    })
+}
+
+fn clahe_apply_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_pipeline_with_layout(
+            ctx,
+            "lc clahe apply",
+            include_str!("shaders/lc_clahe_apply.wgsl"),
+            // Identical bindings to the equalize-apply pass.
+            pipeline::equalize_apply_layout(ctx),
+        )
+    })
+}
+
+/// Tile histogram + tile CDF buffers for the LC CLAHE sub-stage, sized for the
+/// max tile count and cached for the lifetime of the GPU context.
+struct ClaheBuffers {
+    histogram: wgpu::Buffer,
+    cdf: wgpu::Buffer,
+}
+
+fn clahe_buffers(ctx: &GpuContext) -> &'static ClaheBuffers {
+    static B: OnceLock<ClaheBuffers> = OnceLock::new();
+    B.get_or_init(|| ClaheBuffers {
+        histogram: pipeline::make_tile_histogram_buffer(ctx, CLAHE_MAX_TILES),
+        cdf: pipeline::make_tile_cdf_buffer(ctx, CLAHE_MAX_TILES),
+    })
+}
+
+/// Choose the CLAHE tile grid for an image of `w × h` whose LC neighborhood is
+/// `radius` pixels.  Tile size tracks the radius (the locality scale the user
+/// already dialed in); clamped so each axis has 1..=`CLAHE_MAX_TILES_PER_AXIS`
+/// tiles and a tile is never smaller than ~64 px (tiny tiles give noisy
+/// histograms and buy nothing).
+fn clahe_grid(w: u32, h: u32, radius: f32) -> (u32, u32) {
+    let tile = radius.max(64.0);
+    let nx = ((w as f32 / tile).round() as u32).clamp(1, CLAHE_MAX_TILES_PER_AXIS);
+    let ny = ((h as f32 / tile).round() as u32).clamp(1, CLAHE_MAX_TILES_PER_AXIS);
+    (nx, ny)
 }
 
 /// Read 256 × u32 from `readback` and turn it into a 256-element CDF in
@@ -533,51 +648,119 @@ pub fn process_pipeline(
                 }
             };
 
-            // Stage: LC (two ping-pong dispatches).
+            // Stage: LC.  Two independent sub-effects share the LC params:
+            //   * Strength — separable Gaussian deviation-from-mean contrast
+            //     (two ping-pong dispatches).
+            //   * Shadows/Highlights — CLAHE (per-tile local-histogram
+            //     equalization, three all-GPU dispatches, no CPU readback).
+            // Either, both, or neither may be active.
             if let Some(lc) = params.lc
                 && !lc.is_identity()
             {
-                let make_u = |axis: f32| LcUniforms {
-                    radius: lc.radius,
-                    strength: lc.strength,
-                    axis,
-                    image_width: out_w as f32,
-                    image_height: out_h as f32,
-                    _pad0: 0.0,
-                    _pad1: 0.0,
-                    _pad2: 0.0,
-                };
-                let u0 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(0.0)));
-                let u1 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(1.0)));
-                let pl = lc_pipeline(ctx);
+                if lc.has_strength() {
+                    let make_u = |axis: f32| LcUniforms {
+                        radius: lc.radius,
+                        strength: lc.strength,
+                        axis,
+                        image_width: out_w as f32,
+                        image_height: out_h as f32,
+                        _pad0: 0.0,
+                        _pad1: 0.0,
+                        _pad2: 0.0,
+                    };
+                    let u0 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(0.0)));
+                    let u1 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(1.0)));
+                    let pl = lc_pipeline(ctx);
 
-                let (src, dst) = pingpong(current_in_a);
-                pipeline::encode_stage(
-                    ctx,
-                    &mut encoder,
-                    pl,
-                    src,
-                    dst,
-                    &u0,
-                    out_w,
-                    out_h,
-                    "lc pass1",
-                );
-                current_in_a = !current_in_a;
+                    let (src, dst) = pingpong(current_in_a);
+                    pipeline::encode_stage(
+                        ctx,
+                        &mut encoder,
+                        pl,
+                        src,
+                        dst,
+                        &u0,
+                        out_w,
+                        out_h,
+                        "lc pass1",
+                    );
+                    current_in_a = !current_in_a;
 
-                let (src, dst) = pingpong(current_in_a);
-                pipeline::encode_stage(
-                    ctx,
-                    &mut encoder,
-                    pl,
-                    src,
-                    dst,
-                    &u1,
-                    out_w,
-                    out_h,
-                    "lc pass2",
-                );
-                current_in_a = !current_in_a;
+                    let (src, dst) = pingpong(current_in_a);
+                    pipeline::encode_stage(
+                        ctx,
+                        &mut encoder,
+                        pl,
+                        src,
+                        dst,
+                        &u1,
+                        out_w,
+                        out_h,
+                        "lc pass2",
+                    );
+                    current_in_a = !current_in_a;
+                }
+
+                if lc.has_clahe() {
+                    let (nx, ny) = clahe_grid(out_w, out_h, lc.radius);
+                    let bufs = clahe_buffers(ctx);
+                    let u = ClaheUniforms {
+                        nx,
+                        ny,
+                        image_w: out_w,
+                        image_h: out_h,
+                        clip_limit: CLAHE_CLIP_LIMIT,
+                        shadows: lc.shadows,
+                        highlights: lc.highlights,
+                        _pad: 0.0,
+                    };
+                    let ubuf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
+
+                    // Zero only the used region of the tile histogram before
+                    // accumulating (atomicAdd accumulates otherwise).
+                    let used = (nx * ny) as usize * 256 * 4;
+                    ctx.queue
+                        .write_buffer(&bufs.histogram, 0, &vec![0u8; used]);
+
+                    // Pass 1: per-tile histogram of the current L (reads the
+                    // buffer the strength passes left us, or the decoded input).
+                    let (src, _) = pingpong(current_in_a);
+                    pipeline::encode_clahe_histogram(
+                        ctx,
+                        &mut encoder,
+                        clahe_histogram_pipeline(ctx),
+                        src,
+                        &bufs.histogram,
+                        &ubuf,
+                        out_w,
+                        out_h,
+                    );
+                    // Pass 2: clip + prefix-sum + anchor each tile into a CDF.
+                    pipeline::encode_clahe_cdf(
+                        ctx,
+                        &mut encoder,
+                        clahe_cdf_pipeline(ctx),
+                        &bufs.histogram,
+                        &bufs.cdf,
+                        &ubuf,
+                        nx * ny,
+                    );
+                    // Pass 3: bilinear tile interpolation + source-luminance
+                    // blend, writing to the other ping-pong buffer.
+                    let (src, dst) = pingpong(current_in_a);
+                    pipeline::encode_equalize_apply(
+                        ctx,
+                        &mut encoder,
+                        clahe_apply_pipeline(ctx),
+                        src,
+                        dst,
+                        &bufs.cdf,
+                        &ubuf,
+                        out_w,
+                        out_h,
+                    );
+                    current_in_a = !current_in_a;
+                }
             }
 
             // Stage: BC (Brightness/Contrast).

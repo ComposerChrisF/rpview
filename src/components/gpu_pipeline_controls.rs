@@ -82,6 +82,8 @@ pub struct GpuPipelineControls {
     pub lc_expanded: bool,
     pub lc_radius: Entity<Slider>,
     pub lc_strength: Entity<Slider>,
+    pub lc_shadows: Entity<Slider>,
+    pub lc_highlights: Entity<Slider>,
     pub lc_midpoint: Entity<Slider>,
 
     pub bc_enabled: bool,
@@ -152,6 +154,8 @@ impl GpuPipelineControls {
             3,
         );
         let lc_strength = slider(cx, 0.5, 0.0, 2.0, 0.01, 2);
+        let lc_shadows = slider(cx, 0.0, 0.0, 1.0, 0.01, 2);
+        let lc_highlights = slider(cx, 0.0, 0.0, 1.0, 0.01, 2);
         let lc_midpoint = slider(cx, 0.5, 0.1, 0.9, 0.01, 2);
 
         let bc_brightness = slider(cx, 0.0, -1.0, 1.0, 0.01, 2);
@@ -194,6 +198,8 @@ impl GpuPipelineControls {
             lc_expanded: true,
             lc_radius,
             lc_strength,
+            lc_shadows,
+            lc_highlights,
             lc_midpoint,
             bc_enabled: false,
             bc_expanded: true,
@@ -311,6 +317,8 @@ impl GpuPipelineControls {
             lc_enabled: self.lc_enabled,
             lc_radius_t: self.lc_radius.read(cx).value() as f32,
             lc_strength: self.lc_strength.read(cx).value() as f32,
+            lc_shadows: self.lc_shadows.read(cx).value() as f32,
+            lc_highlights: self.lc_highlights.read(cx).value() as f32,
             lc_midpoint: self.lc_midpoint.read(cx).value() as f32,
             bc_enabled: self.bc_enabled,
             bc_brightness: self.bc_brightness.read(cx).value() as f32,
@@ -338,6 +346,10 @@ impl GpuPipelineControls {
             .update(cx, |s, cx| s.set_value(p.lc_radius_t as f64, cx));
         self.lc_strength
             .update(cx, |s, cx| s.set_value(p.lc_strength as f64, cx));
+        self.lc_shadows
+            .update(cx, |s, cx| s.set_value(p.lc_shadows as f64, cx));
+        self.lc_highlights
+            .update(cx, |s, cx| s.set_value(p.lc_highlights as f64, cx));
         self.lc_midpoint
             .update(cx, |s, cx| s.set_value(p.lc_midpoint as f64, cx));
         self.bc_enabled = p.bc_enabled;
@@ -412,6 +424,8 @@ impl GpuPipelineControls {
             lc: self.lc_enabled.then(|| LcParams {
                 radius: radius_effective,
                 strength: self.lc_strength.read(cx).value() as f32,
+                shadows: self.lc_shadows.read(cx).value() as f32,
+                highlights: self.lc_highlights.read(cx).value() as f32,
             }),
             bc: self.bc_enabled.then(|| BcParams {
                 brightness: self.bc_brightness.read(cx).value() as f32,
@@ -447,6 +461,8 @@ impl GpuPipelineControls {
             s.set_value(radius_displayed_to_t(DEFAULT_DISPLAYED_RADIUS) as f64, cx)
         });
         self.lc_strength.update(cx, |s, cx| s.set_value(0.5, cx));
+        self.lc_shadows.update(cx, |s, cx| s.set_value(0.0, cx));
+        self.lc_highlights.update(cx, |s, cx| s.set_value(0.0, cx));
         self.lc_midpoint.update(cx, |s, cx| s.set_value(0.5, cx));
         self.bc_brightness.update(cx, |s, cx| s.set_value(0.0, cx));
         self.bc_contrast.update(cx, |s, cx| s.set_value(0.0, cx));
@@ -740,6 +756,8 @@ impl Render for GpuPipelineControls {
         let lc_radius_t = self.lc_radius.read(cx).value() as f32;
         let lc_radius_displayed = radius_t_to_displayed(lc_radius_t);
         let lc_strength_v = self.lc_strength.read(cx).value();
+        let lc_shadows_v = self.lc_shadows.read(cx).value();
+        let lc_highlights_v = self.lc_highlights.read(cx).value();
         let lc_midpoint_v = self.lc_midpoint.read(cx).value();
         let lc_section = div()
             .flex()
@@ -771,6 +789,18 @@ impl Render for GpuPipelineControls {
                     "Strength",
                     format!("{:.2}", lc_strength_v),
                     self.lc_strength.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Shadows",
+                    format!("{:.2}", lc_shadows_v),
+                    self.lc_shadows.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Highlights",
+                    format!("{:.2}", lc_highlights_v),
+                    self.lc_highlights.clone(),
                     fs,
                 ))
                 .child(slider_row(

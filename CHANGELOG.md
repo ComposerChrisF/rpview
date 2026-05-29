@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-05-29
+
+### Added
+- **Local Contrast CLAHE Shadows and Highlights controls.**  Two new sliders in the Local Contrast stage apply GPU CLAHE (Contrast-Limited Adaptive Histogram Equalization) weighted by source pixel luminance — the per-tile analogue of the Equalize stage’s Shadows/Highlights added in 0.24.0.  Where Equalize uses a single global histogram, CLAHE builds per-tile local histograms so detail recovery adapts to each region of the image.  Three all-GPU compute shaders (no CPU readback): `lc_clahe_histogram.wgsl` fills a tile-major atomic buffer with 256-bin L histograms, `lc_clahe_cdf.wgsl` applies a 2.5× mean contrast clip + redistribute, prefix-sum, and endpoint anchor, and `lc_clahe_apply.wgsl` does bilinear interpolation between neighboring tiles’ CDFs blended via `shadows*(1−L) + highlights*L`.  Tile grid size derives from the existing LC Radius slider (clamped 1–16 tiles/axis, minimum ~64 px per tile); endpoints are hard-anchored so pure black stays black.  `LcParams` gained `shadows` and `highlights` fields with `is_identity` / `has_strength` / `has_clahe` helpers so the LC stage runs its Gaussian-deviation sub-effect and CLAHE sub-effect independently.  New `ClaheUniforms` struct, three cached pipelines, and a `ClaheBuffers` `OnceLock` (256 tiles × 256 bins × 4 bytes = 256 KB each for histogram and CDF).  New `GpuPreset` fields `lc_shadows` and `lc_highlights` (both `#[serde(default)]`) so existing preset JSON loads without changes.
+
 ## [0.24.0] - 2026-05-29
 
 ### Added
