@@ -176,9 +176,7 @@ impl Default for EqualizeParams {
 
 impl EqualizeParams {
     pub fn is_identity(&self) -> bool {
-        self.amount.abs() < 0.0005
-            && self.shadows.abs() < 0.0005
-            && self.highlights.abs() < 0.0005
+        self.amount.abs() < 0.0005 && self.shadows.abs() < 0.0005 && self.highlights.abs() < 0.0005
     }
 }
 
@@ -719,8 +717,7 @@ pub fn process_pipeline(
                     // Zero only the used region of the tile histogram before
                     // accumulating (atomicAdd accumulates otherwise).
                     let used = (nx * ny) as usize * 256 * 4;
-                    ctx.queue
-                        .write_buffer(&bufs.histogram, 0, &vec![0u8; used]);
+                    ctx.queue.write_buffer(&bufs.histogram, 0, &vec![0u8; used]);
 
                     // Pass 1: per-tile histogram of the current L (reads the
                     // buffer the strength passes left us, or the decoded input).
