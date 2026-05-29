@@ -173,8 +173,8 @@ mod tests {
         let params = UnifiedParams {
             lc: Some(LcParams {
                 strength: 0.0,
-                shadow_lift: 0.0,
-                highlight_darken: 0.0,
+                shadow_detail: 0.0,
+                highlight_detail: 0.0,
                 ..Default::default()
             }),
             ..Default::default()

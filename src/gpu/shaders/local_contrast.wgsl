@@ -15,8 +15,8 @@ var<workgroup> cache: array<f32, 1216>;
 struct Uniforms {
   Radius:          f32,
   Strength:        f32,
-  ShadowLift:      f32,
-  HighlightDarken: f32,
+  ShadowDetail:    f32,
+  HighlightDetail: f32,
   Midpoint:        f32,
   Axis:            f32,
   ImageWidth:      f32,
@@ -100,19 +100,29 @@ fn main(
   blurred_L = blurred_L / weight_sum;
 
   // Phase 3: deviation-from-mean enhancement on L.
+  //
+  // `deviation` is how far this pixel sits from its local mean; amplifying it
+  // is what adds local contrast (classic unsharp/local-contrast move).
+  // `Strength` is the global amplification.  `ShadowDetail` / `HighlightDetail`
+  // add EXTRA amplification selectively in the dark / bright regions, so detail
+  // emerges in shadows (or highlights) without lifting or lowering the overall
+  // luminance there — unlike a tone-curve shift, this raises contrast rather
+  // than flattening it toward the midpoint.
+  //
+  // Region weights come from the local mean (`blurred_L`), not the raw pixel,
+  // so a bright speck inside a dark area still counts as "shadow".  Each weight
+  // is 1.0 deep in its region and fades to 0.0 at the midpoint.
   let lab = textureLoad(Input, pixel, 0);
   let L = lab.r;
   let deviation = L - blurred_L;
-  var L_new = L + u.Strength * deviation;
 
-  if (u.ShadowLift > 0.0) {
-    let shadow_blend = (1.0 - smoothstep(0.0, u.Midpoint, blurred_L)) * u.ShadowLift;
-    L_new = mix(L_new, u.Midpoint, shadow_blend);
-  }
-  if (u.HighlightDarken > 0.0) {
-    let highlight_blend = smoothstep(u.Midpoint, 1.0, blurred_L) * u.HighlightDarken;
-    L_new = mix(L_new, u.Midpoint, highlight_blend);
-  }
+  let shadow_w = 1.0 - smoothstep(0.0, u.Midpoint, blurred_L);
+  let highlight_w = smoothstep(u.Midpoint, 1.0, blurred_L);
+  let gain = u.Strength
+           + u.ShadowDetail * shadow_w
+           + u.HighlightDetail * highlight_w;
+
+  var L_new = L + gain * deviation;
   L_new = clamp(L_new, 0.0, 1.0);
 
   textureStore(Output, pixel, vec4<f32>(L_new, lab.g, lab.b, lab.a));

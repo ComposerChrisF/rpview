@@ -25,8 +25,14 @@ pub struct GpuPreset {
     pub lc_enabled: bool,
     pub lc_radius_t: f32,
     pub lc_strength: f32,
-    pub lc_shadow_lift: f32,
-    pub lc_highlight_darken: f32,
+    /// Renamed from `lc_shadow_lift` (v0.22.10 and earlier).  The `alias`
+    /// lets old preset JSON keep loading; its semantics changed from a
+    /// luminance lift toward the midpoint to an additive local-contrast gain.
+    #[serde(alias = "lc_shadow_lift")]
+    pub lc_shadow_detail: f32,
+    /// Renamed from `lc_highlight_darken` (see `lc_shadow_detail`).
+    #[serde(alias = "lc_highlight_darken")]
+    pub lc_highlight_detail: f32,
     pub lc_midpoint: f32,
 
     pub bc_enabled: bool,
@@ -144,8 +150,8 @@ mod tests {
             lc_enabled: true,
             lc_radius_t: 0.42,
             lc_strength: 0.7,
-            lc_shadow_lift: 0.1,
-            lc_highlight_darken: 0.05,
+            lc_shadow_detail: 0.1,
+            lc_highlight_detail: 0.05,
             lc_midpoint: 0.5,
             bc_enabled: false,
             bc_brightness: 0.0,
@@ -254,8 +260,8 @@ mod tests {
             "lc_enabled": false,
             "lc_radius_t": 0.5,
             "lc_strength": 0.5,
-            "lc_shadow_lift": 0.0,
-            "lc_highlight_darken": 0.0,
+            "lc_shadow_lift": 0.3,
+            "lc_highlight_darken": 0.2,
             "lc_midpoint": 0.5,
             "bc_enabled": false,
             "bc_brightness": 0.0,
@@ -270,6 +276,11 @@ mod tests {
             serde_json::from_str(legacy_json).expect("legacy preset must parse");
         assert!(!parsed.equalize_enabled);
         assert!((parsed.equalize_amount - 0.5).abs() < f32::EPSILON);
+        // The old `lc_shadow_lift` / `lc_highlight_darken` keys deserialize
+        // onto the renamed `lc_shadow_detail` / `lc_highlight_detail` fields
+        // via their serde aliases.
+        assert!((parsed.lc_shadow_detail - 0.3).abs() < f32::EPSILON);
+        assert!((parsed.lc_highlight_detail - 0.2).abs() < f32::EPSILON);
     }
 
     #[test]

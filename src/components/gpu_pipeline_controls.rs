@@ -82,8 +82,8 @@ pub struct GpuPipelineControls {
     pub lc_expanded: bool,
     pub lc_radius: Entity<Slider>,
     pub lc_strength: Entity<Slider>,
-    pub lc_shadow_lift: Entity<Slider>,
-    pub lc_highlight_darken: Entity<Slider>,
+    pub lc_shadow_detail: Entity<Slider>,
+    pub lc_highlight_detail: Entity<Slider>,
     pub lc_midpoint: Entity<Slider>,
 
     pub bc_enabled: bool,
@@ -152,8 +152,8 @@ impl GpuPipelineControls {
             3,
         );
         let lc_strength = slider(cx, 0.5, 0.0, 2.0, 0.01, 2);
-        let lc_shadow_lift = slider(cx, 0.0, 0.0, 1.0, 0.01, 2);
-        let lc_highlight_darken = slider(cx, 0.0, 0.0, 1.0, 0.01, 2);
+        let lc_shadow_detail = slider(cx, 0.0, 0.0, 2.0, 0.01, 2);
+        let lc_highlight_detail = slider(cx, 0.0, 0.0, 2.0, 0.01, 2);
         let lc_midpoint = slider(cx, 0.5, 0.1, 0.9, 0.01, 2);
 
         let bc_brightness = slider(cx, 0.0, -1.0, 1.0, 0.01, 2);
@@ -194,8 +194,8 @@ impl GpuPipelineControls {
             lc_expanded: true,
             lc_radius,
             lc_strength,
-            lc_shadow_lift,
-            lc_highlight_darken,
+            lc_shadow_detail,
+            lc_highlight_detail,
             lc_midpoint,
             bc_enabled: false,
             bc_expanded: true,
@@ -311,8 +311,8 @@ impl GpuPipelineControls {
             lc_enabled: self.lc_enabled,
             lc_radius_t: self.lc_radius.read(cx).value() as f32,
             lc_strength: self.lc_strength.read(cx).value() as f32,
-            lc_shadow_lift: self.lc_shadow_lift.read(cx).value() as f32,
-            lc_highlight_darken: self.lc_highlight_darken.read(cx).value() as f32,
+            lc_shadow_detail: self.lc_shadow_detail.read(cx).value() as f32,
+            lc_highlight_detail: self.lc_highlight_detail.read(cx).value() as f32,
             lc_midpoint: self.lc_midpoint.read(cx).value() as f32,
             bc_enabled: self.bc_enabled,
             bc_brightness: self.bc_brightness.read(cx).value() as f32,
@@ -338,10 +338,10 @@ impl GpuPipelineControls {
             .update(cx, |s, cx| s.set_value(p.lc_radius_t as f64, cx));
         self.lc_strength
             .update(cx, |s, cx| s.set_value(p.lc_strength as f64, cx));
-        self.lc_shadow_lift
-            .update(cx, |s, cx| s.set_value(p.lc_shadow_lift as f64, cx));
-        self.lc_highlight_darken
-            .update(cx, |s, cx| s.set_value(p.lc_highlight_darken as f64, cx));
+        self.lc_shadow_detail
+            .update(cx, |s, cx| s.set_value(p.lc_shadow_detail as f64, cx));
+        self.lc_highlight_detail
+            .update(cx, |s, cx| s.set_value(p.lc_highlight_detail as f64, cx));
         self.lc_midpoint
             .update(cx, |s, cx| s.set_value(p.lc_midpoint as f64, cx));
         self.bc_enabled = p.bc_enabled;
@@ -412,8 +412,8 @@ impl GpuPipelineControls {
             lc: self.lc_enabled.then(|| LcParams {
                 radius: radius_effective,
                 strength: self.lc_strength.read(cx).value() as f32,
-                shadow_lift: self.lc_shadow_lift.read(cx).value() as f32,
-                highlight_darken: self.lc_highlight_darken.read(cx).value() as f32,
+                shadow_detail: self.lc_shadow_detail.read(cx).value() as f32,
+                highlight_detail: self.lc_highlight_detail.read(cx).value() as f32,
                 midpoint,
             }),
             bc: self.bc_enabled.then(|| BcParams {
@@ -448,8 +448,8 @@ impl GpuPipelineControls {
             s.set_value(radius_displayed_to_t(DEFAULT_DISPLAYED_RADIUS) as f64, cx)
         });
         self.lc_strength.update(cx, |s, cx| s.set_value(0.5, cx));
-        self.lc_shadow_lift.update(cx, |s, cx| s.set_value(0.0, cx));
-        self.lc_highlight_darken
+        self.lc_shadow_detail.update(cx, |s, cx| s.set_value(0.0, cx));
+        self.lc_highlight_detail
             .update(cx, |s, cx| s.set_value(0.0, cx));
         self.lc_midpoint.update(cx, |s, cx| s.set_value(0.5, cx));
         self.bc_brightness.update(cx, |s, cx| s.set_value(0.0, cx));
@@ -740,8 +740,8 @@ impl Render for GpuPipelineControls {
         let lc_radius_t = self.lc_radius.read(cx).value() as f32;
         let lc_radius_displayed = radius_t_to_displayed(lc_radius_t);
         let lc_strength_v = self.lc_strength.read(cx).value();
-        let lc_shadow_v = self.lc_shadow_lift.read(cx).value();
-        let lc_highlight_v = self.lc_highlight_darken.read(cx).value();
+        let lc_shadow_v = self.lc_shadow_detail.read(cx).value();
+        let lc_highlight_v = self.lc_highlight_detail.read(cx).value();
         let lc_midpoint_v = self.lc_midpoint.read(cx).value();
         let lc_section = div()
             .flex()
@@ -776,15 +776,15 @@ impl Render for GpuPipelineControls {
                     fs,
                 ))
                 .child(slider_row(
-                    "Shadow Lift",
+                    "Shadow Detail",
                     format!("{:.2}", lc_shadow_v),
-                    self.lc_shadow_lift.clone(),
+                    self.lc_shadow_detail.clone(),
                     fs,
                 ))
                 .child(slider_row(
-                    "Highlight Darken",
+                    "Highlight Detail",
                     format!("{:.2}", lc_highlight_v),
-                    self.lc_highlight_darken.clone(),
+                    self.lc_highlight_detail.clone(),
                     fs,
                 ))
                 .child(slider_row(
