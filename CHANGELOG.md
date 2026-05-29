@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-05-29
+
+### Changed
+- **GPU Local Contrast: Shadow Detail and Highlight Detail controls.**  “Shadow Lift” and “Highlight Darken” are replaced by “Shadow Detail” and “Highlight Detail” — region-selective amplifiers of the deviation-from-mean term rather than pulls toward the midpoint.  Dark regions get extra local-contrast gain proportional to `shadow_detail`; bright regions get the same via `highlight_detail`.  This matches the CPU path’s `alpha_black`/`alpha_white` semantics and avoids the contrast-flattening effect of the old lift/darken approach.  Slider range widened from 0–1 to 0–2 to match Strength.  `GpuPreset` fields renamed with `#[serde(alias)]` so existing preset JSON loads without changes.  Files: `shaders/local_contrast.wgsl`, `gpu/unified.rs`, `gpu/mod.rs`, `components/gpu_pipeline_controls.rs`, `utils/gpu_presets.rs`
+
 ## [0.22.10] - 2026-05-04
 
 ### Changed

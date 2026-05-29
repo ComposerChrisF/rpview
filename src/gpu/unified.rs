@@ -35,10 +35,12 @@ pub struct LcParams {
     pub radius: f32,
     /// Overall intensity. 0–2, default 0.5.
     pub strength: f32,
-    /// Brighten dark regions toward midpoint.  0–1.
-    pub shadow_lift: f32,
-    /// Darken bright regions toward midpoint.  0–1.
-    pub highlight_darken: f32,
+    /// Extra local-contrast gain applied selectively in dark regions, so
+    /// detail emerges in the shadows.  0–2, default 0.
+    pub shadow_detail: f32,
+    /// Extra local-contrast gain applied selectively in bright regions, so
+    /// detail emerges in the highlights.  0–2, default 0.
+    pub highlight_detail: f32,
     /// Gray-point pivot.  0.1–0.9, default 0.5.
     pub midpoint: f32,
 }
@@ -48,8 +50,8 @@ impl Default for LcParams {
         Self {
             radius: 60.0,
             strength: 0.5,
-            shadow_lift: 0.0,
-            highlight_darken: 0.0,
+            shadow_detail: 0.0,
+            highlight_detail: 0.0,
             midpoint: 0.5,
         }
     }
@@ -58,8 +60,8 @@ impl Default for LcParams {
 impl LcParams {
     pub fn is_identity(&self) -> bool {
         self.strength.abs() < 0.0005
-            && self.shadow_lift.abs() < 0.0005
-            && self.highlight_darken.abs() < 0.0005
+            && self.shadow_detail.abs() < 0.0005
+            && self.highlight_detail.abs() < 0.0005
     }
 }
 
@@ -204,8 +206,8 @@ impl UnifiedParams {
 struct LcUniforms {
     radius: f32,
     strength: f32,
-    shadow_lift: f32,
-    highlight_darken: f32,
+    shadow_detail: f32,
+    highlight_detail: f32,
     midpoint: f32,
     axis: f32,
     image_width: f32,
@@ -518,8 +520,8 @@ pub fn process_pipeline(
                 let make_u = |axis: f32| LcUniforms {
                     radius: lc.radius,
                     strength: lc.strength,
-                    shadow_lift: lc.shadow_lift,
-                    highlight_darken: lc.highlight_darken,
+                    shadow_detail: lc.shadow_detail,
+                    highlight_detail: lc.highlight_detail,
                     midpoint: lc.midpoint,
                     axis,
                     image_width: out_w as f32,
