@@ -35,14 +35,6 @@ pub struct LcParams {
     pub radius: f32,
     /// Overall intensity. 0–2, default 0.5.
     pub strength: f32,
-    /// Extra local-contrast gain applied selectively in dark regions, so
-    /// detail emerges in the shadows.  0–2, default 0.
-    pub shadow_detail: f32,
-    /// Extra local-contrast gain applied selectively in bright regions, so
-    /// detail emerges in the highlights.  0–2, default 0.
-    pub highlight_detail: f32,
-    /// Gray-point pivot.  0.1–0.9, default 0.5.
-    pub midpoint: f32,
 }
 
 impl Default for LcParams {
@@ -50,9 +42,6 @@ impl Default for LcParams {
         Self {
             radius: 60.0,
             strength: 0.5,
-            shadow_detail: 0.0,
-            highlight_detail: 0.0,
-            midpoint: 0.5,
         }
     }
 }
@@ -60,8 +49,6 @@ impl Default for LcParams {
 impl LcParams {
     pub fn is_identity(&self) -> bool {
         self.strength.abs() < 0.0005
-            && self.shadow_detail.abs() < 0.0005
-            && self.highlight_detail.abs() < 0.0005
     }
 }
 
@@ -139,20 +126,36 @@ impl HueParams {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EqualizeParams {
-    /// Blend between the original L and the histogram-equalized L.
-    /// 0 = no change, 1 = full equalization.
+    /// Flat blend between the original L and the histogram-equalized L, applied
+    /// uniformly across all tones.  0 = no change, 1 = full equalization.
     pub amount: f32,
+    /// Extra equalization blended in proportion to how *dark* the source pixel
+    /// is (full weight at pure black, fading linearly to none at pure white).
+    /// Magnifies subtle differences in the shadows.  0–1, default 0.  This is
+    /// the GPU analogue of the CPU local-contrast "Alpha of pure Black".
+    pub shadows: f32,
+    /// Extra equalization blended in proportion to how *bright* the source
+    /// pixel is (full weight at pure white, fading linearly to none at pure
+    /// black).  Magnifies subtle differences in the highlights.  0–1,
+    /// default 0.  GPU analogue of the CPU "Alpha of pure White".
+    pub highlights: f32,
 }
 
 impl Default for EqualizeParams {
     fn default() -> Self {
-        Self { amount: 0.5 }
+        Self {
+            amount: 0.5,
+            shadows: 0.0,
+            highlights: 0.0,
+        }
     }
 }
 
 impl EqualizeParams {
     pub fn is_identity(&self) -> bool {
         self.amount.abs() < 0.0005
+            && self.shadows.abs() < 0.0005
+            && self.highlights.abs() < 0.0005
     }
 }
 
@@ -206,12 +209,12 @@ impl UnifiedParams {
 struct LcUniforms {
     radius: f32,
     strength: f32,
-    shadow_detail: f32,
-    highlight_detail: f32,
-    midpoint: f32,
     axis: f32,
     image_width: f32,
     image_height: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 #[repr(C)]
@@ -243,7 +246,9 @@ struct HueUniforms {
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct EqualizeUniforms {
     amount: f32,
-    _pad: [f32; 3],
+    shadows: f32,
+    highlights: f32,
+    _pad: f32,
 }
 
 /// Uniforms for both Lanczos passes (H and V share the layout — only the
@@ -376,6 +381,21 @@ fn read_cdf(ctx: &GpuContext, readback: &wgpu::Buffer) -> Result<[f32; 256], Gpu
     for i in 0..256 {
         cumulative += u64::from(hist[i]);
         cdf[i] = cumulative as f32 / total as f32;
+    }
+    // Hard-anchor the endpoints: rescale so cdf[0] → 0 and cdf[255] (always
+    // 1.0) → 1.  Without this, a large mass of pure-black pixels makes cdf[0]
+    // large and equalization lifts black toward grey — exactly what the user
+    // wants to avoid.  With it, pure black stays black and pure white stays
+    // white, while the *occupied* tonal range in between is stretched, so
+    // subtle differences are magnified rather than the endpoints shifted.
+    let cdf0 = cdf[0];
+    let denom = 1.0 - cdf0;
+    if denom < 1e-6 {
+        // Essentially every pixel is at pure black — nothing to redistribute.
+        return Ok(std::array::from_fn(|i| i as f32 / 255.0));
+    }
+    for v in cdf.iter_mut() {
+        *v = ((*v - cdf0) / denom).clamp(0.0, 1.0);
     }
     Ok(cdf)
 }
@@ -520,12 +540,12 @@ pub fn process_pipeline(
                 let make_u = |axis: f32| LcUniforms {
                     radius: lc.radius,
                     strength: lc.strength,
-                    shadow_detail: lc.shadow_detail,
-                    highlight_detail: lc.highlight_detail,
-                    midpoint: lc.midpoint,
                     axis,
                     image_width: out_w as f32,
                     image_height: out_h as f32,
+                    _pad0: 0.0,
+                    _pad1: 0.0,
+                    _pad2: 0.0,
                 };
                 let u0 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(0.0)));
                 let u1 = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&make_u(1.0)));
@@ -678,7 +698,9 @@ pub fn process_pipeline(
 
                 let u = EqualizeUniforms {
                     amount: eq.amount,
-                    _pad: [0.0; 3],
+                    shadows: eq.shadows,
+                    highlights: eq.highlights,
+                    _pad: 0.0,
                 };
                 let uniform_buf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
                 let (src, dst) = pingpong(current_in_a);

@@ -13,14 +13,14 @@ const STRIP: u32 = TILE + 2u * MAX_SAMPLES;
 var<workgroup> cache: array<f32, 1216>;
 
 struct Uniforms {
-  Radius:          f32,
-  Strength:        f32,
-  ShadowDetail:    f32,
-  HighlightDetail: f32,
-  Midpoint:        f32,
-  Axis:            f32,
-  ImageWidth:      f32,
-  ImageHeight:     f32,
+  Radius:      f32,
+  Strength:    f32,
+  Axis:        f32,
+  ImageWidth:  f32,
+  ImageHeight: f32,
+  _pad0:       f32,
+  _pad1:       f32,
+  _pad2:       f32,
 }
 
 @group(0) @binding(0) var Input: texture_2d<f32>;
@@ -103,26 +103,15 @@ fn main(
   //
   // `deviation` is how far this pixel sits from its local mean; amplifying it
   // is what adds local contrast (classic unsharp/local-contrast move).
-  // `Strength` is the global amplification.  `ShadowDetail` / `HighlightDetail`
-  // add EXTRA amplification selectively in the dark / bright regions, so detail
-  // emerges in shadows (or highlights) without lifting or lowering the overall
-  // luminance there — unlike a tone-curve shift, this raises contrast rather
-  // than flattening it toward the midpoint.
-  //
-  // Region weights come from the local mean (`blurred_L`), not the raw pixel,
-  // so a bright speck inside a dark area still counts as "shadow".  Each weight
-  // is 1.0 deep in its region and fades to 0.0 at the midpoint.
+  // `Strength` is the amplification.  Tonal-region detail recovery (pulling
+  // out subtle differences in the shadows / highlights) is handled separately
+  // by the Equalize stage's Shadows / Highlights controls, which use the image
+  // histogram and so magnify far more aggressively than a linear gain can.
   let lab = textureLoad(Input, pixel, 0);
   let L = lab.r;
   let deviation = L - blurred_L;
 
-  let shadow_w = 1.0 - smoothstep(0.0, u.Midpoint, blurred_L);
-  let highlight_w = smoothstep(u.Midpoint, 1.0, blurred_L);
-  let gain = u.Strength
-           + u.ShadowDetail * shadow_w
-           + u.HighlightDetail * highlight_w;
-
-  var L_new = L + gain * deviation;
+  var L_new = L + u.Strength * deviation;
   L_new = clamp(L_new, 0.0, 1.0);
 
   textureStore(Output, pixel, vec4<f32>(L_new, lab.g, lab.b, lab.a));
