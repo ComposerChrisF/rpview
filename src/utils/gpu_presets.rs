@@ -25,6 +25,12 @@ pub struct GpuPreset {
     pub lc_enabled: bool,
     pub lc_radius_t: f32,
     pub lc_strength: f32,
+    /// LC CLAHE (local-histogram) shadows/highlights, added v0.25.0.
+    /// `#[serde(default)]` so older presets load unchanged.
+    #[serde(default)]
+    pub lc_shadows: f32,
+    #[serde(default)]
+    pub lc_highlights: f32,
     pub lc_midpoint: f32,
 
     pub bc_enabled: bool,
@@ -148,6 +154,8 @@ mod tests {
             lc_enabled: true,
             lc_radius_t: 0.42,
             lc_strength: 0.7,
+            lc_shadows: 0.0,
+            lc_highlights: 0.0,
             lc_midpoint: 0.5,
             bc_enabled: false,
             bc_brightness: 0.0,

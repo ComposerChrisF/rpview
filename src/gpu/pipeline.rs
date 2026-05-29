@@ -218,7 +218,8 @@ pub fn histogram_layout(ctx: &GpuContext) -> &'static wgpu::BindGroupLayout {
 }
 
 /// Equalize-apply layout: rgba16float input + rgba16float storage out + CDF
-/// storage buffer (read-only) + uniform.
+/// storage buffer (read-only) + uniform.  Also used by the LC CLAHE apply pass,
+/// whose bindings are identical.
 pub fn equalize_apply_layout(ctx: &GpuContext) -> &'static wgpu::BindGroupLayout {
     static L: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
     L.get_or_init(|| {
@@ -230,6 +231,41 @@ pub fn equalize_apply_layout(ctx: &GpuContext) -> &'static wgpu::BindGroupLayout
                     storage_entry(1, wgpu::TextureFormat::Rgba16Float),
                     storage_buffer_entry(2, true),
                     uniform_entry(3),
+                ],
+            })
+    })
+}
+
+/// CLAHE histogram-pass layout: rgba16float input + atomic tile-histogram
+/// storage buffer + uniform (grid dims).  Like `histogram_layout` but with the
+/// extra uniform that carries the tile grid size.
+pub fn clahe_histogram_layout(ctx: &GpuContext) -> &'static wgpu::BindGroupLayout {
+    static L: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+    L.get_or_init(|| {
+        ctx.device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("rpview-gpu clahe histogram layout"),
+                entries: &[
+                    texture_entry(0),
+                    storage_buffer_entry(1, false),
+                    uniform_entry(2),
+                ],
+            })
+    })
+}
+
+/// CLAHE CDF-pass layout: tile-histogram storage buffer (read) + tile-CDF
+/// storage buffer (write) + uniform.
+pub fn clahe_cdf_layout(ctx: &GpuContext) -> &'static wgpu::BindGroupLayout {
+    static L: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+    L.get_or_init(|| {
+        ctx.device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("rpview-gpu clahe cdf layout"),
+                entries: &[
+                    storage_buffer_entry(0, true),
+                    storage_buffer_entry(1, false),
+                    uniform_entry(2),
                 ],
             })
     })
@@ -445,6 +481,30 @@ pub fn make_cdf_buffer(ctx: &GpuContext) -> wgpu::Buffer {
     })
 }
 
+/// `max_tiles × 256 × u32` atomic tile-histogram buffer for the LC CLAHE
+/// stage.  Sized for the maximum tile count and reused across runs (only the
+/// used `nx*ny*256` prefix is touched).  Caller zeroes the used region with
+/// `queue.write_buffer` before each dispatch.
+pub fn make_tile_histogram_buffer(ctx: &GpuContext, max_tiles: u32) -> wgpu::Buffer {
+    ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("rpview-gpu clahe tile histogram"),
+        size: u64::from(max_tiles) * 256 * 4,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+/// `max_tiles × 256 × f32` tile-CDF buffer, written by the CLAHE CDF pass and
+/// read by the apply pass.  No `COPY_DST` — the GPU fills it, never the CPU.
+pub fn make_tile_cdf_buffer(ctx: &GpuContext, max_tiles: u32) -> wgpu::Buffer {
+    ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("rpview-gpu clahe tile cdf"),
+        size: u64::from(max_tiles) * 256 * 4,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    })
+}
+
 /// Dispatch the histogram pass: count OKLab L bins into `histogram` for
 /// every pixel of `src`.  Caller must have zeroed `histogram` first.
 pub fn encode_histogram(
@@ -527,6 +587,87 @@ pub fn encode_equalize_apply(
     pass.set_bind_group(0, &bind, &[]);
     let (gx, gy, gz) = dispatch_count(width, height);
     pass.dispatch_workgroups(gx, gy, gz);
+}
+
+/// Dispatch the CLAHE histogram pass: count OKLab L bins per tile into
+/// `hist`.  Caller must have zeroed the used region first.
+#[allow(clippy::too_many_arguments)] // wgpu resources are inherently many.
+pub fn encode_clahe_histogram(
+    ctx: &GpuContext,
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    src: &wgpu::Texture,
+    hist: &wgpu::Buffer,
+    uniform: &wgpu::Buffer,
+    width: u32,
+    height: u32,
+) {
+    let src_view = src.create_view(&wgpu::TextureViewDescriptor::default());
+    let bind = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("rpview-gpu clahe histogram bind"),
+        layout: clahe_histogram_layout(ctx),
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&src_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: hist.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: uniform.as_entire_binding(),
+            },
+        ],
+    });
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("rpview-gpu clahe histogram pass"),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(pipeline);
+    pass.set_bind_group(0, &bind, &[]);
+    let (gx, gy, gz) = dispatch_count(width, height);
+    pass.dispatch_workgroups(gx, gy, gz);
+}
+
+/// Dispatch the CLAHE CDF pass: turn each tile histogram into an anchored,
+/// contrast-limited CDF.  One workgroup-thread per tile; `tile_count` is
+/// `nx * ny`, dispatched at workgroup size 64.
+pub fn encode_clahe_cdf(
+    ctx: &GpuContext,
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    hist: &wgpu::Buffer,
+    cdf: &wgpu::Buffer,
+    uniform: &wgpu::Buffer,
+    tile_count: u32,
+) {
+    let bind = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("rpview-gpu clahe cdf bind"),
+        layout: clahe_cdf_layout(ctx),
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: hist.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: cdf.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: uniform.as_entire_binding(),
+            },
+        ],
+    });
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("rpview-gpu clahe cdf pass"),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(pipeline);
+    pass.set_bind_group(0, &bind, &[]);
+    pass.dispatch_workgroups(tile_count.div_ceil(64), 1, 1);
 }
 
 /// Dispatch a per-stage filter (OKLab → OKLab, with uniform parameters).
