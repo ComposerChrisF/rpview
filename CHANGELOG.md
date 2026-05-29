@@ -5,6 +5,15 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-05-29
+
+### Added
+- **Equalize Shadows and Highlights controls.**  Two new sliders in the Equalize stage blend the histogram-equalized L back in weighted by source pixel luminance — the GPU analogue of the CPU local-contrast path’s “Alpha of pure Black” / “Alpha of pure White”.  Per-pixel blend factor = `clamp(amount + shadows*(1−L) + highlights*L, 0, 1)`, so Shadows pushes equalization into dark areas and Highlights into bright areas independently of the Amount slider.  New `EqualizeParams` fields `shadows` and `highlights`; new `GpuPreset` fields `equalize_shadows` and `equalize_highlights` (both `#[serde(default)]`) so existing preset JSON loads without changes.
+- **Equalize CDF hard-anchored at endpoints.**  `read_cdf()` now rescales the raw CDF so `cdf[0]→0` and `cdf[255]→1`, stretching the occupied tonal range to fill [0,1] while keeping pure black pure black and pure white pure white.  This magnifies subtle shadow and highlight detail rather than lifting black toward grey as the unanchored CDF did.
+
+### Changed
+- **Reverted LC-stage Shadow Detail / Highlight Detail approach** (added in 0.23.0).  That approach amplified the deviation-from-mean term in the LC shader for dark/bright regions but did not achieve the goal of bringing out subtle luminance detail.  `LcParams` is back to `radius` + `strength` only; `shaders/local_contrast.wgsl` returns to plain `L + strength * deviation`.  The renamed `GpuPreset` fields `lc_shadow_detail` / `lc_highlight_detail` (added in 0.23.0) are removed; shadow/highlight detail is now handled in the Equalize stage instead.
+
 ## [0.23.0] - 2026-05-29
 
 ### Changed

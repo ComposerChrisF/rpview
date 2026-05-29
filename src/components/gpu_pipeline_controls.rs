@@ -82,8 +82,6 @@ pub struct GpuPipelineControls {
     pub lc_expanded: bool,
     pub lc_radius: Entity<Slider>,
     pub lc_strength: Entity<Slider>,
-    pub lc_shadow_detail: Entity<Slider>,
-    pub lc_highlight_detail: Entity<Slider>,
     pub lc_midpoint: Entity<Slider>,
 
     pub bc_enabled: bool,
@@ -103,6 +101,8 @@ pub struct GpuPipelineControls {
     pub equalize_enabled: bool,
     pub equalize_expanded: bool,
     pub equalize_amount: Entity<Slider>,
+    pub equalize_shadows: Entity<Slider>,
+    pub equalize_highlights: Entity<Slider>,
 
     // --- Presets ---
     pub preset_dropdown: Entity<Dropdown>,
@@ -152,8 +152,6 @@ impl GpuPipelineControls {
             3,
         );
         let lc_strength = slider(cx, 0.5, 0.0, 2.0, 0.01, 2);
-        let lc_shadow_detail = slider(cx, 0.0, 0.0, 2.0, 0.01, 2);
-        let lc_highlight_detail = slider(cx, 0.0, 0.0, 2.0, 0.01, 2);
         let lc_midpoint = slider(cx, 0.5, 0.1, 0.9, 0.01, 2);
 
         let bc_brightness = slider(cx, 0.0, -1.0, 1.0, 0.01, 2);
@@ -167,6 +165,8 @@ impl GpuPipelineControls {
         let hue_value = slider(cx, 0.5, 0.0, 1.0, 0.001, 3);
 
         let equalize_amount = slider(cx, 0.5, 0.0, 1.0, 0.01, 2);
+        let equalize_shadows = slider(cx, 0.0, 0.0, 1.0, 0.01, 2);
+        let equalize_highlights = slider(cx, 0.0, 0.0, 1.0, 0.01, 2);
 
         let preset_dropdown = Self::build_preset_dropdown(None, cx);
         cx.subscribe(&preset_dropdown, Self::on_preset_dropdown_change)
@@ -194,8 +194,6 @@ impl GpuPipelineControls {
             lc_expanded: true,
             lc_radius,
             lc_strength,
-            lc_shadow_detail,
-            lc_highlight_detail,
             lc_midpoint,
             bc_enabled: false,
             bc_expanded: true,
@@ -211,6 +209,8 @@ impl GpuPipelineControls {
             equalize_enabled: false,
             equalize_expanded: true,
             equalize_amount,
+            equalize_shadows,
+            equalize_highlights,
             preset_dropdown,
             preset_name_input,
             current_preset: None,
@@ -311,8 +311,6 @@ impl GpuPipelineControls {
             lc_enabled: self.lc_enabled,
             lc_radius_t: self.lc_radius.read(cx).value() as f32,
             lc_strength: self.lc_strength.read(cx).value() as f32,
-            lc_shadow_detail: self.lc_shadow_detail.read(cx).value() as f32,
-            lc_highlight_detail: self.lc_highlight_detail.read(cx).value() as f32,
             lc_midpoint: self.lc_midpoint.read(cx).value() as f32,
             bc_enabled: self.bc_enabled,
             bc_brightness: self.bc_brightness.read(cx).value() as f32,
@@ -324,6 +322,8 @@ impl GpuPipelineControls {
             hue_value: self.hue_value.read(cx).value() as f32,
             equalize_enabled: self.equalize_enabled,
             equalize_amount: self.equalize_amount.read(cx).value() as f32,
+            equalize_shadows: self.equalize_shadows.read(cx).value() as f32,
+            equalize_highlights: self.equalize_highlights.read(cx).value() as f32,
         }
     }
 
@@ -338,10 +338,6 @@ impl GpuPipelineControls {
             .update(cx, |s, cx| s.set_value(p.lc_radius_t as f64, cx));
         self.lc_strength
             .update(cx, |s, cx| s.set_value(p.lc_strength as f64, cx));
-        self.lc_shadow_detail
-            .update(cx, |s, cx| s.set_value(p.lc_shadow_detail as f64, cx));
-        self.lc_highlight_detail
-            .update(cx, |s, cx| s.set_value(p.lc_highlight_detail as f64, cx));
         self.lc_midpoint
             .update(cx, |s, cx| s.set_value(p.lc_midpoint as f64, cx));
         self.bc_enabled = p.bc_enabled;
@@ -360,6 +356,10 @@ impl GpuPipelineControls {
         self.equalize_enabled = p.equalize_enabled;
         self.equalize_amount
             .update(cx, |s, cx| s.set_value(p.equalize_amount as f64, cx));
+        self.equalize_shadows
+            .update(cx, |s, cx| s.set_value(p.equalize_shadows as f64, cx));
+        self.equalize_highlights
+            .update(cx, |s, cx| s.set_value(p.equalize_highlights as f64, cx));
     }
 
     fn save_current_as_preset(&mut self, name: &str, cx: &mut Context<Self>) {
@@ -412,9 +412,6 @@ impl GpuPipelineControls {
             lc: self.lc_enabled.then(|| LcParams {
                 radius: radius_effective,
                 strength: self.lc_strength.read(cx).value() as f32,
-                shadow_detail: self.lc_shadow_detail.read(cx).value() as f32,
-                highlight_detail: self.lc_highlight_detail.read(cx).value() as f32,
-                midpoint,
             }),
             bc: self.bc_enabled.then(|| BcParams {
                 brightness: self.bc_brightness.read(cx).value() as f32,
@@ -430,6 +427,8 @@ impl GpuPipelineControls {
             }),
             equalize: self.equalize_enabled.then(|| EqualizeParams {
                 amount: self.equalize_amount.read(cx).value() as f32,
+                shadows: self.equalize_shadows.read(cx).value() as f32,
+                highlights: self.equalize_highlights.read(cx).value() as f32,
             }),
         }
     }
@@ -448,9 +447,6 @@ impl GpuPipelineControls {
             s.set_value(radius_displayed_to_t(DEFAULT_DISPLAYED_RADIUS) as f64, cx)
         });
         self.lc_strength.update(cx, |s, cx| s.set_value(0.5, cx));
-        self.lc_shadow_detail.update(cx, |s, cx| s.set_value(0.0, cx));
-        self.lc_highlight_detail
-            .update(cx, |s, cx| s.set_value(0.0, cx));
         self.lc_midpoint.update(cx, |s, cx| s.set_value(0.5, cx));
         self.bc_brightness.update(cx, |s, cx| s.set_value(0.0, cx));
         self.bc_contrast.update(cx, |s, cx| s.set_value(0.0, cx));
@@ -461,6 +457,10 @@ impl GpuPipelineControls {
         self.hue_value.update(cx, |s, cx| s.set_value(0.5, cx));
         self.equalize_amount
             .update(cx, |s, cx| s.set_value(0.5, cx));
+        self.equalize_shadows
+            .update(cx, |s, cx| s.set_value(0.0, cx));
+        self.equalize_highlights
+            .update(cx, |s, cx| s.set_value(0.0, cx));
         cx.emit(GpuPipelineControlsEvent::ResetRequested);
     }
 }
@@ -740,8 +740,6 @@ impl Render for GpuPipelineControls {
         let lc_radius_t = self.lc_radius.read(cx).value() as f32;
         let lc_radius_displayed = radius_t_to_displayed(lc_radius_t);
         let lc_strength_v = self.lc_strength.read(cx).value();
-        let lc_shadow_v = self.lc_shadow_detail.read(cx).value();
-        let lc_highlight_v = self.lc_highlight_detail.read(cx).value();
         let lc_midpoint_v = self.lc_midpoint.read(cx).value();
         let lc_section = div()
             .flex()
@@ -773,18 +771,6 @@ impl Render for GpuPipelineControls {
                     "Strength",
                     format!("{:.2}", lc_strength_v),
                     self.lc_strength.clone(),
-                    fs,
-                ))
-                .child(slider_row(
-                    "Shadow Detail",
-                    format!("{:.2}", lc_shadow_v),
-                    self.lc_shadow_detail.clone(),
-                    fs,
-                ))
-                .child(slider_row(
-                    "Highlight Detail",
-                    format!("{:.2}", lc_highlight_v),
-                    self.lc_highlight_detail.clone(),
                     fs,
                 ))
                 .child(slider_row(
@@ -902,6 +888,8 @@ impl Render for GpuPipelineControls {
 
         // --- Equalize section ---
         let eq_v = self.equalize_amount.read(cx).value();
+        let eq_shadow_v = self.equalize_shadows.read(cx).value();
+        let eq_highlight_v = self.equalize_highlights.read(cx).value();
         let equalize_section = div()
             .flex()
             .flex_col()
@@ -926,6 +914,18 @@ impl Render for GpuPipelineControls {
                     "Amount",
                     format!("{:.2}", eq_v),
                     self.equalize_amount.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Shadows",
+                    format!("{:.2}", eq_shadow_v),
+                    self.equalize_shadows.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Highlights",
+                    format!("{:.2}", eq_highlight_v),
+                    self.equalize_highlights.clone(),
                     fs,
                 ))
             });

@@ -25,14 +25,6 @@ pub struct GpuPreset {
     pub lc_enabled: bool,
     pub lc_radius_t: f32,
     pub lc_strength: f32,
-    /// Renamed from `lc_shadow_lift` (v0.22.10 and earlier).  The `alias`
-    /// lets old preset JSON keep loading; its semantics changed from a
-    /// luminance lift toward the midpoint to an additive local-contrast gain.
-    #[serde(alias = "lc_shadow_lift")]
-    pub lc_shadow_detail: f32,
-    /// Renamed from `lc_highlight_darken` (see `lc_shadow_detail`).
-    #[serde(alias = "lc_highlight_darken")]
-    pub lc_highlight_detail: f32,
     pub lc_midpoint: f32,
 
     pub bc_enabled: bool,
@@ -53,6 +45,12 @@ pub struct GpuPreset {
     pub equalize_enabled: bool,
     #[serde(default = "default_equalize_amount")]
     pub equalize_amount: f32,
+    /// Tonally-weighted equalization (v0.24.0).  Default 0 so older presets
+    /// load unchanged.
+    #[serde(default)]
+    pub equalize_shadows: f32,
+    #[serde(default)]
+    pub equalize_highlights: f32,
 }
 
 fn default_equalize_amount() -> f32 {
@@ -150,8 +148,6 @@ mod tests {
             lc_enabled: true,
             lc_radius_t: 0.42,
             lc_strength: 0.7,
-            lc_shadow_detail: 0.1,
-            lc_highlight_detail: 0.05,
             lc_midpoint: 0.5,
             bc_enabled: false,
             bc_brightness: 0.0,
@@ -163,6 +159,8 @@ mod tests {
             hue_value: 0.5,
             equalize_enabled: false,
             equalize_amount: 0.5,
+            equalize_shadows: 0.0,
+            equalize_highlights: 0.0,
         }
     }
 
@@ -260,8 +258,6 @@ mod tests {
             "lc_enabled": false,
             "lc_radius_t": 0.5,
             "lc_strength": 0.5,
-            "lc_shadow_lift": 0.3,
-            "lc_highlight_darken": 0.2,
             "lc_midpoint": 0.5,
             "bc_enabled": false,
             "bc_brightness": 0.0,
@@ -276,11 +272,10 @@ mod tests {
             serde_json::from_str(legacy_json).expect("legacy preset must parse");
         assert!(!parsed.equalize_enabled);
         assert!((parsed.equalize_amount - 0.5).abs() < f32::EPSILON);
-        // The old `lc_shadow_lift` / `lc_highlight_darken` keys deserialize
-        // onto the renamed `lc_shadow_detail` / `lc_highlight_detail` fields
-        // via their serde aliases.
-        assert!((parsed.lc_shadow_detail - 0.3).abs() < f32::EPSILON);
-        assert!((parsed.lc_highlight_detail - 0.2).abs() < f32::EPSILON);
+        // The tonally-weighted equalize fields are absent from legacy JSON and
+        // default to 0.
+        assert_eq!(parsed.equalize_shadows, 0.0);
+        assert_eq!(parsed.equalize_highlights, 0.0);
     }
 
     #[test]

@@ -173,8 +173,6 @@ mod tests {
         let params = UnifiedParams {
             lc: Some(LcParams {
                 strength: 0.0,
-                shadow_detail: 0.0,
-                highlight_detail: 0.0,
                 ..Default::default()
             }),
             ..Default::default()
@@ -227,7 +225,10 @@ mod tests {
                 saturation: 0.2,
             }),
             hue: Some(HueParams { hue: 0.05 }),
-            equalize: Some(EqualizeParams { amount: 0.4 }),
+            equalize: Some(EqualizeParams {
+                amount: 0.4,
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let (out, ow, oh) = process_pipeline(&rgba, w, h, &params).unwrap();
@@ -246,7 +247,10 @@ mod tests {
         }
         let (rgba, w, h) = fixture();
         let params = UnifiedParams {
-            equalize: Some(EqualizeParams { amount: 0.0 }),
+            equalize: Some(EqualizeParams {
+                amount: 0.0,
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let (out, ow, oh) = process_pipeline(&rgba, w, h, &params).unwrap();
@@ -278,7 +282,10 @@ mod tests {
             }
         }
         let params = UnifiedParams {
-            equalize: Some(EqualizeParams { amount: 1.0 }),
+            equalize: Some(EqualizeParams {
+                amount: 1.0,
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let (out, ow, oh) = process_pipeline(&rgba, w, h, &params).unwrap();
