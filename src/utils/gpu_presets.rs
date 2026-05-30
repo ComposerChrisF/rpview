@@ -33,6 +33,26 @@ pub struct GpuPreset {
     pub lc_highlights: f32,
     pub lc_midpoint: f32,
 
+    /// LC Document-Style Contrast sub-stage.  Added later than the rest of the
+    /// LC fields, so every key is `#[serde(default)]` (with helpers for the
+    /// non-zero defaults) and older preset JSON loads with the stage disabled.
+    #[serde(default)]
+    pub lc_doc_enabled: bool,
+    #[serde(default)]
+    pub lc_doc_contrast: f32,
+    #[serde(default = "default_doc_mix")]
+    pub lc_doc_mix: f32,
+    #[serde(default = "default_doc_tilt_black")]
+    pub lc_doc_tilt_black: f32,
+    #[serde(default = "default_doc_tilt_white")]
+    pub lc_doc_tilt_white: f32,
+    #[serde(default = "default_true")]
+    pub lc_doc_adjust_bw: bool,
+    #[serde(default = "default_true")]
+    pub lc_doc_adjust_xition: bool,
+    #[serde(default)]
+    pub lc_doc_use_median: bool,
+
     pub bc_enabled: bool,
     pub bc_brightness: f32,
     pub bc_contrast: f32,
@@ -61,6 +81,22 @@ pub struct GpuPreset {
 
 fn default_equalize_amount() -> f32 {
     0.5
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_doc_mix() -> f32 {
+    1.0
+}
+
+fn default_doc_tilt_black() -> f32 {
+    -0.20
+}
+
+fn default_doc_tilt_white() -> f32 {
+    -0.05
 }
 
 fn presets_dir() -> PathBuf {
@@ -157,6 +193,14 @@ mod tests {
             lc_shadows: 0.0,
             lc_highlights: 0.0,
             lc_midpoint: 0.5,
+            lc_doc_enabled: true,
+            lc_doc_contrast: 0.1,
+            lc_doc_mix: 1.0,
+            lc_doc_tilt_black: -0.20,
+            lc_doc_tilt_white: -0.05,
+            lc_doc_adjust_bw: true,
+            lc_doc_adjust_xition: true,
+            lc_doc_use_median: false,
             bc_enabled: false,
             bc_brightness: 0.0,
             bc_contrast: 0.0,
@@ -284,6 +328,16 @@ mod tests {
         // default to 0.
         assert_eq!(parsed.equalize_shadows, 0.0);
         assert_eq!(parsed.equalize_highlights, 0.0);
+        // The Document-Style Contrast fields are likewise absent from legacy
+        // JSON; they default to the disabled-but-sane configuration.
+        assert!(!parsed.lc_doc_enabled);
+        assert_eq!(parsed.lc_doc_contrast, 0.0);
+        assert!((parsed.lc_doc_mix - 1.0).abs() < f32::EPSILON);
+        assert!((parsed.lc_doc_tilt_black - (-0.20)).abs() < f32::EPSILON);
+        assert!((parsed.lc_doc_tilt_white - (-0.05)).abs() < f32::EPSILON);
+        assert!(parsed.lc_doc_adjust_bw);
+        assert!(parsed.lc_doc_adjust_xition);
+        assert!(!parsed.lc_doc_use_median);
     }
 
     #[test]

@@ -86,6 +86,16 @@ pub struct GpuPipelineControls {
     pub lc_highlights: Entity<Slider>,
     pub lc_midpoint: Entity<Slider>,
 
+    // --- LC Document-Style Contrast sub-stage ---
+    pub lc_doc_enabled: bool,
+    pub lc_doc_contrast: Entity<Slider>,
+    pub lc_doc_mix: Entity<Slider>,
+    pub lc_doc_tilt_black: Entity<Slider>,
+    pub lc_doc_tilt_white: Entity<Slider>,
+    pub lc_doc_adjust_bw: bool,
+    pub lc_doc_adjust_xition: bool,
+    pub lc_doc_use_median: bool,
+
     pub bc_enabled: bool,
     pub bc_expanded: bool,
     pub bc_brightness: Entity<Slider>,
@@ -158,6 +168,12 @@ impl GpuPipelineControls {
         let lc_highlights = slider(cx, 0.0, 0.0, 1.0, 0.01, 2);
         let lc_midpoint = slider(cx, 0.5, 0.1, 0.9, 0.01, 2);
 
+        // Document-Style Contrast knobs (defaults mirror the CPU LC dialog).
+        let lc_doc_contrast = slider(cx, 0.0, -1.0, 1.0, 0.01, 2);
+        let lc_doc_mix = slider(cx, 1.0, -1.0, 1.0, 0.01, 2);
+        let lc_doc_tilt_black = slider(cx, -0.20, -1.0, 1.0, 0.01, 2);
+        let lc_doc_tilt_white = slider(cx, -0.05, -1.0, 1.0, 0.01, 2);
+
         let bc_brightness = slider(cx, 0.0, -1.0, 1.0, 0.01, 2);
         let bc_contrast = slider(cx, 0.0, -1.0, 2.0, 0.01, 2);
 
@@ -201,6 +217,14 @@ impl GpuPipelineControls {
             lc_shadows,
             lc_highlights,
             lc_midpoint,
+            lc_doc_enabled: false,
+            lc_doc_contrast,
+            lc_doc_mix,
+            lc_doc_tilt_black,
+            lc_doc_tilt_white,
+            lc_doc_adjust_bw: true,
+            lc_doc_adjust_xition: true,
+            lc_doc_use_median: false,
             bc_enabled: false,
             bc_expanded: true,
             bc_brightness,
@@ -320,6 +344,14 @@ impl GpuPipelineControls {
             lc_shadows: self.lc_shadows.read(cx).value() as f32,
             lc_highlights: self.lc_highlights.read(cx).value() as f32,
             lc_midpoint: self.lc_midpoint.read(cx).value() as f32,
+            lc_doc_enabled: self.lc_doc_enabled,
+            lc_doc_contrast: self.lc_doc_contrast.read(cx).value() as f32,
+            lc_doc_mix: self.lc_doc_mix.read(cx).value() as f32,
+            lc_doc_tilt_black: self.lc_doc_tilt_black.read(cx).value() as f32,
+            lc_doc_tilt_white: self.lc_doc_tilt_white.read(cx).value() as f32,
+            lc_doc_adjust_bw: self.lc_doc_adjust_bw,
+            lc_doc_adjust_xition: self.lc_doc_adjust_xition,
+            lc_doc_use_median: self.lc_doc_use_median,
             bc_enabled: self.bc_enabled,
             bc_brightness: self.bc_brightness.read(cx).value() as f32,
             bc_contrast: self.bc_contrast.read(cx).value() as f32,
@@ -352,6 +384,18 @@ impl GpuPipelineControls {
             .update(cx, |s, cx| s.set_value(p.lc_highlights as f64, cx));
         self.lc_midpoint
             .update(cx, |s, cx| s.set_value(p.lc_midpoint as f64, cx));
+        self.lc_doc_enabled = p.lc_doc_enabled;
+        self.lc_doc_contrast
+            .update(cx, |s, cx| s.set_value(p.lc_doc_contrast as f64, cx));
+        self.lc_doc_mix
+            .update(cx, |s, cx| s.set_value(p.lc_doc_mix as f64, cx));
+        self.lc_doc_tilt_black
+            .update(cx, |s, cx| s.set_value(p.lc_doc_tilt_black as f64, cx));
+        self.lc_doc_tilt_white
+            .update(cx, |s, cx| s.set_value(p.lc_doc_tilt_white as f64, cx));
+        self.lc_doc_adjust_bw = p.lc_doc_adjust_bw;
+        self.lc_doc_adjust_xition = p.lc_doc_adjust_xition;
+        self.lc_doc_use_median = p.lc_doc_use_median;
         self.bc_enabled = p.bc_enabled;
         self.bc_brightness
             .update(cx, |s, cx| s.set_value(p.bc_brightness as f64, cx));
@@ -426,6 +470,14 @@ impl GpuPipelineControls {
                 strength: self.lc_strength.read(cx).value() as f32,
                 shadows: self.lc_shadows.read(cx).value() as f32,
                 highlights: self.lc_highlights.read(cx).value() as f32,
+                doc_enabled: self.lc_doc_enabled,
+                doc_contrast: self.lc_doc_contrast.read(cx).value() as f32,
+                doc_mix: self.lc_doc_mix.read(cx).value() as f32,
+                doc_tilt_black: self.lc_doc_tilt_black.read(cx).value() as f32,
+                doc_tilt_white: self.lc_doc_tilt_white.read(cx).value() as f32,
+                doc_adjust_bw: self.lc_doc_adjust_bw,
+                doc_adjust_xition: self.lc_doc_adjust_xition,
+                doc_use_median: self.lc_doc_use_median,
             }),
             bc: self.bc_enabled.then(|| BcParams {
                 brightness: self.bc_brightness.read(cx).value() as f32,
@@ -464,6 +516,17 @@ impl GpuPipelineControls {
         self.lc_shadows.update(cx, |s, cx| s.set_value(0.0, cx));
         self.lc_highlights.update(cx, |s, cx| s.set_value(0.0, cx));
         self.lc_midpoint.update(cx, |s, cx| s.set_value(0.5, cx));
+        self.lc_doc_enabled = false;
+        self.lc_doc_adjust_bw = true;
+        self.lc_doc_adjust_xition = true;
+        self.lc_doc_use_median = false;
+        self.lc_doc_contrast
+            .update(cx, |s, cx| s.set_value(0.0, cx));
+        self.lc_doc_mix.update(cx, |s, cx| s.set_value(1.0, cx));
+        self.lc_doc_tilt_black
+            .update(cx, |s, cx| s.set_value(-0.20, cx));
+        self.lc_doc_tilt_white
+            .update(cx, |s, cx| s.set_value(-0.05, cx));
         self.bc_brightness.update(cx, |s, cx| s.set_value(0.0, cx));
         self.bc_contrast.update(cx, |s, cx| s.set_value(0.0, cx));
         self.vibrance_amount
@@ -512,6 +575,50 @@ fn slider_row(
                 ),
         )
         .child(slider)
+}
+
+/// Compact checkbox row for a sub-toggle inside a stage section (e.g. the LC
+/// Document-Style Contrast knobs).  Mirrors `local_contrast_controls::checkbox_row`:
+/// the whole row is clickable and runs `toggle_fn`, then emits ParametersChanged.
+fn sub_checkbox<F>(
+    label: &str,
+    checked: bool,
+    font_size_scale: f32,
+    cx: &mut Context<GpuPipelineControls>,
+    toggle_fn: F,
+) -> impl IntoElement
+where
+    F: Fn(&mut GpuPipelineControls) + 'static,
+{
+    div()
+        .id(SharedString::from(format!("gpu-sub-cb-{label}")))
+        .flex()
+        .items_center()
+        .gap(px(8.0))
+        .cursor_pointer()
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |this, _evt: &MouseDownEvent, _window, cx| {
+                toggle_fn(this);
+                cx.emit(GpuPipelineControlsEvent::ParametersChanged);
+                cx.notify();
+            }),
+        )
+        .child(
+            div()
+                .w(px(13.0))
+                .h(px(13.0))
+                .border_1()
+                .border_color(rgb(0x888888))
+                .rounded(px(2.0))
+                .when(checked, |d| d.bg(rgb(0x4080FF))),
+        )
+        .child(
+            div()
+                .text_size(scaled_text_size(11.0, font_size_scale))
+                .text_color(Colors::text())
+                .child(label.to_string()),
+        )
 }
 
 /// Header row with enable checkbox, title, and collapse caret.
@@ -759,6 +866,79 @@ impl Render for GpuPipelineControls {
         let lc_shadows_v = self.lc_shadows.read(cx).value();
         let lc_highlights_v = self.lc_highlights.read(cx).value();
         let lc_midpoint_v = self.lc_midpoint.read(cx).value();
+        let lc_doc_on = self.lc_doc_enabled;
+        let lc_doc_contrast_v = self.lc_doc_contrast.read(cx).value();
+        let lc_doc_mix_v = self.lc_doc_mix.read(cx).value();
+        let lc_doc_tilt_black_v = self.lc_doc_tilt_black.read(cx).value();
+        let lc_doc_tilt_white_v = self.lc_doc_tilt_white.read(cx).value();
+        let lc_doc_adjust_bw = self.lc_doc_adjust_bw;
+        let lc_doc_adjust_xition = self.lc_doc_adjust_xition;
+        let lc_doc_use_median = self.lc_doc_use_median;
+
+        // Document-Style Contrast sub-section, built straight-line (its
+        // checkboxes need `cx`, which can't be captured inside the
+        // `.when(lc_expanded)` closure) and appended via `.children` below.
+        let mut lc_doc_block = div().flex().flex_col().gap(px(6.0)).child(sub_checkbox(
+            "Document Contrast",
+            lc_doc_on,
+            fs,
+            cx,
+            |this| this.lc_doc_enabled = !this.lc_doc_enabled,
+        ));
+        if lc_doc_on {
+            lc_doc_block = lc_doc_block
+                .child(slider_row(
+                    "Contrast",
+                    format!("{:+.2}", lc_doc_contrast_v),
+                    self.lc_doc_contrast.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Mix Doc Contrast",
+                    format!("{:+.2}", lc_doc_mix_v),
+                    self.lc_doc_mix.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Tilt Black-Point",
+                    format!("{:+.2}", lc_doc_tilt_black_v),
+                    self.lc_doc_tilt_black.clone(),
+                    fs,
+                ))
+                .child(slider_row(
+                    "Tilt White-Point",
+                    format!("{:+.2}", lc_doc_tilt_white_v),
+                    self.lc_doc_tilt_white.clone(),
+                    fs,
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .gap(px(12.0))
+                        .child(sub_checkbox(
+                            "Adjust BW",
+                            lc_doc_adjust_bw,
+                            fs,
+                            cx,
+                            |this| this.lc_doc_adjust_bw = !this.lc_doc_adjust_bw,
+                        ))
+                        .child(sub_checkbox(
+                            "Adjust Gray",
+                            lc_doc_adjust_xition,
+                            fs,
+                            cx,
+                            |this| this.lc_doc_adjust_xition = !this.lc_doc_adjust_xition,
+                        )),
+                )
+                .child(sub_checkbox(
+                    "Use Median Gray-Point",
+                    lc_doc_use_median,
+                    fs,
+                    cx,
+                    |this| this.lc_doc_use_median = !this.lc_doc_use_median,
+                ));
+        }
+
         let lc_section = div()
             .flex()
             .flex_col()
@@ -809,7 +989,8 @@ impl Render for GpuPipelineControls {
                     self.lc_midpoint.clone(),
                     fs,
                 ))
-            });
+            })
+            .children(self.lc_expanded.then_some(lc_doc_block));
 
         // --- BC section ---
         let bc_bright_v = self.bc_brightness.read(cx).value();

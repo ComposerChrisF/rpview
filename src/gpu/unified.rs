@@ -44,6 +44,29 @@ pub struct LcParams {
     /// CLAHE equalization faded into the bright tones by source luminance.
     /// 0–1, default 0.
     pub highlights: f32,
+
+    // --- Document-Style Contrast sub-stage -------------------------------
+    /// Master enable for the Document-Style Contrast tone curve (GPU port of
+    /// the CPU `contrast_doc`).  When off, none of the `doc_*` fields below
+    /// have any effect.  Default false.
+    pub doc_enabled: bool,
+    /// `contrast_std` amount applied before the document curve (the CPU
+    /// "Contrast").  −1 … 1, default 0 (neutral).
+    pub doc_contrast: f32,
+    /// `contrast_doc` mix (the CPU `mix_document_contrast`).  −1 … 1, default 1.
+    pub doc_mix: f32,
+    /// Tilt of the black-point threshold relative to the local gray-point.
+    /// −1 … 1, default −0.20.
+    pub doc_tilt_black: f32,
+    /// Tilt of the white-point threshold relative to the local gray-point.
+    /// −1 … 1, default −0.05.
+    pub doc_tilt_white: f32,
+    /// Apply contrast to the crushed black / white endpoints.  Default true.
+    pub doc_adjust_bw: bool,
+    /// Apply contrast to the midtone transition zone.  Default true.
+    pub doc_adjust_xition: bool,
+    /// Use the per-tile median (vs mean) as the local gray-point.  Default false.
+    pub doc_use_median: bool,
 }
 
 impl Default for LcParams {
@@ -53,6 +76,14 @@ impl Default for LcParams {
             strength: 0.5,
             shadows: 0.0,
             highlights: 0.0,
+            doc_enabled: false,
+            doc_contrast: 0.0,
+            doc_mix: 1.0,
+            doc_tilt_black: -0.20,
+            doc_tilt_white: -0.05,
+            doc_adjust_bw: true,
+            doc_adjust_xition: true,
+            doc_use_median: false,
         }
     }
 }
@@ -62,6 +93,7 @@ impl LcParams {
         self.strength.abs() < 0.0005
             && self.shadows.abs() < 0.0005
             && self.highlights.abs() < 0.0005
+            && !self.has_doc()
     }
 
     /// True when the Gaussian-blur deviation contrast is active.
@@ -72,6 +104,21 @@ impl LcParams {
     /// True when the CLAHE shadows/highlights sub-stage is active.
     fn has_clahe(&self) -> bool {
         self.shadows.abs() >= 0.0005 || self.highlights.abs() >= 0.0005
+    }
+
+    /// True when the Document-Style Contrast sub-stage is active.  Gated on the
+    /// master enable AND a non-trivial curve (so an enabled-but-flat config
+    /// short-circuits to a no-op rather than dispatching three passes).
+    fn has_doc(&self) -> bool {
+        self.doc_enabled && (self.doc_mix.abs() >= 0.0005 || self.doc_contrast.abs() >= 0.0005)
+    }
+
+    /// Pack the document sub-stage's boolean knobs into the uniform `flags`
+    /// word: bit0 = adjust BW, bit1 = adjust transition, bit2 = use median.
+    fn doc_flags(&self) -> u32 {
+        (self.doc_adjust_bw as u32)
+            | ((self.doc_adjust_xition as u32) << 1)
+            | ((self.doc_use_median as u32) << 2)
     }
 }
 
@@ -252,6 +299,26 @@ struct ClaheUniforms {
     shadows: f32,
     highlights: f32,
     _pad: f32,
+}
+
+/// Shared uniform for both LC Document-Style Contrast passes (stats / apply).
+/// Each pass reads the subset it needs.  Layout matches the `Uniforms` struct
+/// in `lc_doc_*.wgsl` (12 × 4 bytes = 48, 16-byte aligned).
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct DocUniforms {
+    nx: u32,
+    ny: u32,
+    image_w: u32,
+    image_h: u32,
+    contrast: f32,
+    mix: f32,
+    tilt_black: f32,
+    tilt_white: f32,
+    flags: u32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 #[repr(C)]
@@ -446,6 +513,50 @@ fn clahe_buffers(ctx: &GpuContext) -> &'static ClaheBuffers {
     B.get_or_init(|| ClaheBuffers {
         histogram: pipeline::make_tile_histogram_buffer(ctx, CLAHE_MAX_TILES),
         cdf: pipeline::make_tile_cdf_buffer(ctx, CLAHE_MAX_TILES),
+    })
+}
+
+// --- LC Document-Style Contrast sub-stage ---------------------------------
+
+fn doc_stats_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_pipeline_with_layout(
+            ctx,
+            "lc doc stats",
+            include_str!("shaders/lc_doc_stats.wgsl"),
+            // Same bindings as the CLAHE CDF pass: hist (read) + stats (write) + uniform.
+            pipeline::clahe_cdf_layout(ctx),
+        )
+    })
+}
+
+fn doc_apply_pipeline(ctx: &GpuContext) -> &'static wgpu::ComputePipeline {
+    static P: OnceLock<wgpu::ComputePipeline> = OnceLock::new();
+    P.get_or_init(|| {
+        pipeline::build_pipeline_with_layout(
+            ctx,
+            "lc doc apply",
+            include_str!("shaders/lc_doc_apply.wgsl"),
+            // Same bindings as the equalize/CLAHE apply pass.
+            pipeline::equalize_apply_layout(ctx),
+        )
+    })
+}
+
+/// Tile histogram + tile stats (mean/median) buffers for the LC Document-Style
+/// Contrast sub-stage.  Kept separate from `ClaheBuffers` so the two sub-stages
+/// can both run in one encoder without aliasing the histogram buffer.
+struct DocBuffers {
+    histogram: wgpu::Buffer,
+    stats: wgpu::Buffer,
+}
+
+fn doc_buffers(ctx: &GpuContext) -> &'static DocBuffers {
+    static B: OnceLock<DocBuffers> = OnceLock::new();
+    B.get_or_init(|| DocBuffers {
+        histogram: pipeline::make_tile_histogram_buffer(ctx, CLAHE_MAX_TILES),
+        stats: pipeline::make_tile_stats_buffer(ctx, CLAHE_MAX_TILES),
     })
 }
 
@@ -752,6 +863,75 @@ pub fn process_pipeline(
                         src,
                         dst,
                         &bufs.cdf,
+                        &ubuf,
+                        out_w,
+                        out_h,
+                    );
+                    current_in_a = !current_in_a;
+                }
+
+                // Document-Style Contrast: per-tile gray-point (mean/median)
+                // → bilinear interpolation → contrast_std + contrast_doc.
+                // Self-contained (own histogram → stats → apply), runs last so
+                // its gray-point reflects the post-strength/CLAHE L.
+                if lc.has_doc() {
+                    let (nx, ny) = clahe_grid(out_w, out_h, lc.radius);
+                    let bufs = doc_buffers(ctx);
+                    let u = DocUniforms {
+                        nx,
+                        ny,
+                        image_w: out_w,
+                        image_h: out_h,
+                        contrast: lc.doc_contrast,
+                        mix: lc.doc_mix,
+                        tilt_black: lc.doc_tilt_black,
+                        tilt_white: lc.doc_tilt_white,
+                        flags: lc.doc_flags(),
+                        _pad0: 0.0,
+                        _pad1: 0.0,
+                        _pad2: 0.0,
+                    };
+                    let ubuf = pipeline::make_uniform_buffer(ctx, bytemuck::bytes_of(&u));
+
+                    // Zero only the used region of the tile histogram before
+                    // accumulating (atomicAdd accumulates otherwise).
+                    let used = (nx * ny) as usize * 256 * 4;
+                    ctx.queue.write_buffer(&bufs.histogram, 0, &vec![0u8; used]);
+
+                    // Pass 1: per-tile histogram of the current L.
+                    let (src, _) = pingpong(current_in_a);
+                    pipeline::encode_clahe_histogram(
+                        ctx,
+                        &mut encoder,
+                        clahe_histogram_pipeline(ctx),
+                        src,
+                        &bufs.histogram,
+                        &ubuf,
+                        out_w,
+                        out_h,
+                    );
+                    // Pass 2: per-tile mean + median into the stats buffer
+                    // (shares the CLAHE CDF pass's bind-group layout).
+                    pipeline::encode_clahe_cdf(
+                        ctx,
+                        &mut encoder,
+                        doc_stats_pipeline(ctx),
+                        &bufs.histogram,
+                        &bufs.stats,
+                        &ubuf,
+                        nx * ny,
+                    );
+                    // Pass 3: bilinear gray-point + contrast_std + contrast_doc
+                    // (shares the equalize/CLAHE apply bind-group layout; the
+                    // stats buffer takes the "cdf" binding slot).
+                    let (src, dst) = pingpong(current_in_a);
+                    pipeline::encode_equalize_apply(
+                        ctx,
+                        &mut encoder,
+                        doc_apply_pipeline(ctx),
+                        src,
+                        dst,
+                        &bufs.stats,
                         &ubuf,
                         out_w,
                         out_h,
