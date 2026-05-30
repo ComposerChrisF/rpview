@@ -239,6 +239,10 @@ pub struct SettingsWindow {
     wrap_navigation_toggle: Entity<ToggleSwitch>,
     show_image_counter_toggle: Entity<ToggleSwitch>,
     file_manager_integration_toggle: Entity<ToggleSwitch>,
+
+    /// Inline feedback for the "Clear All Cached Frames" button (Performance
+    /// section). Empty until the user clicks it.
+    cache_status: String,
 }
 
 impl SettingsWindow {
@@ -833,6 +837,7 @@ impl SettingsWindow {
             wrap_navigation_toggle,
             show_image_counter_toggle,
             file_manager_integration_toggle,
+            cache_status: String::new(),
         }
     }
 
@@ -1320,6 +1325,61 @@ impl SettingsWindow {
                 &self.max_image_dimension_stepper,
                 max_dim_reset,
             ))
+            .child(self.render_cache_controls(cx))
+    }
+
+    /// Render the on-disk frame-cache controls (a single "Clear All Cached
+    /// Frames" button + inline status).  The cache stores decoded animation
+    /// frames for fast playback; it has no automatic eviction, so this is the
+    /// user's manual purge.
+    fn render_cache_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let status = self.cache_status.clone();
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .mt(px(12.0))
+            .child(self.render_label(
+                "Cached animation frames".to_string(),
+                Some("Decoded frames are cached on disk for fast playback".to_string()),
+            ))
+            .child(
+                div()
+                    .id("clear-all-cached-frames")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .px(px(12.0))
+                    .py(px(5.0))
+                    .rounded(px(4.0))
+                    .border_1()
+                    .border_color(rgb(0x66_66_66))
+                    .cursor_pointer()
+                    .text_size(TextSize::sm())
+                    .text_color(Colors::text())
+                    .child("Clear All Cached Frames")
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _ev: &MouseDownEvent, _window, cx| {
+                            this.cache_status = match crate::utils::frame_cache::purge_all() {
+                                Ok(freed) => format!(
+                                    "Cleared {:.2} MB of cached frames",
+                                    freed as f64 / (1024.0 * 1024.0)
+                                ),
+                                Err(e) => format!("Cache clear failed: {e}"),
+                            };
+                            cx.notify();
+                        }),
+                    ),
+            )
+            .when(!status.is_empty(), |el| {
+                el.child(
+                    div()
+                        .text_size(TextSize::sm())
+                        .text_color(rgb(0xAA_AA_AA))
+                        .child(status),
+                )
+            })
     }
 
     /// Render keyboard & mouse section

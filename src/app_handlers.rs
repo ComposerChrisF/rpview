@@ -291,184 +291,6 @@ impl App {
         }
     }
 
-    pub(crate) fn handle_toggle_local_contrast(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.local_contrast_window.is_some() {
-            self.close_local_contrast_window(cx);
-        } else {
-            self.open_local_contrast_window(cx);
-        }
-        cx.notify();
-    }
-
-    pub(crate) fn handle_reset_local_contrast(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.local_contrast_controls.update(cx, |c, cx| {
-            c.reset_sliders(cx);
-            c.set_status("", cx);
-        });
-        if let Some(loaded) = self.viewer.current_image.as_mut() {
-            loaded.lc_render = None;
-            loaded.cached_lc_params = None;
-        }
-        cx.notify();
-    }
-
-    /// Apply current LC settings: process the image and display the result.
-    /// Works regardless of Auto Process on/off.
-    pub(crate) fn handle_apply_local_contrast(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
-        if params.is_identity() {
-            return;
-        }
-        // Auto-pause animation when LC is active.
-        if let Some(ref mut anim) = self.viewer.image_state.animation {
-            anim.is_playing = false;
-        }
-        // Process and show the result immediately.
-        self.viewer.set_lc_enabled(true);
-        self.viewer.update_local_contrast(params);
-        if self.viewer.is_processing_lc() {
-            self.local_contrast_controls.update(cx, |c, cx| {
-                c.set_status("Processing…", cx);
-                c.set_progress(Some(0.0), cx);
-            });
-        }
-        cx.notify();
-    }
-
-    /// Shift+Cmd+P / Shift+Ctrl+P: process all frames if the image is
-    /// animated; otherwise behave like the single-frame Apply.
-    ///
-    /// Unlike single-frame Apply (which auto-pauses so the user can compare
-    /// the result), batch processing leaves playback running — the new
-    /// streaming/atomic-swap paths render unprocessed frames as a fallback,
-    /// so the user can keep watching the animation while LC builds.
-    pub(crate) fn handle_apply_local_contrast_all(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
-        if params.is_identity() {
-            return;
-        }
-        let is_animated = self.viewer.image_state.animation.is_some();
-        if !is_animated {
-            // Static image — single Apply path.
-            self.handle_apply_local_contrast(window, cx);
-            return;
-        }
-        self.viewer.set_lc_enabled(true);
-        self.viewer.spawn_lc_batch(params);
-        cx.notify();
-    }
-
-    pub(crate) fn open_local_contrast_window(&mut self, cx: &mut Context<Self>) {
-        if self.local_contrast_window.is_some() {
-            return;
-        }
-        let bounds = self
-            .settings
-            .appearance
-            .local_contrast_window_bounds
-            .map(|b| b.to_bounds())
-            .unwrap_or_else(|| {
-                gpui::Bounds::centered(None, gpui::size(gpui::px(320.0), gpui::px(760.0)), cx)
-            });
-        let controls = self.local_contrast_controls.clone();
-        let weak_app = cx.weak_entity();
-
-        let result = cx.open_window(
-            gpui::WindowOptions {
-                window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
-                kind: gpui::WindowKind::Floating,
-                is_resizable: true,
-                is_movable: true,
-                titlebar: Some(gpui::TitlebarOptions {
-                    title: Some("Local Contrast".into()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            move |window, cx| {
-                crate::utils::window_level::set_always_on_top(window);
-                let weak_for_escape = weak_app.clone();
-                let on_escape: crate::components::EscapeCallback =
-                    Box::new(move |window, app_cx| {
-                        window.remove_window();
-                        let _ = weak_for_escape.update(app_cx, |app, inner_cx| {
-                            app.register_escape_press(inner_cx);
-                        });
-                    });
-                let view = cx.new(|inner_cx| {
-                    crate::components::LocalContrastWindowView::new(
-                        controls.clone(),
-                        on_escape,
-                        inner_cx,
-                    )
-                });
-
-                // Persist bounds on move/resize.
-                let weak_for_bounds = weak_app.clone();
-                view.update(cx, |_, inner_cx| {
-                    inner_cx
-                        .observe_window_bounds(window, move |_, window, cx| {
-                            let bounds = window.bounds();
-                            let _ = weak_for_bounds.update(cx, |app, _| {
-                                app.settings.appearance.local_contrast_window_bounds = Some(
-                                    crate::state::settings::PersistedWindowBounds::from_bounds(
-                                        bounds,
-                                    ),
-                                );
-                                crate::utils::settings_io::save_settings_debounced(&app.settings);
-                            });
-                        })
-                        .detach();
-
-                    // Clear the handle + persisted-open flag when the view (window) drops.
-                    let weak_for_close = weak_app.clone();
-                    inner_cx
-                        .on_release(move |_, app_cx| {
-                            let _ = weak_for_close.update(app_cx, |app, _| {
-                                app.local_contrast_window = None;
-                                app.settings.appearance.local_contrast_window_open = false;
-                                let _ = crate::utils::settings_io::save_settings(&app.settings);
-                            });
-                        })
-                        .detach();
-                });
-                view
-            },
-        );
-        match result {
-            Ok(handle) => {
-                self.local_contrast_window = Some(handle);
-                self.settings.appearance.local_contrast_window_open = true;
-                let _ = crate::utils::settings_io::save_settings(&self.settings);
-            }
-            Err(e) => eprintln!("Failed to open local-contrast window: {:?}", e),
-        }
-    }
-
-    pub(crate) fn close_local_contrast_window(&mut self, cx: &mut Context<Self>) {
-        if let Some(handle) = self.local_contrast_window.take() {
-            let _ = handle.update(cx, |_, window, _| window.remove_window());
-            self.settings.appearance.local_contrast_window_open = false;
-            let _ = crate::utils::settings_io::save_settings(&self.settings);
-        }
-    }
-
     pub(crate) fn handle_toggle_gpu_pipeline(
         &mut self,
         _window: &mut Window,
@@ -592,7 +414,6 @@ impl App {
         self.viewer.clear_active_slot();
         self.viewer.image_state.filters_enabled = false;
         self.viewer.update_filtered_cache();
-        self.viewer.set_lc_enabled(false);
         self.viewer.set_gpu_pipeline_enabled(false);
         self.save_current_image_state();
         cx.notify();
@@ -602,7 +423,6 @@ impl App {
         self.viewer.clear_active_slot();
         self.viewer.image_state.filters_enabled = true;
         self.viewer.update_filtered_cache();
-        self.viewer.set_lc_enabled(true);
         self.viewer.set_gpu_pipeline_enabled(true);
         self.save_current_image_state();
         cx.notify();
@@ -777,25 +597,13 @@ impl App {
                 .current_image
                 .as_ref()
                 .is_some_and(|i| i.gpu_pipeline_render.is_some());
-        let lc_active = self.viewer.lc_enabled
-            && self.viewer.current_image.as_ref().is_some_and(|i| {
-                i.lc_render.is_some()
-                    || self
-                        .viewer
-                        .image_state
-                        .animation
-                        .as_ref()
-                        .and_then(|a| i.lc_frame_renders.get(a.current_frame))
-                        .and_then(|opt| opt.as_ref())
-                        .is_some()
-            });
         let filters_active = self.viewer.image_state.filters_enabled
             && self
                 .viewer
                 .current_image
                 .as_ref()
                 .is_some_and(|i| i.filtered_render.is_some());
-        let any_processing = active_slot || gpu_pipeline_active || lc_active || filters_active;
+        let any_processing = active_slot || gpu_pipeline_active || filters_active;
 
         // Determine extension from settings when any processing is active
         let save_ext = if any_processing {
@@ -1398,10 +1206,6 @@ impl App {
             // new frame's effective dimensions differ.
             self.viewer.set_current_frame(next);
         }
-        // If LC is active, reprocess the new frame.
-        if self.viewer.lc_enabled {
-            self.reapply_local_contrast_for_current_frame(cx);
-        }
         // GPU pipeline output is per-frame; re-run on the new frame.
         self.reapply_gpu_pipeline_if_active(cx);
         cx.notify();
@@ -1421,10 +1225,6 @@ impl App {
                 anim.current_frame - 1
             };
             self.viewer.set_current_frame(prev);
-        }
-        // If LC is active, reprocess the new frame.
-        if self.viewer.lc_enabled {
-            self.reapply_local_contrast_for_current_frame(cx);
         }
         // GPU pipeline output is per-frame; re-run on the new frame.
         self.reapply_gpu_pipeline_if_active(cx);
@@ -1644,18 +1444,11 @@ impl App {
         let state = self.app_state.get_current_state(default_filters);
         let filters = state.filters;
         let filters_enabled = state.filters_enabled;
-        let lc_auto = state.lc_auto_process;
         self.viewer.set_image_state(state); // move, no clone
 
         // Update filter controls UI to reflect the loaded filter values
         self.filter_controls.update(cx, |controls, cx| {
             controls.update_from_filters(filters, cx);
-        });
-
-        // Restore per-image LC auto-process state
-        self.local_contrast_controls.update(cx, |c, cx| {
-            c.auto_process = lc_auto;
-            cx.notify();
         });
 
         // Re-apply filters to the newly-loaded image if they're non-default.
@@ -1666,52 +1459,6 @@ impl App {
                 || (filters.gamma - 1.0).abs() >= 0.001)
         {
             self.viewer.update_filtered_cache();
-        }
-
-        // Legacy: we used to re-apply LC here, but the caller path
-        // (app_render.rs) skips this function for never-seen images, which
-        // made LC silently stop working after navigating away. The re-apply
-        // now lives in `reapply_local_contrast_if_active`, called
-        // unconditionally from the render loop whenever an async load
-        // finishes.
-    }
-
-    /// Trigger LC processing for the current animation frame, using the
-    /// per-frame cache when available. Called when the user steps through
-    /// frames while LC is active.
-    fn reapply_local_contrast_for_current_frame(&mut self, cx: &mut Context<Self>) {
-        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
-        if params.is_identity() {
-            return;
-        }
-
-        // Check per-frame cache first.
-        if let Some(ref loaded) = self.viewer.current_image {
-            if let Some(ref anim) = self.viewer.image_state.animation {
-                let idx = anim.current_frame;
-                if loaded.cached_lc_params.as_ref() == Some(&params)
-                    && idx < loaded.lc_frame_renders.len()
-                {
-                    if let Some((render, size)) = loaded.lc_frame_renders[idx].clone() {
-                        // Cache hit — install directly.
-                        if let Some(loaded_mut) = self.viewer.current_image.as_mut() {
-                            loaded_mut.lc_render = Some(render);
-                            loaded_mut.lc_render_size = Some(size);
-                        }
-                        cx.notify();
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Cache miss — kick off processing.
-        self.viewer.update_local_contrast(params);
-        if self.viewer.is_processing_lc() {
-            self.local_contrast_controls.update(cx, |c, cx| {
-                c.set_status("Processing…", cx);
-                c.set_progress(Some(0.0), cx);
-            });
         }
     }
 
@@ -1732,57 +1479,6 @@ impl App {
             return;
         }
         self.viewer.update_gpu_pipeline(params);
-    }
-
-    /// Re-trigger LC processing on the current image when the user has any
-    /// non-neutral LC knob and auto-process is enabled for this image.
-    /// Called after every successful image load so the sliders "follow"
-    /// the user across images like the filter sliders do.
-    pub(crate) fn reapply_local_contrast_if_active(&mut self, cx: &mut Context<Self>) {
-        let params = self.local_contrast_controls.read(cx).get_parameters(cx);
-        if params.is_identity() {
-            return;
-        }
-
-        // Animated + LC enabled + complete disk cache for these params →
-        // rehydrate from disk. Cheap (no recomputation) and avoids the
-        // "navigate back to a previously-processed GIF and the LC view is
-        // gone" surprise.
-        if self.viewer.lc_enabled
-            && let Some(ref loaded) = self.viewer.current_image
-            && let Some(ref data) = loaded.animation_data
-            && let Some(ref key) = loaded.image_key
-        {
-            let phash = crate::utils::frame_cache::params_hash(&params);
-            let total = data.frame_count;
-            let all_present = (0..total).all(|i| {
-                crate::utils::frame_cache::lc_frame_path(key, &phash, i)
-                    .map(|p| p.exists())
-                    .unwrap_or(false)
-            });
-            if all_present {
-                self.viewer.spawn_lc_batch(params);
-                return;
-            }
-        }
-
-        let auto = self.local_contrast_controls.read(cx).auto_process;
-        if !auto {
-            // Auto Process off — don't auto-process on navigation.
-            // Don't change lc_enabled; the new image has no lc_render yet
-            // so the viewer will show the unprocessed image naturally.
-            return;
-        }
-        // Auto-pause animation when LC is active.
-        if let Some(ref mut anim) = self.viewer.image_state.animation {
-            anim.is_playing = false;
-        }
-        self.viewer.set_lc_enabled(true);
-        self.viewer.update_local_contrast(params);
-        self.local_contrast_controls.update(cx, |c, cx| {
-            c.set_status("Processing…", cx);
-            c.set_progress(Some(0.0), cx);
-        });
     }
 
     pub(crate) fn update_viewer(&mut self, window: &mut Window, _cx: &mut Context<Self>) {

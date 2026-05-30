@@ -27,9 +27,7 @@ pub enum GpuPipelineControlsEvent {
     ResetRequested,
 }
 
-/// Discrete resize choices the user can pick from explicit buttons.  These
-/// match the snap-points in `local_contrast_controls::RESIZE_CHOICES` so
-/// muscle memory carries between the two panels.
+/// Discrete resize choices the user can pick from explicit buttons.
 pub const RESIZE_CHOICES: [f32; 5] = [0.25, 0.5, 1.0, 2.0, 4.0];
 
 /// When `resize_auto` is on, the effective factor is computed so the longer
@@ -618,9 +616,9 @@ fn slider_row(
         .child(slider)
 }
 
-/// Compact checkbox row for a sub-toggle inside a stage section (e.g. the LC
-/// Document-Style Contrast knobs).  Mirrors `local_contrast_controls::checkbox_row`:
-/// the whole row is clickable and runs `toggle_fn`, then emits ParametersChanged.
+/// Compact checkbox row for a sub-toggle inside a stage section (e.g. the
+/// Document-Style Contrast knobs).  The whole row is clickable and runs
+/// `toggle_fn`, then emits ParametersChanged.
 fn sub_checkbox<F>(
     label: &str,
     checked: bool,

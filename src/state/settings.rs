@@ -206,12 +206,6 @@ pub struct Appearance {
     /// Whether the Filter window was open when the app last quit
     #[serde(default)]
     pub filter_window_open: bool,
-    /// Last-known bounds of the floating Local Contrast window
-    #[serde(default)]
-    pub local_contrast_window_bounds: Option<PersistedWindowBounds>,
-    /// Whether the Local Contrast window was open when the app last quit
-    #[serde(default)]
-    pub local_contrast_window_open: bool,
     /// Last-known bounds of the floating GPU Pipeline window
     #[serde(default)]
     pub gpu_pipeline_window_bounds: Option<PersistedWindowBounds>,
@@ -277,8 +271,6 @@ impl Default for Appearance {
             window_title_format: "{filename} ({sm}, {index}/{total})".to_string(),
             filter_window_bounds: None,
             filter_window_open: false,
-            local_contrast_window_bounds: None,
-            local_contrast_window_open: false,
             gpu_pipeline_window_bounds: None,
             gpu_pipeline_window_open: false,
         }
