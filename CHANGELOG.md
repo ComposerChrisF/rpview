@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] - 2026-05-29
+
+### Added
+- **Document Contrast decoupled from Local Contrast.**  Document-Style Contrast is now a top-level UI section with its own enable toggle, collapse, and “Region Size” slider — no longer nested under the Local Contrast master enable.  `LcParams` gained a `doc_radius` field so the document gray-point tile grid uses an independent size from Strength/CLAHE’s `radius`.  `get_params` builds `lc: Some(..)` when either section is enabled; Strength/Shadows/Highlights are gated by the LC master enable, document fields by the Document Contrast enable.  `GpuPreset` gained `lc_doc_radius_t` with `#[serde(default)]` (≈0.49 → 60 px) so existing preset JSON loads without changes.  reset/to_preset/apply_preset and the legacy-load test updated accordingly.
+
 ## [0.26.0] - 2026-05-29
 
 ### Added

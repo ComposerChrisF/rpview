@@ -50,6 +50,10 @@ pub struct LcParams {
     /// the CPU `contrast_doc`).  When off, none of the `doc_*` fields below
     /// have any effect.  Default false.
     pub doc_enabled: bool,
+    /// Spatial scale (in pixels) of the local gray-point estimate for the
+    /// document curve — independent of `radius` (which scales Strength/CLAHE).
+    /// Drives the doc tile grid via `clahe_grid`.  Default 60.
+    pub doc_radius: f32,
     /// `contrast_std` amount applied before the document curve (the CPU
     /// "Contrast").  −1 … 1, default 0 (neutral).
     pub doc_contrast: f32,
@@ -77,6 +81,7 @@ impl Default for LcParams {
             shadows: 0.0,
             highlights: 0.0,
             doc_enabled: false,
+            doc_radius: 60.0,
             doc_contrast: 0.0,
             doc_mix: 1.0,
             doc_tilt_black: -0.20,
@@ -875,7 +880,7 @@ pub fn process_pipeline(
                 // Self-contained (own histogram → stats → apply), runs last so
                 // its gray-point reflects the post-strength/CLAHE L.
                 if lc.has_doc() {
-                    let (nx, ny) = clahe_grid(out_w, out_h, lc.radius);
+                    let (nx, ny) = clahe_grid(out_w, out_h, lc.doc_radius);
                     let bufs = doc_buffers(ctx);
                     let u = DocUniforms {
                         nx,
