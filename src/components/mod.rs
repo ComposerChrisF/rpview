@@ -15,8 +15,6 @@ pub mod gpu_pipeline_window;
 pub mod help_overlay;
 pub mod image_viewer;
 pub mod loading_indicator;
-pub mod local_contrast_controls;
-pub mod local_contrast_window;
 #[cfg(not(target_os = "macos"))]
 pub mod menu_bar;
 pub mod processing_indicator;
@@ -30,8 +28,6 @@ pub use gpu_pipeline_controls::{GpuPipelineControls, GpuPipelineControlsEvent};
 pub use gpu_pipeline_window::GpuPipelineWindowView;
 pub use help_overlay::HelpOverlay;
 pub use image_viewer::ImageViewer;
-pub use local_contrast_controls::{LocalContrastControls, LocalContrastControlsEvent};
-pub use local_contrast_window::LocalContrastWindowView;
 #[cfg(not(target_os = "macos"))]
 pub use menu_bar::MenuBar;
 pub use settings_window::SettingsWindow;

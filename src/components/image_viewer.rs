@@ -33,16 +33,10 @@ pub(crate) struct SavedSlot {
     pub height: u32,
 }
 
-/// Bundle of state for an in-flight local-contrast computation. `Some` while
-/// a worker thread is running, `None` otherwise — consolidates what used to
-/// be four lockstep fields (`is_processing_lc`, handle, cancel, progress).
-/// Payload the LC worker thread sends back on completion: the rendered
-/// image plus its pixel dimensions (which may differ from the source's when
-/// the user picked a non-1× resize factor).
-pub(crate) type LcResult = Option<(Arc<gpui::RenderImage>, (u32, u32))>;
-
-/// Single frame result from the batch LC worker: `(frame_index, render, dimensions)`.
-pub(crate) type LcBatchResult = Option<(usize, Arc<gpui::RenderImage>, (u32, u32))>;
+/// Payload an async render worker (the GPU pipeline) sends back on completion:
+/// the rendered image plus its pixel dimensions (which may differ from the
+/// source's when the user picked a non-1× resize factor). `None` on failure.
+pub(crate) type RenderResult = Option<(Arc<gpui::RenderImage>, (u32, u32))>;
 
 /// Convert an RGBA image to a BGRA-ordered `RenderImage` suitable for GPUI.
 fn rgba_to_bgra_render_image(rgba: &image::RgbaImage) -> Arc<gpui::RenderImage> {
@@ -61,46 +55,20 @@ fn rgba_to_bgra_render_image(rgba: &image::RgbaImage) -> Arc<gpui::RenderImage> 
 /// Effective display dimensions for `loaded` at `frame_idx` (when animated).
 ///
 /// Selection priority:
-/// 1. **LC enabled + per-frame LC result cached** → that result's size.
-///    Frame-aware: animated GIFs whose frames are different sizes (or LC
-///    `resize_factor != 1.0`) report each frame's true display size.
-/// 2. **LC enabled + animated, no per-frame result yet** → the unprocessed
-///    source frame's size. We display unprocessed during streaming
-///    fallback, so dimensions need to follow what's actually on screen.
-/// 3. **LC enabled + static** → `lc_render_size`.
-/// 4. **LC off + animated** → the current frame's source dimensions.
-/// 5. **LC off + static (or fallback)** → file dimensions.
+/// 1. **GPU pipeline enabled + render present** → that render's size
+///    (`resize_factor` may have shrunk it).
+/// 2. **Animated** → the current frame's source dimensions.
+/// 3. **Static (or fallback)** → file dimensions.
 fn effective_image_size(
     loaded: &LoadedImage,
-    lc_enabled: bool,
     gpu_pipeline_enabled: bool,
     frame_idx: Option<usize>,
 ) -> (u32, u32) {
-    // GPU pipeline output sits above CPU LC in display priority — when it's
-    // present and enabled it's what's on screen, and `resize_factor` may
-    // have shrunk it.
     if gpu_pipeline_enabled
         && loaded.gpu_pipeline_render.is_some()
         && let Some(size) = loaded.gpu_pipeline_render_size
     {
         return size;
-    }
-    if lc_enabled {
-        if let Some(idx) = frame_idx {
-            if let Some(Some((_, size))) = loaded.lc_frame_renders.get(idx) {
-                return *size;
-            }
-            if let Some(ref anim) = loaded.animation_data
-                && let Some(frame) = anim.frames.get(idx)
-            {
-                return (frame.image.width(), frame.image.height());
-            }
-        }
-        if loaded.lc_render.is_some()
-            && let Some(size) = loaded.lc_render_size
-        {
-            return size;
-        }
     }
     if let Some(idx) = frame_idx
         && let Some(ref anim) = loaded.animation_data
@@ -111,60 +79,12 @@ fn effective_image_size(
     (loaded.width, loaded.height)
 }
 
-pub(crate) struct LcJob {
-    pub handle: std::sync::mpsc::Receiver<LcResult>,
-    pub cancel: Arc<std::sync::atomic::AtomicBool>,
-    pub progress_bips: Arc<std::sync::atomic::AtomicU32>,
-    /// Parameters this worker was launched with. Copied onto
-    /// `LoadedImage.cached_lc_params` when the result is installed so the
-    /// next `update_local_contrast` with the same params becomes a cache
-    /// hit instead of recomputing.
-    pub params: crate::utils::local_contrast::Parameters,
-}
-
-/// In-flight batch LC job that processes all animation frames sequentially.
-#[allow(dead_code)]
-pub(crate) struct LcBatchJob {
-    /// Channel receiving `Some((frame_index, render, size))` per completed
-    /// frame, or `None` as a sentinel when the batch finishes (or is cancelled).
-    pub handle: std::sync::mpsc::Receiver<LcBatchResult>,
-    /// Cancel flag shared with the worker thread; checked between frames.
-    pub cancel: Arc<std::sync::atomic::AtomicBool>,
-    /// Index of the frame currently being processed (updated atomically by worker).
-    pub current_frame: Arc<std::sync::atomic::AtomicUsize>,
-    /// Total number of frames in the animation.
-    pub total_frames: usize,
-    /// Parameters this batch was launched with (for invalidation detection).
-    pub params: crate::utils::local_contrast::Parameters,
-    /// When `true`, results stream into `lc_pending_frame_renders` and only
-    /// swap into `lc_frame_renders` when the batch fully completes — keeping
-    /// the prior LC view stable during the rebuild (no flicker). When
-    /// `false`, results stream directly into `lc_frame_renders` (first-time
-    /// processing, fallback to unprocessed for unfilled frames).
-    pub atomic_swap_on_complete: bool,
-}
-
-impl LcJob {
-    /// Progress of the background LC job as a percentage in `0.0..=100.0`.
-    pub fn progress_percent(&self) -> f32 {
-        let bips = self
-            .progress_bips
-            .load(std::sync::atomic::Ordering::Relaxed);
-        (bips as f32) / 100.0
-    }
-    /// Signal the worker thread to abort at its next checkpoint.
-    pub fn request_cancel(&self) {
-        self.cancel
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-}
-
 /// In-flight unified-GPU-pipeline job.  The wgpu dispatch itself can't be
 /// cancelled mid-flight, so `cancel` is a "should I install this result?"
 /// flag — set when a newer request arrives, checked in `check_gpu_processing`
 /// so the stale render gets dropped instead of briefly flashing on screen.
 pub(crate) struct GpuJob {
-    pub handle: std::sync::mpsc::Receiver<LcResult>,
+    pub handle: std::sync::mpsc::Receiver<RenderResult>,
     pub cancel: Arc<std::sync::atomic::AtomicBool>,
     /// Params the worker was launched with — copied onto
     /// `LoadedImage.cached_gpu_pipeline_params` when the result is installed.
@@ -226,32 +146,12 @@ pub struct LoadedImage {
     /// Filter settings used to produce `filtered_render` (for change detection).
     pub cached_filter_settings: Option<FilterSettings>,
 
-    // --- Local contrast state ---
-    /// Planar-float copy of `decoded_rgba8` cached for the local-contrast
-    /// worker. Avoids re-doing the f32/255 conversion (6–20ms for a large
-    /// RGBA image) on every slider tick. Populated lazily on the first LC
-    /// application.
-    pub lc_source_fmap: Option<Arc<crate::utils::float_map::FloatMap>>,
-    /// In-memory local-contrast output. Takes priority over `filtered_render`
-    /// when present. Cleared on navigation or Reset.
-    pub lc_render: Option<Arc<gpui::RenderImage>>,
-    /// Pixel dimensions of `lc_render`. Differs from `width`/`height` when
-    /// the LC dialog's resize factor is not 1× — zoom math and the readout
-    /// need the effective size so e.g. 100% zoom matches the 2× output.
-    pub lc_render_size: Option<(u32, u32)>,
-    /// LC parameters used to produce `lc_render` (for change detection).
-    pub cached_lc_params: Option<crate::utils::local_contrast::Parameters>,
-    /// Per-frame LC renders for animated images, indexed by frame number.
-    /// `None` at an index means that frame hasn't been LC-processed yet.
-    /// Empty vec for static images.
-    pub lc_frame_renders: Vec<LcResult>,
-
     // --- GPU pipeline state ---
     /// Output of the unified GPU pixel-shader pipeline (PSP3 algorithm,
-    /// LC + SBC + Vibrance + Hue in OKLab).  Independent of the CPU LC
-    /// path; takes priority over `lc_render` when present.  Cleared on
-    /// navigation, reset, or when every stage is disabled.  Save File pulls
-    /// BGRA bytes back out via `RenderImage::as_bytes(0)`.
+    /// LC + SBC + Vibrance + Hue in OKLab).  Takes priority over
+    /// `filtered_render` when present.  Cleared on navigation, reset, or when
+    /// every stage is disabled.  Save File pulls BGRA bytes back out via
+    /// `RenderImage::as_bytes(0)`.
     pub gpu_pipeline_render: Option<Arc<gpui::RenderImage>>,
     /// Pixel dimensions of `gpu_pipeline_render` — differs from `width`/
     /// `height` when `UnifiedParams::resize_factor != 1.0`.
@@ -266,15 +166,9 @@ pub struct LoadedImage {
     /// Per-frame GPU pipeline renders for animated images, indexed by frame
     /// number.  `None` at an index means that frame hasn't been processed
     /// (or the cache was just invalidated by a parameter change).  Empty
-    /// vec for static images.  Mirrors `lc_frame_renders` — revisiting an
-    /// already-processed frame during looped playback is a cache hit and
-    /// avoids the ~30–80 ms pipeline run.
-    pub gpu_frame_renders: Vec<LcResult>,
-    /// Pending per-frame LC renders during an atomic-swap rebuild. When
-    /// `Some`, the active batch job is writing here instead of into
-    /// `lc_frame_renders`; the swap happens only once every slot is filled.
-    /// `None` when no atomic-swap rebuild is in progress.
-    pub lc_pending_frame_renders: Option<Vec<LcResult>>,
+    /// vec for static images.  Revisiting an already-processed frame during
+    /// looped playback is a cache hit and avoids the ~30–80 ms pipeline run.
+    pub gpu_frame_renders: Vec<RenderResult>,
 
     // --- Animation ---
     /// Animation data (if this is an animated image)
@@ -347,31 +241,15 @@ pub struct ImageViewer {
     pub(crate) filter_processing_handle:
         Option<std::sync::mpsc::Receiver<Result<Arc<gpui::RenderImage>, String>>>,
 
-    // --- Local contrast processing ---
-    /// In-flight local-contrast job (cancel flag, progress counter, result
-    /// channel). `None` when no worker thread is running.
-    pub(crate) lc_job: Option<LcJob>,
-    /// Parameters queued for a follow-on LC run. Populated when
-    /// `update_local_contrast` is called while a worker is already in
-    /// flight — `check_lc_processing` kicks these off once the current job
-    /// finishes. Keeping at most one worker prevents thread pile-up when
-    /// the user rapidly scrubs sliders or the resize toggle.
-    pub(crate) pending_lc_params: Option<crate::utils::local_contrast::Parameters>,
-    /// In-flight batch LC job that processes all animation frames sequentially.
-    pub(crate) lc_batch_job: Option<LcBatchJob>,
-    /// Session-wide toggle for the LC output (so the `1`/`2` keys can A/B
-    /// the processed image against the un-processed one).
-    pub(crate) lc_enabled: bool,
-    /// Session-wide toggle for the GPU-pipeline output, parallel to
-    /// `lc_enabled`.  Pressing `1` (DisableFilters) flips this off so the
-    /// raw source shows; `2` (EnableFilters) flips it back on.  The cached
-    /// `gpu_pipeline_render` is preserved across the toggle so re-enabling
-    /// is instant.
+    /// Session-wide toggle for the GPU-pipeline output.  Pressing `1`
+    /// (DisableFilters) flips this off so the raw source shows; `2`
+    /// (EnableFilters) flips it back on.  The cached `gpu_pipeline_render`
+    /// is preserved across the toggle so re-enabling is instant.
     pub(crate) gpu_pipeline_enabled: bool,
 
     // --- GPU pipeline processing ---
     /// In-flight GPU-pipeline job (cancel flag, result channel, params).
-    /// `None` when no worker thread is running.  Mirrors `lc_job`.
+    /// `None` when no worker thread is running.
     pub(crate) gpu_job: Option<GpuJob>,
     /// Params queued for a follow-on GPU run.  Populated when
     /// `update_gpu_pipeline` is called while a worker is already in flight —
@@ -432,10 +310,6 @@ impl ImageViewer {
             is_loading: false,
             is_processing_filters: false,
             filter_processing_handle: None,
-            lc_job: None,
-            pending_lc_params: None,
-            lc_batch_job: None,
-            lc_enabled: false,
             gpu_pipeline_enabled: true,
             gpu_job: None,
             pending_gpu_params: None,
@@ -866,7 +740,7 @@ impl ImageViewer {
                     self.image_state.animation = None;
                 }
 
-                let lc_frame_count = animation_data.as_ref().map(|a| a.frame_count).unwrap_or(0);
+                let frame_count = animation_data.as_ref().map(|a| a.frame_count).unwrap_or(0);
                 self.current_image = Some(LoadedImage {
                     path: path.clone(),
                     width,
@@ -874,17 +748,11 @@ impl ImageViewer {
                     decoded_rgba8: None,
                     filtered_render: None,
                     cached_filter_settings: None,
-                    lc_source_fmap: None,
-                    lc_render: None,
-                    lc_render_size: None,
-                    cached_lc_params: None,
-                    lc_frame_renders: vec![None; lc_frame_count],
-                    lc_pending_frame_renders: None,
                     gpu_pipeline_render: None,
                     gpu_pipeline_render_size: None,
                     cached_gpu_pipeline_params: None,
                     cached_gpu_pipeline_frame_idx: None,
-                    gpu_frame_renders: vec![None; lc_frame_count],
+                    gpu_frame_renders: vec![None; frame_count],
                     animation_data,
                     frame_cache_paths,
                     image_key,
@@ -977,7 +845,7 @@ impl ImageViewer {
                             self.image_state.animation = None;
                         }
 
-                        let lc_frame_count = data
+                        let frame_count = data
                             .animation_data
                             .as_ref()
                             .map(|a| a.frame_count)
@@ -989,17 +857,11 @@ impl ImageViewer {
                             decoded_rgba8: None,
                             filtered_render: None,
                             cached_filter_settings: None,
-                            lc_source_fmap: None,
-                            lc_render: None,
-                            lc_render_size: None,
-                            cached_lc_params: None,
-                            lc_frame_renders: vec![None; lc_frame_count],
-                            lc_pending_frame_renders: None,
                             gpu_pipeline_render: None,
                             gpu_pipeline_render_size: None,
                             cached_gpu_pipeline_params: None,
                             cached_gpu_pipeline_frame_idx: None,
-                            gpu_frame_renders: vec![None; lc_frame_count],
+                            gpu_frame_renders: vec![None; frame_count],
                             animation_data: data.animation_data,
                             frame_cache_paths,
                             image_key: data.image_key,
@@ -1323,7 +1185,7 @@ impl ImageViewer {
 
         rayon::spawn(move || {
             debug_eprintln!("[GPU_THREAD] start (frame {:?}, {}x{})", frame_idx, w, h);
-            let result: LcResult =
+            let result: RenderResult =
                 match crate::gpu::process_pipeline(&rgba, w, h, &params_for_thread) {
                     Ok((bgra_bytes, out_w, out_h)) => {
                         match image::RgbaImage::from_raw(out_w, out_h, bgra_bytes) {
@@ -1428,669 +1290,6 @@ impl ImageViewer {
         self.with_size_aware_change(|s| s.gpu_pipeline_enabled = enabled);
     }
 
-    /// Kick off (or cancel and restart) local-contrast processing for the
-    /// current image using `params`. A worker thread reads the cached
-    /// `decoded_rgba8`, runs `locally_normalize_luminance`, and sends the
-    /// resulting in-memory image back via an mpsc channel. Cancelled by
-    /// flipping an `AtomicBool` the worker's feedback callback watches.
-    ///
-    /// At most one worker thread is ever in flight. If a job is already
-    /// running when this is called, the incoming params are stashed in
-    /// `pending_lc_params` and picked up by `check_lc_processing` once the
-    /// current worker exits. This prevents thread pile-up (and the memory
-    /// pressure that comes with it) when the user rapidly scrubs sliders.
-    pub fn update_local_contrast(&mut self, params: crate::utils::local_contrast::Parameters) {
-        // LC doesn't make sense for SVGs (rasterized at a fixed scale).
-        if let Some(ref loaded) = self.current_image {
-            if crate::utils::file_scanner::is_svg(&loaded.path) {
-                return;
-            }
-        }
-
-        // Cancel any batch job before borrowing current_image mutably.
-        let is_animated = self.image_state.animation.is_some();
-        let frame_idx = self
-            .image_state
-            .animation
-            .as_ref()
-            .map(|a| a.current_frame)
-            .unwrap_or(0);
-
-        let Some(loaded) = self.current_image.as_mut() else {
-            return;
-        };
-
-        if params.is_identity() {
-            if let Some(job) = self.lc_job.take() {
-                job.request_cancel();
-            }
-            self.pending_lc_params = None;
-            loaded.lc_render = None;
-            loaded.lc_render_size = None;
-            loaded.cached_lc_params = None;
-            loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
-            loaded.lc_pending_frame_renders = None;
-            if let Some(batch) = self.lc_batch_job.take() {
-                batch
-                    .cancel
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-            }
-            return;
-        }
-
-        // --- Animated images: per-frame LC path ---
-        if is_animated {
-            // Invalidate per-frame cache if params changed.
-            if loaded.cached_lc_params.as_ref() != Some(&params) {
-                loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
-                loaded.lc_pending_frame_renders = None;
-                if let Some(batch) = self.lc_batch_job.take() {
-                    batch
-                        .cancel
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-            }
-
-            // Per-frame cache hit.
-            if loaded.cached_lc_params.as_ref() == Some(&params)
-                && frame_idx < loaded.lc_frame_renders.len()
-            {
-                if let Some((render, size)) = loaded.lc_frame_renders[frame_idx].clone() {
-                    loaded.lc_render = Some(render);
-                    loaded.lc_render_size = Some(size);
-                    return;
-                }
-            }
-
-            // If a worker is already running, stash pending and let it finish.
-            if let Some(job) = self.lc_job.as_ref() {
-                job.request_cancel();
-                self.pending_lc_params = Some(params);
-                return;
-            }
-
-            self.spawn_lc_worker_for_frame(frame_idx, params);
-            return;
-        }
-
-        // --- Static images: original path ---
-
-        // Skip re-processing if params haven't changed since the last render.
-        if loaded.cached_lc_params.as_ref() == Some(&params) && loaded.lc_render.is_some() {
-            // Cache hit: the current buffer already matches — drop any stale
-            // pending request and don't disturb an in-flight job (it's for
-            // the same or a newer request).
-            return;
-        }
-
-        // If a worker is already running, stash these params and let it
-        // finish; `check_lc_processing` will pick up the latest queued
-        // params and start the follow-on job. Tell the old worker to
-        // abandon its output since we're about to supersede it.
-        if let Some(job) = self.lc_job.as_ref() {
-            job.request_cancel();
-            self.pending_lc_params = Some(params);
-            return;
-        }
-
-        self.spawn_lc_worker(params);
-    }
-
-    /// Actually spawn the worker thread. Precondition: `self.lc_job` is
-    /// `None`. Caller is responsible for the identity / cache-hit checks.
-    fn spawn_lc_worker(&mut self, params: crate::utils::local_contrast::Parameters) {
-        use std::sync::atomic::{AtomicBool, Ordering};
-        let Some(loaded) = self.current_image.as_mut() else {
-            return;
-        };
-
-        // Lazily decode the source and build the planar float copy (same
-        // pattern as filters). The f32/255 conversion is 6–20ms for a large
-        // RGBA image and would otherwise repeat on every slider tick.
-        if loaded.decoded_rgba8.is_none() {
-            match image_loader::load_image(&loaded.path) {
-                Ok(img) => {
-                    loaded.decoded_rgba8 = Some(Arc::new(img.to_rgba8()));
-                }
-                Err(_e) => {
-                    debug_eprintln!("[LC] Decode failed: {}", _e);
-                    return;
-                }
-            }
-        }
-        if loaded.lc_source_fmap.is_none() {
-            let Some(rgba) = loaded.decoded_rgba8.as_ref() else {
-                debug_eprintln!("[BUG] decoded_rgba8 is None after successful load");
-                return;
-            };
-            loaded.lc_source_fmap = Some(Arc::new(crate::utils::float_map::FloatMap::from_rgba8(
-                rgba,
-            )));
-        }
-        let Some(fmap) = loaded.lc_source_fmap.clone() else {
-            debug_eprintln!("[BUG] lc_source_fmap is None after assignment");
-            return;
-        };
-
-        let cancel = Arc::new(AtomicBool::new(false));
-        let cancel_for_thread = cancel.clone();
-        let progress_bips = Arc::new(std::sync::atomic::AtomicU32::new(0));
-        let progress_for_thread = progress_bips.clone();
-
-        let (tx, rx) = std::sync::mpsc::channel();
-        let params_for_thread = params.clone();
-        self.lc_job = Some(LcJob {
-            handle: rx,
-            cancel,
-            progress_bips,
-            params,
-        });
-
-        rayon::spawn(move || {
-            use crate::utils::local_contrast::FeedbackFn;
-            debug_eprintln!("[LC_THREAD] start");
-            let cancel_watch = cancel_for_thread.clone();
-            let progress_watch = progress_for_thread.clone();
-            let feedback: Box<FeedbackFn> = Box::new(move |p, _msg| {
-                let bips = (p * 10_000.0).clamp(0.0, 10_000.0) as u32;
-                progress_watch.store(bips, Ordering::Relaxed);
-                cancel_watch.load(Ordering::Relaxed)
-            });
-            let out = crate::utils::local_contrast::locally_normalize_luminance(
-                fmap.as_ref(),
-                &params_for_thread,
-                Some(&*feedback),
-            );
-            let result = out.map(|out_map| {
-                let size = (out_map.width, out_map.height);
-                let bgra = out_map.to_bgra_image();
-                let frame = image::Frame::new(bgra);
-                let render = Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
-                    frame, 1,
-                )));
-                (render, size)
-            });
-            progress_for_thread.store(10_000, Ordering::Relaxed);
-            debug_eprintln!("[LC_THREAD] done, produced={}", result.is_some());
-            let _ = tx.send(result);
-        });
-    }
-
-    /// Spawn an LC worker for a specific animation frame. The source `FloatMap`
-    /// is built from `animation_data.frames[frame_idx]` rather than from the
-    /// on-disk path (which only decodes frame 0 for animated images).
-    fn spawn_lc_worker_for_frame(
-        &mut self,
-        frame_idx: usize,
-        params: crate::utils::local_contrast::Parameters,
-    ) {
-        use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-        let Some(loaded) = self.current_image.as_ref() else {
-            return;
-        };
-        let Some(ref anim_data) = loaded.animation_data else {
-            return;
-        };
-        if frame_idx >= anim_data.frames.len() {
-            return;
-        }
-
-        // Build FloatMap from the specific animation frame (not cached —
-        // each frame is different).
-        let rgba = anim_data.frames[frame_idx].image.to_rgba8();
-        let fmap = Arc::new(crate::utils::float_map::FloatMap::from_rgba8(&rgba));
-
-        let cancel = Arc::new(AtomicBool::new(false));
-        let cancel_for_thread = cancel.clone();
-        let progress_bips = Arc::new(AtomicU32::new(0));
-        let progress_for_thread = progress_bips.clone();
-
-        let (tx, rx) = std::sync::mpsc::channel();
-        let params_for_thread = params.clone();
-        self.lc_job = Some(LcJob {
-            handle: rx,
-            cancel,
-            progress_bips,
-            params,
-        });
-
-        rayon::spawn(move || {
-            use crate::utils::local_contrast::FeedbackFn;
-            debug_eprintln!("[LC_THREAD] start (frame {})", frame_idx);
-            let cancel_watch = cancel_for_thread.clone();
-            let progress_watch = progress_for_thread.clone();
-            let feedback: Box<FeedbackFn> = Box::new(move |p, _msg| {
-                let bips = (p * 10_000.0).clamp(0.0, 10_000.0) as u32;
-                progress_watch.store(bips, Ordering::Relaxed);
-                cancel_watch.load(Ordering::Relaxed)
-            });
-            let out = crate::utils::local_contrast::locally_normalize_luminance(
-                fmap.as_ref(),
-                &params_for_thread,
-                Some(&*feedback),
-            );
-            let result = out.map(|out_map| {
-                let size = (out_map.width, out_map.height);
-                let bgra = out_map.to_bgra_image();
-                let frame = image::Frame::new(bgra);
-                let render = Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
-                    frame, 1,
-                )));
-                (render, size)
-            });
-            progress_for_thread.store(10_000, Ordering::Relaxed);
-            debug_eprintln!(
-                "[LC_THREAD] done (frame {}), produced={}",
-                frame_idx,
-                result.is_some()
-            );
-            let _ = tx.send(result);
-        });
-    }
-
-    /// `true` while a worker thread is running.
-    pub fn is_processing_lc(&self) -> bool {
-        self.lc_job.is_some()
-    }
-
-    /// Current LC progress in percent (0.0–100.0) while processing. Returns
-    /// `None` when nothing is in-flight.
-    pub fn lc_progress_percent(&self) -> Option<f32> {
-        self.lc_job.as_ref().map(LcJob::progress_percent)
-    }
-
-    /// Cancel any in-flight LC computation. The worker observes the cancel
-    /// flag at its next checkpoint and drops its result silently.
-    pub fn cancel_lc_processing(&mut self) {
-        if let Some(job) = self.lc_job.take() {
-            job.request_cancel();
-        }
-        // Also drop any queued follow-on job so we truly stop.
-        self.pending_lc_params = None;
-    }
-
-    /// Cancel any in-flight batch LC job.
-    pub fn cancel_lc_batch(&mut self) {
-        if let Some(batch) = self.lc_batch_job.take() {
-            batch
-                .cancel
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-        if let Some(loaded) = self.current_image.as_mut() {
-            loaded.lc_pending_frame_renders = None;
-        }
-    }
-
-    /// `true` when all animation frames have been LC-processed with the
-    /// current parameters. Always returns `false` for static images.
-    pub fn all_frames_lc_processed(&self) -> bool {
-        let Some(loaded) = self.current_image.as_ref() else {
-            return false;
-        };
-        !loaded.lc_frame_renders.is_empty() && loaded.lc_frame_renders.iter().all(|s| s.is_some())
-    }
-
-    /// Kick off batch LC processing for all animation frames.
-    ///
-    /// # Decision tree (per request)
-    /// 1. If every frame is already in memory at the requested params →
-    ///    no-op (refresh visible LC for the current frame and return).
-    /// 2. Otherwise build a per-frame work plan: each frame is either
-    ///    skipped (already in memory at these params), loaded from disk
-    ///    (a previously-saved LC PNG matches), or computed from source.
-    /// 3. Atomic-swap mode is chosen only when the prior cache is fully
-    ///    populated AND the request is for *different* params — that's the
-    ///    case where we want to keep the prior view stable during the
-    ///    rebuild. Resume-from-partial (same params, some slots missing)
-    ///    streams the new results into existing slots so the user sees
-    ///    progress without losing the already-good frames.
-    pub fn spawn_lc_batch(&mut self, params: crate::utils::local_contrast::Parameters) {
-        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-
-        // Cancel any existing single-frame or batch job.
-        self.cancel_lc_processing();
-        self.cancel_lc_batch();
-
-        let Some(loaded) = self.current_image.as_mut() else {
-            return;
-        };
-        let Some(ref anim_data) = loaded.animation_data else {
-            return;
-        };
-        let total_frames = anim_data.frame_count;
-        if total_frames == 0 {
-            return;
-        }
-
-        let params_match = loaded.cached_lc_params.as_ref() == Some(&params);
-        // Per-frame: do we already have an in-memory result at the requested
-        // params? Only meaningful when the cached params match — when they
-        // don't, every existing slot is stale.
-        let already_done: Vec<bool> = if params_match {
-            loaded
-                .lc_frame_renders
-                .iter()
-                .map(|s| s.is_some())
-                .collect()
-        } else {
-            vec![false; total_frames]
-        };
-
-        // Case 1: every frame already processed at these params → no-op.
-        if already_done.iter().all(|&b| b) && already_done.len() == total_frames {
-            debug_eprintln!(
-                "[LC BATCH] All {} frames already processed at these params — no-op",
-                total_frames
-            );
-            // Make sure the visible LC pixel reflects the current frame.
-            if let Some(ref anim) = self.image_state.animation {
-                let idx = anim.current_frame;
-                if idx < loaded.lc_frame_renders.len()
-                    && let Some((render, size)) = loaded.lc_frame_renders[idx].clone()
-                {
-                    loaded.lc_render = Some(render);
-                    loaded.lc_render_size = Some(size);
-                }
-            }
-            return;
-        }
-
-        // Atomic-swap when params changed AND there's a complete prior cache
-        // to keep visible during the rebuild.
-        let prior_full_diff = !params_match
-            && !loaded.lc_frame_renders.is_empty()
-            && loaded.lc_frame_renders.iter().all(|s| s.is_some());
-        let atomic_swap = prior_full_diff;
-
-        if atomic_swap {
-            loaded.lc_pending_frame_renders = Some(vec![None; total_frames]);
-            // Leave lc_frame_renders / cached_lc_params untouched until swap.
-        } else {
-            loaded.lc_pending_frame_renders = None;
-            if !params_match {
-                // Different params: prior slots are stale — clear them and
-                // switch to the new params.
-                loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
-                loaded.cached_lc_params = Some(params.clone());
-            }
-            // params_match + partial → resume mode: keep populated slots,
-            // worker fills only the missing ones.
-        }
-
-        let image_key = loaded.image_key.clone();
-        let phash = crate::utils::frame_cache::params_hash(&params);
-
-        // Build the per-frame work plan.
-        enum WorkItem {
-            Load { idx: usize, path: PathBuf },
-            Compute { idx: usize, rgba: image::RgbaImage },
-        }
-        let work_items: Vec<WorkItem> = (0..total_frames)
-            .filter(|&i| !already_done[i])
-            .map(|i| {
-                if let Some(ref key) = image_key
-                    && let Ok(p) = crate::utils::frame_cache::lc_frame_path(key, &phash, i)
-                    && p.exists()
-                {
-                    return WorkItem::Load { idx: i, path: p };
-                }
-                WorkItem::Compute {
-                    idx: i,
-                    rgba: anim_data.frames[i].image.to_rgba8(),
-                }
-            })
-            .collect();
-
-        #[cfg(debug_assertions)]
-        {
-            let load_count = work_items
-                .iter()
-                .filter(|w| matches!(w, WorkItem::Load { .. }))
-                .count();
-            debug_eprintln!(
-                "[LC BATCH] {} frames: {} skip, {} load from disk, {} compute",
-                total_frames,
-                total_frames - work_items.len(),
-                load_count,
-                work_items.len() - load_count
-            );
-        }
-
-        let cancel = Arc::new(AtomicBool::new(false));
-        let current_frame = Arc::new(AtomicUsize::new(0));
-        let (tx, rx) = std::sync::mpsc::channel();
-
-        let cancel_clone = cancel.clone();
-        let current_clone = current_frame.clone();
-        let params_clone = params.clone();
-        let image_key_clone = image_key.clone();
-        let phash_clone = phash.clone();
-
-        std::thread::spawn(move || {
-            use crate::utils::local_contrast::FeedbackFn;
-            for work in work_items {
-                if cancel_clone.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                let result = match work {
-                    WorkItem::Load { idx, path } => {
-                        current_clone.store(idx, Ordering::Relaxed);
-                        let img = match image::open(&path) {
-                            Ok(img) => img.to_rgba8(),
-                            Err(_e) => {
-                                debug_eprintln!(
-                                    "[LC BATCH] Failed to load cached frame {} from {}: {}",
-                                    idx,
-                                    path.display(),
-                                    _e
-                                );
-                                continue;
-                            }
-                        };
-                        let size = (img.width(), img.height());
-                        // GPUI wants BGRA; PNG is RGBA — flip channels.
-                        let mut bgra = img;
-                        for px in bgra.pixels_mut() {
-                            px.0.swap(0, 2);
-                        }
-                        let frame = image::Frame::new(bgra);
-                        let render = Arc::new(gpui::RenderImage::new(
-                            smallvec::SmallVec::from_elem(frame, 1),
-                        ));
-                        Some((idx, render, size))
-                    }
-                    WorkItem::Compute { idx, rgba } => {
-                        current_clone.store(idx, Ordering::Relaxed);
-                        let fmap = crate::utils::float_map::FloatMap::from_rgba8(&rgba);
-                        let cancel_for_feedback = cancel_clone.clone();
-                        let feedback: Box<FeedbackFn> =
-                            Box::new(move |_p, _msg| cancel_for_feedback.load(Ordering::Relaxed));
-                        let out = crate::utils::local_contrast::locally_normalize_luminance(
-                            &fmap,
-                            &params_clone,
-                            Some(&*feedback),
-                        );
-                        let Some(out_map) = out else {
-                            // Cancelled mid-frame.
-                            break;
-                        };
-                        let size = (out_map.width, out_map.height);
-                        let bgra = out_map.to_bgra_image();
-
-                        // Persist the LC output to disk for next time.
-                        // Save as RGBA PNG (image crate's PNG encoder doesn't
-                        // do BGRA), so flip channels into a fresh buffer.
-                        if let Some(ref key) = image_key_clone
-                            && let Ok(dest) =
-                                crate::utils::frame_cache::lc_frame_path(key, &phash_clone, idx)
-                            && !dest.exists()
-                        {
-                            let mut rgba_out = bgra.clone();
-                            for px in rgba_out.pixels_mut() {
-                                px.0.swap(0, 2);
-                            }
-                            if let Err(_e) = rgba_out.save(&dest) {
-                                debug_eprintln!(
-                                    "[LC BATCH] Failed to persist frame {} to {}: {}",
-                                    idx,
-                                    dest.display(),
-                                    _e
-                                );
-                            }
-                        }
-
-                        let frame = image::Frame::new(bgra);
-                        let render = Arc::new(gpui::RenderImage::new(
-                            smallvec::SmallVec::from_elem(frame, 1),
-                        ));
-                        Some((idx, render, size))
-                    }
-                };
-
-                if let Some(payload) = result
-                    && tx.send(Some(payload)).is_err()
-                {
-                    break; // Receiver dropped (image navigated away).
-                }
-            }
-            // Sentinel: batch complete (or cancelled).
-            let _ = tx.send(None);
-        });
-
-        self.lc_batch_job = Some(LcBatchJob {
-            handle: rx,
-            cancel,
-            current_frame,
-            total_frames,
-            params,
-            atomic_swap_on_complete: atomic_swap,
-        });
-    }
-
-    /// Poll the batch LC job for completed frames. Installs results into the
-    /// per-frame cache and updates `lc_render` if the current frame was
-    /// processed. Returns `Some((current, total))` while the batch is running,
-    /// or `None` when done / not active.
-    pub fn check_lc_batch_processing(&mut self) -> Option<(usize, usize)> {
-        let batch = self.lc_batch_job.as_ref()?;
-        let total = batch.total_frames;
-        let atomic_swap = batch.atomic_swap_on_complete;
-        let batch_params = batch.params.clone();
-
-        // Drain all available results from the channel.
-        loop {
-            // try_recv requires only an immutable borrow; pull it out so we
-            // can mutate `self` afterwards without a borrow conflict.
-            let recv = self
-                .lc_batch_job
-                .as_ref()
-                .map(|b| b.handle.try_recv())
-                .unwrap_or(Err(std::sync::mpsc::TryRecvError::Disconnected));
-            match recv {
-                Ok(Some((idx, render, size))) => {
-                    if atomic_swap {
-                        // Route into pending; do not touch lc_render or
-                        // lc_frame_renders until the swap. No size change
-                        // visible to the user yet, so no rescale.
-                        if let Some(loaded) = self.current_image.as_mut()
-                            && let Some(pending) = loaded.lc_pending_frame_renders.as_mut()
-                            && idx < pending.len()
-                        {
-                            pending[idx] = Some((render, size));
-                        }
-                    } else {
-                        // Streaming: writing this frame into lc_frame_renders
-                        // can change the displayed size (was unprocessed
-                        // source dims, now LC dims) — wrap so the rescale
-                        // fires when idx == current_frame.
-                        self.with_size_aware_change(|s| {
-                            let Some(loaded) = s.current_image.as_mut() else {
-                                return;
-                            };
-                            if idx < loaded.lc_frame_renders.len() {
-                                loaded.lc_frame_renders[idx] = Some((render.clone(), size));
-                            }
-                            if let Some(ref anim) = s.image_state.animation
-                                && idx == anim.current_frame
-                            {
-                                loaded.lc_render = Some(render);
-                                loaded.lc_render_size = Some(size);
-                            }
-                        });
-                    }
-                }
-                Ok(None) => {
-                    // Batch complete or cancelled.
-                    if atomic_swap {
-                        // The swap can change the displayed size for the
-                        // current frame (old params → new params, and
-                        // resize_factor may differ). Wrap it.
-                        let batch_params_for_swap = batch_params.clone();
-                        self.with_size_aware_change(|s| {
-                            let Some(loaded) = s.current_image.as_mut() else {
-                                return;
-                            };
-                            let Some(pending) = loaded.lc_pending_frame_renders.take() else {
-                                return;
-                            };
-                            let fully_populated =
-                                !pending.is_empty() && pending.iter().all(|s| s.is_some());
-                            if !fully_populated {
-                                // Partial pending (cancellation) is dropped —
-                                // prior lc_frame_renders stays intact.
-                                return;
-                            }
-                            loaded.lc_frame_renders = pending;
-                            loaded.cached_lc_params = Some(batch_params_for_swap);
-                            if let Some(ref anim) = s.image_state.animation {
-                                let cur = anim.current_frame;
-                                if cur < loaded.lc_frame_renders.len()
-                                    && let Some((render, size)) =
-                                        loaded.lc_frame_renders[cur].clone()
-                                {
-                                    loaded.lc_render = Some(render);
-                                    loaded.lc_render_size = Some(size);
-                                }
-                            }
-                        });
-                    }
-                    self.lc_batch_job = None;
-                    return None;
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    if let Some(loaded) = self.current_image.as_mut() {
-                        loaded.lc_pending_frame_renders = None;
-                    }
-                    self.lc_batch_job = None;
-                    return None;
-                }
-            }
-        }
-
-        // Return progress for the status bar.
-        let batch = self.lc_batch_job.as_ref()?;
-        let current = batch
-            .current_frame
-            .load(std::sync::atomic::Ordering::Relaxed);
-        Some((current, total))
-    }
-
-    /// A/B toggle: hide the LC render so the main window shows the
-    /// unprocessed (or filter-processed) image. Does not destroy
-    /// `LoadedImage.lc_render`, so re-enabling is free.
-    pub fn set_lc_enabled(&mut self, enabled: bool) {
-        if self.lc_enabled == enabled {
-            return;
-        }
-        self.with_size_aware_change(|s| s.lc_enabled = enabled);
-    }
-    #[allow(dead_code)]
-    pub fn is_lc_enabled(&self) -> bool {
-        self.lc_enabled
-    }
-
     /// Store the currently displayed image to a save slot (`slot` is 3..=9).
     /// Captures whichever image source the render path would use: a recalled
     /// slot, LC output, filtered output, or the raw source.
@@ -2136,27 +1335,25 @@ impl ImageViewer {
             return self.saved_slots[idx].as_ref().map(|s| (s.width, s.height));
         }
         let frame_idx = self.image_state.animation.as_ref().map(|a| a.current_frame);
-        self.current_image.as_ref().map(|img| {
-            effective_image_size(img, self.lc_enabled, self.gpu_pipeline_enabled, frame_idx)
-        })
+        self.current_image
+            .as_ref()
+            .map(|img| effective_image_size(img, self.gpu_pipeline_enabled, frame_idx))
     }
 
     /// Capture the currently visible image as a `SavedSlot`.  Mirrors the
     /// display priority used by the renderer (active slot → GPU pipeline →
-    /// per-frame LC → static LC → filtered → raw) so a slot store, or
-    /// `Save File`, captures exactly what's on screen.  Returns `None` when
-    /// there is no image to capture (e.g. empty directory).
+    /// filtered → raw) so a slot store, or `Save File`, captures exactly
+    /// what's on screen.  Returns `None` when there is no image to capture
+    /// (e.g. empty directory).
     pub(crate) fn capture_current_display(&mut self) -> Option<SavedSlot> {
         // If a slot is being recalled, clone its data directly.
         if let Some(slot) = self.active_slot {
             let idx = (slot - 3) as usize;
             return self.saved_slots[idx].clone();
         }
-        // Animation frame index, used for per-frame LC lookup.
-        let frame_idx = self.image_state.animation.as_ref().map(|a| a.current_frame);
         let loaded = self.current_image.as_mut()?;
-        // GPU pipeline render takes top priority when enabled, then LC,
-        // then filtered, then raw source.
+        // GPU pipeline render takes top priority when enabled, then filtered,
+        // then raw source.
         if self.gpu_pipeline_enabled
             && let Some(ref render) = loaded.gpu_pipeline_render
         {
@@ -2168,28 +1365,6 @@ impl ImageViewer {
                 width: w,
                 height: h,
             });
-        }
-        if self.lc_enabled {
-            // Animation: prefer the per-frame LC cache for the current frame.
-            if let Some(idx) = frame_idx
-                && let Some(Some((render, size))) = loaded.lc_frame_renders.get(idx)
-            {
-                return Some(SavedSlot {
-                    render: render.clone(),
-                    width: size.0,
-                    height: size.1,
-                });
-            }
-            if let Some(ref render) = loaded.lc_render {
-                let (w, h) = loaded
-                    .lc_render_size
-                    .unwrap_or((loaded.width, loaded.height));
-                return Some(SavedSlot {
-                    render: render.clone(),
-                    width: w,
-                    height: h,
-                });
-            }
         }
         if let Some(ref render) = loaded.filtered_render {
             return Some(SavedSlot {
@@ -2211,51 +1386,6 @@ impl ImageViewer {
             width: loaded.width,
             height: loaded.height,
         })
-    }
-
-    /// Check for completed LC processing; if a result arrived, install it on
-    /// the current image. Returns true if a new LC render was applied.
-    pub fn check_lc_processing(&mut self) -> bool {
-        let Some(job) = self.lc_job.as_ref() else {
-            return false;
-        };
-        let Ok(result) = job.handle.try_recv() else {
-            return false;
-        };
-        // Take ownership of the job so we can move its `params` into the
-        // cache key. The worker thread has already exited (it's what sent
-        // us the result through the channel).
-        let Some(completed_job) = self.lc_job.take() else {
-            return false;
-        };
-        let installed = match result {
-            Some((render_image, size)) => {
-                self.with_size_aware_change(|s| {
-                    if let Some(loaded) = s.current_image.as_mut() {
-                        loaded.lc_render = Some(render_image.clone());
-                        loaded.lc_render_size = Some(size);
-                        loaded.cached_lc_params = Some(completed_job.params);
-
-                        // Also cache per-frame for animated images.
-                        if let Some(ref anim) = s.image_state.animation {
-                            let idx = anim.current_frame;
-                            if idx < loaded.lc_frame_renders.len() {
-                                loaded.lc_frame_renders[idx] = Some((render_image, size));
-                            }
-                        }
-                    }
-                });
-                true
-            }
-            None => false,
-        };
-        // Kick off any follow-on request that was queued while this worker
-        // was busy. Going through `update_local_contrast` means the
-        // identity / cache-hit short-circuits still apply.
-        if let Some(pending) = self.pending_lc_params.take() {
-            self.update_local_contrast(pending);
-        }
-        installed
     }
 
     /// Check for completed filter processing and install the resulting in-memory image.
@@ -2806,10 +1936,7 @@ impl ImageViewer {
             .unwrap_or((loaded.width, loaded.height));
 
         // Get the display path (handles animation frames and filters).
-        // For animations the path always points at the current frame's
-        // cached PNG when available — so the LC priority chain has the
-        // correct per-frame source as a fallback when there's no LC render
-        // yet (streaming-process state, or post-navigation rehydration).
+        // For animations the path points at the current frame's cached PNG.
         let path = if let Some(ref anim_state) = self.image_state.animation {
             let frame_index = anim_state.current_frame;
 
@@ -2822,26 +1949,8 @@ impl ImageViewer {
             let cached_path = &loaded.frame_cache_paths[frame_index];
             let path_ok = !cached_path.as_os_str().is_empty() && cached_path.exists();
 
-            // Whether we have a per-frame LC render that will take
-            // priority below — if so the path itself is unused.
-            let has_lc_render = self.lc_enabled
-                && loaded
-                    .lc_frame_renders
-                    .get(frame_index)
-                    .and_then(|s| s.as_ref())
-                    .is_some();
-
             if path_ok {
                 cached_path.clone()
-            } else if has_lc_render {
-                // Path is unused — lc_candidate has the pixels.
-                PathBuf::new()
-            } else if self.lc_enabled {
-                // LC is on but no per-frame render yet AND raw frame not
-                // cached. Fall back to the GIF file (shows frame 0 — not
-                // ideal, but better than erroring; cache_frame should
-                // typically have populated this slot already).
-                loaded.path.clone()
             } else {
                 return div()
                     .size_full()
@@ -2874,8 +1983,8 @@ impl ImageViewer {
         let zoom_level = self.image_state.zoom;
         let is_fit = self.image_state.is_fit_to_window;
 
-        // Priority: saved slot > GPU pipeline output > local-contrast output >
-        //           B/C/G filtered output > file path.
+        // Priority: saved slot > GPU pipeline output > B/C/G filtered output
+        //           > file path.
         let slot_candidate = self.active_slot.and_then(|s| {
             self.saved_slots[(s - 3) as usize]
                 .as_ref()
@@ -2886,32 +1995,12 @@ impl ImageViewer {
         } else {
             None
         };
-        let lc_candidate = if slot_candidate.is_none() && gpu_candidate.is_none() && self.lc_enabled
-        {
-            // For animations, prefer per-frame LC cache over the generic lc_render.
-            if let Some(ref anim) = self.image_state.animation {
-                let idx = anim.current_frame;
-                loaded
-                    .lc_frame_renders
-                    .get(idx)
-                    .and_then(|opt| opt.as_ref())
-                    .map(|(r, _)| r)
-                    .or(loaded.lc_render.as_ref())
-            } else {
-                loaded.lc_render.as_ref()
-            }
-        } else {
-            None
-        };
         let (image_source, image_id): (gpui::ImageSource, ElementId) =
             if let Some(render_image) = slot_candidate {
                 let id = ElementId::Name(format!("slot-{}", render_image.id.0).into());
                 (gpui::ImageSource::Render(render_image.clone()), id)
             } else if let Some(render_image) = gpu_candidate {
                 let id = ElementId::Name(format!("gpu-{}", render_image.id.0).into());
-                (gpui::ImageSource::Render(render_image.clone()), id)
-            } else if let Some(render_image) = lc_candidate {
-                let id = ElementId::Name(format!("lc-{}", render_image.id.0).into());
                 (gpui::ImageSource::Render(render_image.clone()), id)
             } else if let Some(ref render_image) = loaded.filtered_render {
                 let id = ElementId::Name(format!("filtered-{}", render_image.id.0).into());

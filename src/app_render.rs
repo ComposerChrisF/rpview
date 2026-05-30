@@ -51,11 +51,6 @@ impl Render for App {
                     self.viewer.cache_frame(idx);
                 }
 
-                // Re-apply Local Contrast on every new image (session-global
-                // sliders). Now that current_frame is restored and cached,
-                // this can rehydrate the per-frame LC cache from disk too.
-                self.reapply_local_contrast_if_active(cx);
-
                 // Re-apply the GPU pipeline if the user is on the "show
                 // processed" side of the 1/2 toggle.  Skipped silently
                 // when `gpu_pipeline_enabled` is false (they pressed `1`)
@@ -100,19 +95,6 @@ impl Render for App {
                         self.last_frame_update = Instant::now();
                     }
                 }
-
-                // Tell the LC controls about the new image (for batch UI + auto resize).
-                let (is_animated, dims) = self
-                    .viewer
-                    .current_image
-                    .as_ref()
-                    .map(|img| (img.animation_data.is_some(), Some((img.width, img.height))))
-                    .unwrap_or((false, None));
-                self.local_contrast_controls.update(cx, |c, cx| {
-                    c.set_image_dimensions(dims);
-                    c.set_is_animated(is_animated, cx);
-                    c.set_batch_progress(None, cx);
-                });
             }
 
             // Request re-render to show the loaded image
@@ -124,70 +106,12 @@ impl Render for App {
             cx.notify();
         }
 
-        // Same for local-contrast processing.
-        if self.viewer.check_lc_processing() {
-            self.local_contrast_controls.update(cx, |c, cx| {
-                c.set_status("Ready", cx);
-                c.set_progress(None, cx);
-            });
-            cx.notify();
-        }
-        // While LC is running, keep requesting animation frames so we poll
-        // the channel promptly when the worker finishes — otherwise nothing
-        // re-wakes the render loop after the user stops moving the slider.
-        if self.viewer.is_processing_lc() {
-            if let Some(pct) = self.viewer.lc_progress_percent() {
-                self.local_contrast_controls.update(cx, |c, cx| {
-                    c.set_status(format!("Processing… {:.0}%", pct), cx);
-                    c.set_progress(Some(pct / 100.0), cx);
-                });
-            }
-            window.request_animation_frame();
-        }
-
         // GPU pipeline worker: install the result on completion and keep the
         // render loop ticking while a worker is in flight, same pattern as LC.
         if self.viewer.check_gpu_processing() {
             cx.notify();
         }
         if self.viewer.is_processing_gpu() {
-            window.request_animation_frame();
-        }
-
-        // Poll batch LC processing (all animation frames).
-        if let Some((current, total)) = self.viewer.check_lc_batch_processing() {
-            self.local_contrast_controls.update(cx, |c, cx| {
-                c.set_batch_progress(Some((current, total)), cx);
-                c.set_status(format!("Processing frame {}/{}…", current + 1, total), cx);
-            });
-            window.request_animation_frame();
-            cx.notify();
-        } else if self.viewer.lc_batch_job.is_none() {
-            // Batch just finished (or was never running). Clear progress
-            // if the controls still show a batch in progress.
-            let was_batching = self
-                .local_contrast_controls
-                .read(cx)
-                .batch_progress
-                .is_some();
-            if was_batching {
-                let all_done = self.viewer.all_frames_lc_processed();
-                self.local_contrast_controls.update(cx, |c, cx| {
-                    c.set_batch_progress(None, cx);
-                    c.set_status(
-                        if all_done {
-                            "All frames processed"
-                        } else {
-                            "Batch cancelled"
-                        },
-                        cx,
-                    );
-                });
-                cx.notify();
-            }
-        }
-        // Keep render loop alive during batch.
-        if self.viewer.lc_batch_job.is_some() {
             window.request_animation_frame();
         }
 
@@ -760,15 +684,6 @@ impl Render for App {
             }))
             .on_action(cx.listener(|this, _: &SortByTypeToggle, window, cx| {
                 this.handle_sort_by_type_toggle(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &ToggleLocalContrast, window, cx| {
-                this.handle_toggle_local_contrast(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &ApplyLocalContrast, window, cx| {
-                this.handle_apply_local_contrast(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &ResetLocalContrast, window, cx| {
-                this.handle_reset_local_contrast(window, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleGpuPipeline, window, cx| {
                 this.handle_toggle_gpu_pipeline(window, cx);

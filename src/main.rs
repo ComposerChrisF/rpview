@@ -74,7 +74,7 @@ use cli::Cli;
 use components::{
     DebugOverlay, DebugOverlayConfig, FilterControls, FilterControlsEvent, FilterWindowView,
     GpuPipelineControls, GpuPipelineControlsEvent, GpuPipelineWindowView, HelpOverlay, ImageViewer,
-    LocalContrastControls, LocalContrastControlsEvent, LocalContrastWindowView, SettingsWindow,
+    SettingsWindow,
 };
 use state::{AppSettings, AppState};
 use utils::debug_eprintln;
@@ -82,18 +82,17 @@ use utils::settings_io;
 
 // Import all actions from lib.rs (they're defined there to avoid duplication)
 use rpview::{
-    ApplyLocalContrast, ApplyLocalContrastAll, BrightnessDown, BrightnessUp, CloseSettings,
-    CloseWindow, ConfirmDelete, ContrastDown, ContrastUp, DisableFilters, EnableFilters,
-    EscapePressed, GammaDown, GammaUp, NextFrame, NextImage, OpenFile, OpenInExternalEditor,
-    OpenInExternalViewer, OpenInExternalViewerAndQuit, PanDown, PanDownFast, PanDownSlow, PanLeft,
-    PanLeftFast, PanLeftSlow, PanRight, PanRightFast, PanRightSlow, PanUp, PanUpFast, PanUpSlow,
-    PreviousFrame, PreviousImage, Quit, RecallSlot3, RecallSlot4, RecallSlot5, RecallSlot6,
-    RecallSlot7, RecallSlot8, RecallSlot9, RequestDelete, RequestPermanentDelete, ResetFilters,
-    ResetGpuPipeline, ResetLocalContrast, ResetSettingsToDefaults, RevealInFinder, SaveFile,
-    SaveFileToDownloads, SortAlphabetical, SortByModified, SortByTypeToggle, StoreSlot3,
-    StoreSlot4, StoreSlot5, StoreSlot6, StoreSlot7, StoreSlot8, StoreSlot9,
-    ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters, ToggleGpuPipeline,
-    ToggleHelp, ToggleLocalContrast, ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast,
+    BrightnessDown, BrightnessUp, CloseSettings, CloseWindow, ConfirmDelete, ContrastDown,
+    ContrastUp, DisableFilters, EnableFilters, EscapePressed, GammaDown, GammaUp, NextFrame,
+    NextImage, OpenFile, OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit,
+    PanDown, PanDownFast, PanDownSlow, PanLeft, PanLeftFast, PanLeftSlow, PanRight, PanRightFast,
+    PanRightSlow, PanUp, PanUpFast, PanUpSlow, PreviousFrame, PreviousImage, Quit, RecallSlot3,
+    RecallSlot4, RecallSlot5, RecallSlot6, RecallSlot7, RecallSlot8, RecallSlot9, RequestDelete,
+    RequestPermanentDelete, ResetFilters, ResetGpuPipeline, ResetSettingsToDefaults,
+    RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical, SortByModified,
+    SortByTypeToggle, StoreSlot3, StoreSlot4, StoreSlot5, StoreSlot6, StoreSlot7, StoreSlot8,
+    StoreSlot9, ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters,
+    ToggleGpuPipeline, ToggleHelp, ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast,
     ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow,
     ZoomReset, ZoomResetAndCenter,
 };
@@ -136,11 +135,6 @@ pub(crate) struct App {
     filter_window: Option<WindowHandle<FilterWindowView>>,
     /// Filter controls component (shared between no-window state and the filter window)
     filter_controls: Entity<FilterControls>,
-    /// Open floating Local Contrast window handle (None = closed)
-    local_contrast_window: Option<WindowHandle<LocalContrastWindowView>>,
-    /// Local Contrast controls (sliders). Always exists; lives in the App so
-    /// its slider values persist across open/close of the LC window.
-    local_contrast_controls: Entity<LocalContrastControls>,
     /// Open floating GPU Pipeline window handle (None = closed)
     gpu_pipeline_window: Option<WindowHandle<GpuPipelineWindowView>>,
     /// GPU pipeline controls (sliders + per-stage enables). Always exists;
@@ -270,7 +264,6 @@ fn main() {
         cx.activate(true);
 
         let reopen_filter_window = settings.appearance.filter_window_open;
-        let reopen_lc_window = settings.appearance.local_contrast_window_open;
         let reopen_gpu_pipeline_window = settings.appearance.gpu_pipeline_window_open;
         let main_window = match cx.open_window(
             WindowOptions {
@@ -325,158 +318,6 @@ fn main() {
                                 this.viewer.update_filtered_cache();
                                 this.save_current_image_state();
                                 cx.notify();
-                            },
-                        )
-                        .detach();
-
-                    // Create local-contrast controls (sliders live on the App; the
-                    // LC window renders this entity when open).
-                    let local_contrast_controls = inner_cx.new(|cx| {
-                        LocalContrastControls::new(settings.appearance.font_size_scale, cx)
-                    });
-                    inner_cx
-                        .subscribe(
-                            &local_contrast_controls,
-                            |this, _entity, event: &LocalContrastControlsEvent, cx| match event {
-                                LocalContrastControlsEvent::ResetRequested => {
-                                    this.local_contrast_controls.update(cx, |c, cx| {
-                                        c.reset_sliders(cx);
-                                        c.set_status("", cx);
-                                        c.set_progress(None, cx);
-                                        c.set_batch_progress(None, cx);
-                                    });
-                                    this.viewer.cancel_lc_batch();
-                                    if let Some(loaded) = this.viewer.current_image.as_mut() {
-                                        loaded.lc_render = None;
-                                        loaded.cached_lc_params = None;
-                                        loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
-                                    }
-                                    cx.notify();
-                                }
-                                LocalContrastControlsEvent::CancelRequested => {
-                                    this.viewer.cancel_lc_processing();
-                                    this.viewer.cancel_lc_batch();
-                                    this.local_contrast_controls.update(cx, |c, cx| {
-                                        c.set_status("Cancelled", cx);
-                                        c.set_progress(None, cx);
-                                        c.set_batch_progress(None, cx);
-                                    });
-                                    cx.notify();
-                                }
-                                LocalContrastControlsEvent::ProcessAllFramesRequested => {
-                                    let params =
-                                        this.local_contrast_controls.read(cx).get_parameters(cx);
-                                    this.viewer.spawn_lc_batch(params);
-                                    cx.notify();
-                                }
-                                LocalContrastControlsEvent::ParametersChanged => {
-                                    let auto = this.local_contrast_controls.read(cx).auto_process;
-                                    // Persist auto-process state per-image (only when it changes).
-                                    if this.viewer.image_state.lc_auto_process != auto {
-                                        this.viewer.image_state.lc_auto_process = auto;
-                                        this.save_current_image_state();
-                                    }
-                                    if !auto {
-                                        // Auto Process off: don't trigger processing on
-                                        // slider changes. Cancel any in-flight job. Do NOT
-                                        // change lc_enabled — keep showing whatever is
-                                        // currently displayed.
-                                        this.viewer.cancel_lc_processing();
-                                        this.local_contrast_controls.update(cx, |c, cx| {
-                                            c.set_progress(None, cx);
-                                        });
-                                        cx.notify();
-                                        return;
-                                    }
-                                    // Auto Process on: process and display the result.
-                                    this.viewer.set_lc_enabled(true);
-                                    // Auto-pause animation when LC is enabled.
-                                    if let Some(ref mut anim) = this.viewer.image_state.animation {
-                                        anim.is_playing = false;
-                                    }
-                                    let params =
-                                        this.local_contrast_controls.read(cx).get_parameters(cx);
-                                    this.viewer.update_local_contrast(params);
-                                    if this.viewer.is_processing_lc() {
-                                        this.local_contrast_controls.update(cx, |c, cx| {
-                                            c.set_status("Processing…", cx);
-                                            c.set_progress(Some(0.0), cx);
-                                        });
-                                    } else {
-                                        this.local_contrast_controls.update(cx, |c, cx| {
-                                            c.set_status("", cx);
-                                            c.set_progress(None, cx);
-                                        });
-                                    }
-                                    cx.notify();
-                                }
-                                LocalContrastControlsEvent::ClearCacheForCurrentImageRequested => {
-                                    let key = this
-                                        .viewer
-                                        .current_image
-                                        .as_ref()
-                                        .and_then(|loaded| loaded.image_key.clone());
-                                    let toast_msg = match key {
-                                        Some(ref k) => {
-                                            match crate::utils::frame_cache::purge_image(k) {
-                                                Ok(freed) => format!(
-                                                    "Cleared cache for current image ({:.2} MB)",
-                                                    freed as f64 / (1024.0 * 1024.0)
-                                                ),
-                                                Err(e) => format!("Cache clear failed: {e}"),
-                                            }
-                                        }
-                                        None => "No cache key for current image".to_string(),
-                                    };
-                                    // Drop in-memory caches so the next batch
-                                    // does not hand back references to deleted
-                                    // disk files.
-                                    this.viewer.cancel_lc_batch();
-                                    if let Some(loaded) = this.viewer.current_image.as_mut() {
-                                        loaded.lc_render = None;
-                                        loaded.lc_render_size = None;
-                                        loaded.cached_lc_params = None;
-                                        loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
-                                        loaded.lc_pending_frame_renders = None;
-                                        for slot in loaded.frame_cache_paths.iter_mut() {
-                                            *slot = std::path::PathBuf::new();
-                                        }
-                                    }
-                                    this.toast = Some(crate::ToastState {
-                                        message: toast_msg,
-                                        detail: None,
-                                        is_error: false,
-                                        created_at: std::time::Instant::now(),
-                                    });
-                                    cx.notify();
-                                }
-                                LocalContrastControlsEvent::ClearAllCachesRequested => {
-                                    let toast_msg = match crate::utils::frame_cache::purge_all() {
-                                        Ok(freed) => format!(
-                                            "Cleared all cached frames ({:.2} MB)",
-                                            freed as f64 / (1024.0 * 1024.0)
-                                        ),
-                                        Err(e) => format!("Cache clear failed: {e}"),
-                                    };
-                                    this.viewer.cancel_lc_batch();
-                                    if let Some(loaded) = this.viewer.current_image.as_mut() {
-                                        loaded.lc_render = None;
-                                        loaded.lc_render_size = None;
-                                        loaded.cached_lc_params = None;
-                                        loaded.lc_frame_renders.iter_mut().for_each(|s| *s = None);
-                                        loaded.lc_pending_frame_renders = None;
-                                        for slot in loaded.frame_cache_paths.iter_mut() {
-                                            *slot = std::path::PathBuf::new();
-                                        }
-                                    }
-                                    this.toast = Some(crate::ToastState {
-                                        message: toast_msg,
-                                        detail: None,
-                                        is_error: false,
-                                        created_at: std::time::Instant::now(),
-                                    });
-                                    cx.notify();
-                                }
                             },
                         )
                         .detach();
@@ -549,8 +390,6 @@ fn main() {
                         show_settings: false,
                         filter_window: None,
                         filter_controls,
-                        local_contrast_window: None,
-                        local_contrast_controls,
                         gpu_pipeline_window: None,
                         gpu_pipeline_controls,
                         settings_window,
@@ -591,15 +430,6 @@ fn main() {
             cx.defer(move |cx| {
                 let _ = main_window.update(cx, |app, _window, app_cx| {
                     app.open_filter_window(app_cx);
-                });
-            });
-        }
-
-        // Same for the Local Contrast window.
-        if reopen_lc_window {
-            cx.defer(move |cx| {
-                let _ = main_window.update(cx, |app, _window, app_cx| {
-                    app.open_local_contrast_window(app_cx);
                 });
             });
         }
@@ -649,11 +479,6 @@ fn main() {
         forward!(SortAlphabetical, handle_sort_alphabetical);
         forward!(SortByModified, handle_sort_by_modified);
         forward!(SortByTypeToggle, handle_sort_by_type_toggle);
-        // Local Contrast
-        forward!(ToggleLocalContrast, handle_toggle_local_contrast);
-        forward!(ApplyLocalContrast, handle_apply_local_contrast);
-        forward!(ApplyLocalContrastAll, handle_apply_local_contrast_all);
-        forward!(ResetLocalContrast, handle_reset_local_contrast);
         // Zoom
         forward!(ZoomIn, handle_zoom_in);
         forward!(ZoomOut, handle_zoom_out);

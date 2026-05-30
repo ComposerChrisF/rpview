@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-05-29
+
+### Removed
+- **CPU Local Contrast engine removed entirely.**  The CPU-side DSP pipeline (Local Contrast floating window, sliders, presets, and per-frame batch processing) has been deleted now that the GPU pipeline fully replaces it.  Deleted 6 files: `src/utils/{local_contrast,float_map,color,lc_presets}.rs` and `src/components/{local_contrast_controls,local_contrast_window}.rs`.  All LC actions, keybindings, menu items, app handlers, render-loop polling, and persisted settings have been unwired.  `src/utils/frame_cache.rs` trimmed to keep only the raw-frame caching that powers animation playback (removed `lc_frame_path`/`params_hash`/`purge_image`).  “Clear All Cached Frames” relocated to Settings → Performance.  GPU pipeline and the basic-filters feature are unchanged.
+
 ## [0.27.0] - 2026-05-29
 
 ### Added

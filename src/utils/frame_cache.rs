@@ -1,35 +1,27 @@
 //! Persistent on-disk frame cache for animated images.
 //!
-//! Animated GIF / WEBP frames — both raw decoded frames and local-contrast
-//! processed outputs — are cached to `dirs::cache_dir()/rpview/cache/` so
-//! repeat opens (and re-applies of the same LC parameters) skip the decode
-//! and the LC computation.
+//! Raw decoded frames of animated GIF / WEBP images are cached to
+//! `dirs::cache_dir()/rpview/cache/` so repeat opens skip the decode.
 //!
 //! # Filename layout
 //!
 //! ```text
-//! {image_key}_raw_{frame:06}.png             — unprocessed decoded frame
-//! {image_key}_lc{params_hash}_{frame:06}.png — LC-processed at given params
+//! {image_key}_raw_{frame:06}.png  — unprocessed decoded frame
 //! ```
 //!
-//! Where:
-//! - `image_key` = `{path_fnv:016x}_{mtime_secs}` — derived from the canonical
-//!   source path plus its modification time, so replacing the file on disk
-//!   invalidates the cache automatically.
-//! - `params_hash` = 8 lowercase hex digits — low 32 bits of FNV-1a of a
-//!   canonical serde_json serialization of [`local_contrast::Parameters`].
+//! Where `image_key` = `{path_fnv:016x}_{mtime_secs}` — derived from the
+//! canonical source path plus its modification time, so replacing the file on
+//! disk invalidates the cache automatically.
 //!
 //! FNV-1a is used (not `std::hash::DefaultHasher`) because the std hasher is
 //! explicitly not guaranteed stable across compiler versions, and we need
 //! cache keys to round-trip across app updates.
 //!
 //! TODO(cache size): warn the user when `total_size()` exceeds some
-//! threshold (~5 GB?). With per-param-set caching of 100+ frame animations,
-//! disk usage can climb fast and there is currently no automatic eviction.
+//! threshold (~5 GB?). With 100+ frame animations disk usage can climb fast
+//! and there is currently no automatic eviction.
 
 use std::path::{Path, PathBuf};
-
-use crate::utils::local_contrast::Parameters;
 
 const CACHE_SUBDIR: &str = "rpview/cache";
 
@@ -69,51 +61,9 @@ pub fn image_key(path: &Path) -> Option<String> {
     Some(format!("{path_hash:016x}_{mtime_secs}"))
 }
 
-/// Returns 8 lowercase hex digits identifying an LC parameter set.
-pub fn params_hash(params: &Parameters) -> String {
-    let canonical = serde_json::to_string(params).unwrap_or_default();
-    let h = fnv1a_64(canonical.as_bytes()) as u32;
-    format!("{h:08x}")
-}
-
 /// Path for an unprocessed (raw) cached frame.
 pub fn raw_frame_path(image_key: &str, frame_idx: usize) -> Result<PathBuf, String> {
     Ok(cache_root()?.join(format!("{image_key}_raw_{frame_idx:06}.png")))
-}
-
-/// Path for an LC-processed cached frame.
-pub fn lc_frame_path(
-    image_key: &str,
-    params_hash: &str,
-    frame_idx: usize,
-) -> Result<PathBuf, String> {
-    Ok(cache_root()?.join(format!("{image_key}_lc{params_hash}_{frame_idx:06}.png")))
-}
-
-/// Delete every cache file whose name starts with `image_key`. Returns the
-/// number of bytes freed.
-pub fn purge_image(image_key: &str) -> Result<u64, String> {
-    let root = cache_root()?;
-    let mut freed = 0u64;
-    for entry in std::fs::read_dir(&root).map_err(|e| format!("read {}: {}", root.display(), e))? {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        let name = entry.file_name();
-        let name_str = match name.to_str() {
-            Some(s) => s,
-            None => continue,
-        };
-        if !name_str.starts_with(image_key) {
-            continue;
-        }
-        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-        if std::fs::remove_file(entry.path()).is_ok() {
-            freed += size;
-        }
-    }
-    Ok(freed)
 }
 
 /// Delete every file under the cache directory. Returns the number of bytes
@@ -152,24 +102,6 @@ mod tests {
         // Differing inputs produce differing hashes; same input is stable.
         assert_ne!(fnv1a_64(b"abc"), fnv1a_64(b"abd"));
         assert_eq!(fnv1a_64(b"hello world"), fnv1a_64(b"hello world"));
-    }
-
-    #[test]
-    fn params_hash_is_deterministic() {
-        let p = Parameters::default();
-        assert_eq!(params_hash(&p), params_hash(&p));
-        assert_eq!(params_hash(&p).len(), 8);
-    }
-
-    #[test]
-    fn params_hash_differs_when_params_differ() {
-        let mut a = Parameters::default();
-        let mut b = Parameters::default();
-        b.contrast += 0.1;
-        assert_ne!(params_hash(&a), params_hash(&b));
-        b = a.clone();
-        a.lighten_shadows = 0.1;
-        assert_ne!(params_hash(&a), params_hash(&b));
     }
 
     #[test]
