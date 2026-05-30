@@ -38,6 +38,10 @@ pub struct GpuPreset {
     /// non-zero defaults) and older preset JSON loads with the stage disabled.
     #[serde(default)]
     pub lc_doc_enabled: bool,
+    /// Document-Contrast size, normalized 0..1 knob position (independent of
+    /// `lc_radius_t`).  Default ≈ 0.49 → 60 px under the controls' log mapping.
+    #[serde(default = "default_doc_radius_t")]
+    pub lc_doc_radius_t: f32,
     #[serde(default)]
     pub lc_doc_contrast: f32,
     #[serde(default = "default_doc_mix")]
@@ -89,6 +93,12 @@ fn default_true() -> bool {
 
 fn default_doc_mix() -> f32 {
     1.0
+}
+
+/// Normalized knob position for a 60 px document size under the controls'
+/// logarithmic 4..1000 px mapping: `(ln 60 − ln 4) / (ln 1000 − ln 4)`.
+fn default_doc_radius_t() -> f32 {
+    0.4904
 }
 
 fn default_doc_tilt_black() -> f32 {
@@ -194,6 +204,7 @@ mod tests {
             lc_highlights: 0.0,
             lc_midpoint: 0.5,
             lc_doc_enabled: true,
+            lc_doc_radius_t: 0.6,
             lc_doc_contrast: 0.1,
             lc_doc_mix: 1.0,
             lc_doc_tilt_black: -0.20,
@@ -331,6 +342,7 @@ mod tests {
         // The Document-Style Contrast fields are likewise absent from legacy
         // JSON; they default to the disabled-but-sane configuration.
         assert!(!parsed.lc_doc_enabled);
+        assert!((parsed.lc_doc_radius_t - 0.4904).abs() < 1e-4);
         assert_eq!(parsed.lc_doc_contrast, 0.0);
         assert!((parsed.lc_doc_mix - 1.0).abs() < f32::EPSILON);
         assert!((parsed.lc_doc_tilt_black - (-0.20)).abs() < f32::EPSILON);
