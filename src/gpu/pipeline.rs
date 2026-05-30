@@ -505,6 +505,20 @@ pub fn make_tile_cdf_buffer(ctx: &GpuContext, max_tiles: u32) -> wgpu::Buffer {
     })
 }
 
+/// `max_tiles × 2 × f32` tile-stats buffer (mean + median per tile) for the LC
+/// Document-Style Contrast stage, written by the doc-stats pass and read by the
+/// doc-apply pass.  No `COPY_DST` — the GPU fills it, never the CPU.  Shares the
+/// `clahe_cdf_layout` (storage-read hist + storage-write stats + uniform) and
+/// `equalize_apply_layout` shapes, so no new bind-group layouts are needed.
+pub fn make_tile_stats_buffer(ctx: &GpuContext, max_tiles: u32) -> wgpu::Buffer {
+    ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("rpview-gpu doc tile stats"),
+        size: u64::from(max_tiles) * 2 * 4,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    })
+}
+
 /// Dispatch the histogram pass: count OKLab L bins into `histogram` for
 /// every pixel of `src`.  Caller must have zeroed `histogram` first.
 pub fn encode_histogram(

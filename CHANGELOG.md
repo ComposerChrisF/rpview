@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-05-29
+
+### Added
+- **GPU Document-Style Contrast.**  Port of the CPU `contrast_doc` tone curve to the unified GPU pipeline’s Local Contrast stage.  Two new compute shaders: `lc_doc_stats.wgsl` computes per-tile mean and median from the existing tile histogram, and `lc_doc_apply.wgsl` applies bilinear gray-point interpolation (from neighboring tile means/medians) followed by `contrast_std` and `contrast_doc` curves per pixel.  New `LcParams` fields `doc_amount`, `doc_shadow`, `doc_highlight`; new `DocUniforms` struct; three cached pipelines; a `DocBuffers` `OnceLock`; and a dedicated dispatch block in `unified.rs`.  `GpuPreset` extended with `lc_doc_amount`, `lc_doc_shadow`, `lc_doc_highlight` (all `#[serde(default)]`) so existing preset JSON loads without changes.  GPU Pipeline panel gained a “Document Contrast” sub-section under Local Contrast with Amount, Shadow, and Highlight sliders.
+
 ## [0.25.0] - 2026-05-29
 
 ### Added

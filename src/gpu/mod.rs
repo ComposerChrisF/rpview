@@ -320,6 +320,46 @@ mod tests {
                 strength: 0.0,
                 shadows: 1.0,
                 highlights: 0.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let (out, ow, oh) = process_pipeline(&rgba, w, h, &params).unwrap();
+        assert_eq!((ow, oh), (w, h));
+        assert_eq!(out.len(), (w * h * 4) as usize);
+    }
+
+    /// LC Document-Style Contrast drives its own three-pass local-histogram
+    /// path: tile histogram → per-tile mean/median stats → bilinear apply of
+    /// contrast_std + contrast_doc.  On a gradient the path must complete and
+    /// return the right shape.  Strength and CLAHE are off so only the doc
+    /// sub-stage runs.
+    #[test]
+    fn lc_doc_contrast_produces_output() {
+        if !require_gpu() {
+            return;
+        }
+        let w = 96u32;
+        let h = 96u32;
+        let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let v = ((x + y) * 255 / (w + h)) as u8;
+                rgba.push(v);
+                rgba.push(v);
+                rgba.push(v);
+                rgba.push(255);
+            }
+        }
+        let params = UnifiedParams {
+            lc: Some(LcParams {
+                radius: 32.0,
+                strength: 0.0,
+                shadows: 0.0,
+                highlights: 0.0,
+                doc_enabled: true,
+                doc_mix: 1.0,
+                ..Default::default()
             }),
             ..Default::default()
         };
