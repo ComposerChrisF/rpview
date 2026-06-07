@@ -419,7 +419,16 @@ fn main() {
         // the entity has been dropped, and any remaining secondary windows
         // are about to be torn down by `cx.quit()` anyway.
         cx.on_window_closed(move |cx| {
-            if main_window.update(cx, |_, _, _| ()).is_err() {
+            // `update` returns `Err` once the main window's entity is dropped —
+            // that means the main window itself closed, so quit. Otherwise a
+            // secondary floating window (Filter / GPU Pipeline) just closed, and
+            // the OS may not hand focus back to us automatically; re-activate the
+            // main window so it regains keyboard focus and ESC keeps working
+            // (including the 3-press quit shortcut).
+            if main_window
+                .update(cx, |_, window, _| window.activate_window())
+                .is_err()
+            {
                 cx.quit();
             }
         })
@@ -468,6 +477,13 @@ fn main() {
                 });
             };
         }
+        // ESC fallback: when a focused window has no local `EscapePressed`
+        // handler in its dispatch path, the action bubbles to this global
+        // handler so ESC still reaches the main App — keeping the 3-press quit
+        // shortcut working "without regard for what has focus". A window with a
+        // local handler (main window, Filter, GPU Pipeline) consumes ESC first,
+        // so this never double-fires.
+        forward!(EscapePressed, handle_escape);
         // Navigation
         forward!(NextImage, handle_next_image);
         forward!(PreviousImage, handle_previous_image);

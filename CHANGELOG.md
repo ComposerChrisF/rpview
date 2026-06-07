@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.1] - 2026-06-07
+
+### Fixed
+- **Floating-window keyboard focus.**  ESC now correctly dismisses the GPU Pipeline and Filter floating windows.  Root cause: GPUI 0.2.2 dispatches keystrokes from the synthetic dispatch-tree root when a window’s focus is `None`, placing it _above_ the root `<div>` and its `EscapePressed` handler.  Fix: both windows now explicitly focus their root view on open (`focus_handle.focus(window)`).  Additionally, `on_window_closed` now re-activates the main window when any secondary floating window closes, so keyboard focus (including the 3-press ESC quit shortcut) returns automatically without a manual click.  A global `EscapePressed` fallback via the `forward!` macro ensures the quit shortcut works regardless of which window holds focus.
+
 ## [0.28.0] - 2026-05-29
 
 ### Removed
