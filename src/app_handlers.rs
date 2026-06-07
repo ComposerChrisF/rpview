@@ -236,6 +236,11 @@ impl App {
                     FilterWindowView::new(filter_controls.clone(), on_escape, inner_cx)
                 });
 
+                // Focus the window root so its `EscapePressed` handler lands in
+                // the key-dispatch path (see the GPU Pipeline window for the full
+                // rationale). Otherwise ESC can't dismiss this window either.
+                view.read(cx).focus_handle.clone().focus(window);
+
                 // Persist bounds on move/resize.
                 let weak_for_bounds = weak_app.clone();
                 view.update(cx, |_, inner_cx| {
@@ -359,6 +364,13 @@ impl App {
                         inner_cx,
                     )
                 });
+
+                // Explicitly focus the window's root. Without this the window's
+                // focus stays `None`, so GPUI dispatches keystrokes from the
+                // synthetic dispatch-tree root — which sits *above* our root
+                // `<div>` and its `EscapePressed` handler. The result: ESC never
+                // reaches `on_escape` and the window can't be dismissed.
+                view.read(cx).focus_handle.clone().focus(window);
 
                 // Persist bounds on move/resize.
                 let weak_for_bounds = weak_app.clone();
