@@ -1,6 +1,6 @@
 # Cross-Platform Support
 
-This document describes RPView's cross-platform implementation and platform-specific features.
+This document describes RPView’s cross-platform implementation and platform-specific features.
 
 ## Supported Platforms
 
@@ -66,7 +66,7 @@ RPView provides menu bar integration on all platforms:
 - Menus appear in the system menu bar at the top of the screen
 
 #### Windows and Linux
-- Uses an in-app menu bar component (GPUI 0.2.2 doesn't fully support native menus)
+- Uses an in-app menu bar component (GPUI 0.2.2 doesn’t fully support native menus)
 - Menu bar appears at the top of the application window
 - Dropdown menus open on click, close on click outside or pressing Escape
 - Hover between menus when one is open
@@ -122,7 +122,7 @@ RPView automatically supports high-DPI displays on all platforms:
 
 GPUI handles all DPI scaling automatically:
 
-1. Retrieves the display's scale factor from the platform
+1. Retrieves the display’s scale factor from the platform
 2. Applies scaling to all UI elements and images
 3. Updates scale factor when windows move between displays
 4. Renders at the correct pixel density
@@ -138,7 +138,7 @@ RPView can be set as the default handler for image files:
 File associations are configured in `packaging/macos/Info.plist`:
 
 - PNG, JPEG, GIF, BMP, TIFF, ICO, WEBP support
-- "Open With" menu integration
+- “Open With” menu integration
 - Drag & drop files onto app icon in Dock
 
 **Installation:**
@@ -151,13 +151,13 @@ File associations are configured in `packaging/macos/Info.plist`:
 File associations are configured in the Inno Setup installer (`packaging/windows/rpview.iss`):
 
 - Registry entries for all supported formats
-- "Open With" context menu integration
+- “Open With” context menu integration
 - Optional default program setting during installation
 
 **Installation:**
 1. Run the installer (created with Inno Setup)
-2. Check "Associate image files" during installation
-3. Right-click images → "Open With" → RPView
+2. Check “Associate image files” during installation
+3. Right-click images → “Open With” → RPView
 
 #### Linux
 
@@ -335,7 +335,7 @@ RPView follows platform conventions by detecting when all windows are closed and
 ### File Paths
 
 - **macOS/Linux**: Use forward slashes (`/`)
-- **Windows**: Use backslashes (`\`) but Rust's `PathBuf` handles this automatically
+- **Windows**: Use backslashes (`\`) but Rust’s `PathBuf` handles this automatically
 
 ### Image Format Support
 
@@ -424,7 +424,7 @@ Platform-specific features planned for future releases:
 
 ### macOS
 
-**Issue:** "RPView is damaged and can't be opened"
+**Issue:** “RPView is damaged and can’t be opened”
 **Solution:** The app needs to be signed or you need to allow it in System Preferences → Security & Privacy
 
 **Issue:** File associations not working
@@ -433,14 +433,14 @@ Platform-specific features planned for future releases:
 ### Windows
 
 **Issue:** Console window appears
-**Solution:** Ensure you're using the release build (`cargo build --release`)
+**Solution:** Ensure you’re using the release build (`cargo build --release`)
 
 **Issue:** File associations not working
 **Solution:** Run the installer as administrator or manually register file types
 
 ### Linux
 
-**Issue:** App doesn't appear in application menu
+**Issue:** App doesn’t appear in application menu
 **Solution:** Run `update-desktop-database ~/.local/share/applications/`
 
 **Issue:** File associations not working

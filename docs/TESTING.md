@@ -122,7 +122,7 @@ Tests end-to-end user scenarios:
 
 ## Test Coverage
 
-### What's Tested
+### What’s Tested
 
 ✅ **File Operations**
 - All supported image formats (PNG, JPEG, GIF, BMP, TIFF, ICO, WEBP)
@@ -154,7 +154,7 @@ Tests end-to-end user scenarios:
 - State persistence across sessions
 - Error handling
 
-### What's Not Tested
+### What’s Not Tested
 
 ⚠️ **UI Components** (GPUI-specific)
 - ImageViewer rendering
@@ -351,7 +351,7 @@ Tests are designed to run in CI/CD pipelines:
 **Test fails on different platforms**:
 - Use `TempDir` for file system tests (automatic cleanup)
 - Sort file lists alphabetically for predictable order
-- Don't rely on file modification times in tests
+- Don’t rely on file modification times in tests
 
 **Lifetime issues in tests**:
 ```rust

@@ -39,11 +39,11 @@ This directory contains the UI components for rpview.
 - **ZoomIndicator** (`zoom_indicator.rs`) - Zoom level display
   - Position in bottom-right corner
   - Shows current zoom percentage
-  - Shows "Fit" when at fit-to-window size
+  - Shows “Fit” when at fit-to-window size
 
 - **StatusBar** (`status_bar.rs`) - Optional status bar
   - Shows current file name
-  - Shows position in list (e.g., "3/10")
+  - Shows position in list (e.g., “3/10”)
   - Shows current sort mode
 
 ## Component Organization

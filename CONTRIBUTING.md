@@ -1,6 +1,6 @@
 # Contributing to rpview
 
-Thank you for your interest in contributing to rpview! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to rpview!  This document provides guidelines and information for contributors.
 
 ## Table of Contents
 
@@ -108,20 +108,20 @@ rpview/
 
 ## Development Workflow
 
-### 1. Create a Feature Branch
+### 1.  Create a Feature Branch
 
 ```bash
 git checkout -b feature/your-feature-name
 ```
 
-### 2. Make Your Changes
+### 2.  Make Your Changes
 
 - Follow the coding standards (see below)
 - Write clear, descriptive commit messages
 - Add tests for new functionality
 - Update documentation as needed
 
-### 3. Test Your Changes
+### 3.  Test Your Changes
 
 ```bash
 cargo test
@@ -129,7 +129,7 @@ cargo clippy
 cargo fmt --check
 ```
 
-### 4. Commit Your Changes
+### 4.  Commit Your Changes
 
 ```bash
 git add .
@@ -141,14 +141,14 @@ Use clear commit messages:
 - Be concise but descriptive
 - Reference issue numbers when applicable
 
-### 5. Keep Your Branch Updated
+### 5.  Keep Your Branch Updated
 
 ```bash
 git fetch upstream
 git rebase upstream/master
 ```
 
-### 6. Push to Your Fork
+### 6.  Push to Your Fork
 
 ```bash
 git push origin feature/your-feature-name
@@ -175,7 +175,7 @@ git push origin feature/your-feature-name
 
 - Use the `AppError` and `AppResult` types from `error.rs`
 - Provide descriptive error messages
-- Handle errors gracefully; don't panic in normal operation
+- Handle errors gracefully; don’t panic in normal operation
 - Use `?` operator for error propagation
 
 ### Comments and Documentation
@@ -250,7 +250,7 @@ cargo test test_name
 
 ## Development Phases
 
-The project is being developed in phases as outlined in [TODO.md](TODO.md). When contributing:
+The project is being developed in phases as outlined in [TODO.md](TODO.md).  When contributing:
 
 - Check the current phase to understand priorities
 - Align your contributions with the roadmap

@@ -16,13 +16,13 @@ Reviewed: 2026-02-19
 
 ### Maintainer History
 
-RazrFalcon created and maintained resvg from December 2017 through v0.44. In October 2024 he transferred stewardship to the [Linebender organization](https://linebender.org/), which focuses on 2D rendering, vector graphics, and text in Rust (also maintains Vello, Parley, etc.). The first Linebender release was v0.45.0 (February 2025), which included relicensing from MPL-2.0 to Apache-2.0 OR MIT.
+RazrFalcon created and maintained resvg from December 2017 through v0.44.  In October 2024 he transferred stewardship to the [Linebender organization](https://linebender.org/), which focuses on 2D rendering, vector graphics, and text in Rust (also maintains Vello, Parley, etc.).  The first Linebender release was v0.45.0 (February 2025), which included relicensing from MPL-2.0 to Apache-2.0 OR MIT.
 
 ---
 
 ## Licensing: PASS
 
-All dependencies use permissive licenses. No copyleft licenses anywhere in the tree.
+All dependencies use permissive licenses.  No copyleft licenses anywhere in the tree.
 
 ### Core Crates
 
@@ -61,11 +61,11 @@ All dependencies use permissive licenses. No copyleft licenses anywhere in the t
 
 ### Known Vulnerabilities
 
-**None.** No CVEs or RustSec advisories exist for resvg, usvg, tiny-skia, roxmltree, svgtypes, or kurbo. Verified against the RustSec Advisory Database, NVD, OSV, and `cargo audit`.
+**None.** No CVEs or RustSec advisories exist for resvg, usvg, tiny-skia, roxmltree, svgtypes, or kurbo.  Verified against the RustSec Advisory Database, NVD, OSV, and `cargo audit`.
 
 ### Code Safety
 
-- **Pure Rust** — no C/C++ code in the final binary. This eliminates memory corruption (buffer overflows, use-after-free, etc.).
+- **Pure Rust** — no C/C++ code in the final binary.  This eliminates memory corruption (buffer overflows, use-after-free, etc.).
 - **roxmltree** (the XML parser) explicitly forbids `unsafe` code (`#![forbid(unsafe_code)]`).
 - Nearly no `unsafe` elsewhere in the resvg tree.
 
@@ -97,11 +97,11 @@ All dependencies use permissive licenses. No copyleft licenses anywhere in the t
 | Local file disclosure | **Possible by default** — `ImageHrefResolver` reads local file paths |
 | Data URLs | **Supported** — `data:image/...;base64,...` are processed |
 
-> **Important caveat**: The default `ImageHrefResolver` will read local files referenced by `<image xlink:href="...">`. For untrusted SVGs, replace the resolver to block local file access. In rpview's use case (viewing user-selected local files), this is acceptable behavior — the user already has filesystem access.
+> **Important caveat**: The default `ImageHrefResolver` will read local files referenced by `<image xlink:href="...">`.  For untrusted SVGs, replace the resolver to block local file access.  In rpview’s use case (viewing user-selected local files), this is acceptable behavior — the user already has filesystem access.
 
 ### Font Handling
 
-fontdb, ttf-parser, and rustybuzz parse font data. No known vulnerabilities exist. When processing untrusted SVGs that reference custom fonts, this is a theoretical attack surface.
+fontdb, ttf-parser, and rustybuzz parse font data.  No known vulnerabilities exist.  When processing untrusted SVGs that reference custom fonts, this is a theoretical attack surface.
 
 ### Historical Security-Related Fixes
 
@@ -197,12 +197,12 @@ resvg v0.47.0
 
 | Area | Verdict |
 |---|---|
-| **Licensing** | PASS — all permissive (MIT, Apache-2.0, BSD-3-Clause, Zlib). No copyleft. |
+| **Licensing** | PASS — all permissive (MIT, Apache-2.0, BSD-3-Clause, Zlib).  No copyleft. |
 | **Known CVEs** | PASS — none for any crate in the tree |
 | **Code safety** | PASS — pure Rust, near-zero `unsafe` |
 | **XML attacks** | PASS — no XXE, no billion laughs, UTF-8 only |
 | **Scripting/XSS** | PASS — no JavaScript, SMIL, or interactivity |
 | **Network access** | PASS — no network I/O |
-| **Local file access** | CAVEAT — default resolver reads local files (acceptable for rpview's local-file viewer use case) |
+| **Local file access** | CAVEAT — default resolver reads local files (acceptable for rpview’s local-file viewer use case) |
 | **DoS resistance** | PASS — element count and nesting depth limits enforced |
 | **Maintenance** | PASS — actively maintained by Linebender, latest release 10 days ago, ~10M downloads |

@@ -56,7 +56,7 @@ cd tools/create-ico && cargo run
 
 **Embedding in Binary:**
 The `build.rs` script uses the `winresource` crate (maintained fork of `winres`) to embed
-the icon and version metadata into `rpview.exe` at build time. This is automatic on Windows builds.
+the icon and version metadata into `rpview.exe` at build time.  This is automatic on Windows builds.
 
 Build dependency in `Cargo.toml`:
 ```toml

@@ -24,7 +24,7 @@ Press `Cmd+,` (macOS) or `Ctrl+,` (Windows/Linux) to open the interactive settin
 - Reset all settings to defaults
 
 ### Manual Editing
-You can also edit the `settings.json` file directly with any text editor. The file uses standard JSON format with pretty-printing for readability. Changes take effect the next time you launch RPView.
+You can also edit the `settings.json` file directly with any text editor.  The file uses standard JSON format with pretty-printing for readability.  Changes take effect the next time you launch RPView.
 
 ## Settings File Structure
 
@@ -61,7 +61,7 @@ Determines how new images are displayed when first loaded:
 **Type**: Boolean  
 **Default**: `true`
 
-When enabled, RPView remembers zoom level, pan position, and filter settings for each image. When you navigate back to a previously viewed image, it restores your exact view state.
+When enabled, RPView remembers zoom level, pan position, and filter settings for each image.  When you navigate back to a previously viewed image, it restores your exact view state.
 
 ```json
 "remember_per_image_state": true
@@ -72,7 +72,7 @@ When enabled, RPView remembers zoom level, pan position, and filter settings for
 **Default**: `1000`  
 **Range**: 1 - 10000
 
-Maximum number of images to remember state for. When this limit is reached, the least recently viewed images are forgotten (LRU eviction). Increase this if you work with large collections and want to preserve state for more images.
+Maximum number of images to remember state for.  When this limit is reached, the least recently viewed images are forgotten (LRU eviction).  Increase this if you work with large collections and want to preserve state for more images.
 
 ```json
 "state_cache_size": 1000
@@ -82,7 +82,7 @@ Maximum number of images to remember state for. When this limit is reached, the 
 **Type**: Boolean  
 **Default**: `true`
 
-Controls whether animated GIFs and WebP images automatically start playing when loaded. When disabled, animations remain paused until you press the `O` key.
+Controls whether animated GIFs and WebP images automatically start playing when loaded.  When disabled, animations remain paused until you press the `O` key.
 
 ```json
 "animation_auto_play": true
@@ -96,7 +96,7 @@ Controls performance-related optimizations.
 **Type**: Boolean  
 **Default**: `true`
 
-When enabled, RPView preloads the next and previous images into GPU memory for instant navigation. This eliminates the black flash when switching between images but uses more GPU memory.
+When enabled, RPView preloads the next and previous images into GPU memory for instant navigation.  This eliminates the black flash when switching between images but uses more GPU memory.
 
 ```json
 "preload_adjacent_images": true
@@ -107,7 +107,7 @@ When enabled, RPView preloads the next and previous images into GPU memory for i
 **Default**: `4`  
 **Range**: 1 - 16
 
-Number of CPU threads to use for filter processing. Higher values speed up filter calculations but use more CPU resources. Set to match your CPU core count for best performance.
+Number of CPU threads to use for filter processing.  Higher values speed up filter calculations but use more CPU resources.  Set to match your CPU core count for best performance.
 
 ```json
 "filter_processing_threads": 4
@@ -117,7 +117,7 @@ Number of CPU threads to use for filter processing. Higher values speed up filte
 **Type**: Array of two integers `[width, height]`  
 **Default**: `[16384, 16384]`
 
-Safety limit for image dimensions. Images larger than this are rejected to prevent memory exhaustion. Default is 16K x 16K which should handle most images.
+Safety limit for image dimensions.  Images larger than this are rejected to prevent memory exhaustion.  Default is 16K x 16K which should handle most images.
 
 ```json
 "max_image_dimensions": [16384, 16384]
@@ -154,7 +154,7 @@ Distance in pixels the image moves when holding Shift while pressing WASD/IJKL k
 **Default**: `3.0`  
 **Range**: 0.1 - 100.0
 
-Distance in pixels the image moves when holding Alt while pressing WASD/IJKL keys. Useful for precise positioning.
+Distance in pixels the image moves when holding Alt while pressing WASD/IJKL keys.  Useful for precise positioning.
 
 ```json
 "pan_speed_slow": 3.0
@@ -165,7 +165,7 @@ Distance in pixels the image moves when holding Alt while pressing WASD/IJKL key
 **Default**: `1.1`  
 **Range**: 1.01 - 2.0
 
-Zoom multiplier per mouse wheel notch when holding Cmd/Ctrl. Default `1.1` means 10% zoom per scroll. Higher values = faster zoom, lower values = finer control.
+Zoom multiplier per mouse wheel notch when holding Cmd/Ctrl.  Default `1.1` means 10% zoom per scroll.  Higher values = faster zoom, lower values = finer control.
 
 ```json
 "scroll_wheel_sensitivity": 1.1
@@ -176,7 +176,7 @@ Zoom multiplier per mouse wheel notch when holding Cmd/Ctrl. Default `1.1` means
 **Default**: `0.01`  
 **Range**: 0.001 - 0.1
 
-Controls how much mouse movement affects zoom when using Z+Drag zoom. Lower values = finer control, higher values = faster zoom.
+Controls how much mouse movement affects zoom when using Z+Drag zoom.  Lower values = finer control, higher values = faster zoom.
 
 ```json
 "z_drag_sensitivity": 0.01
@@ -186,7 +186,7 @@ Controls how much mouse movement affects zoom when using Z+Drag zoom. Lower valu
 **Type**: Boolean  
 **Default**: `false`
 
-When enabled, spacebar+drag panning accelerates with faster mouse movement. Currently a placeholder for future implementation.
+When enabled, spacebar+drag panning accelerates with faster mouse movement.  Currently a placeholder for future implementation.
 
 ```json
 "spacebar_pan_accelerated": false
@@ -200,7 +200,7 @@ Controls file saving and directory behavior.
 **Type**: String (optional)  
 **Default**: `null`
 
-Default directory for saving filtered images. When `null`, saves to the same directory as the source image. Set to a path like `"/Users/you/Pictures/Edited"` to always save to a specific folder.
+Default directory for saving filtered images.  When `null`, saves to the same directory as the source image.  Set to a path like `"/Users/you/Pictures/Edited"` to always save to a specific folder.
 
 ```json
 "default_save_directory": null
@@ -216,7 +216,7 @@ Or:
 **Default**: `"Png"`  
 **Values**: `"Png"`, `"Jpeg"`, `"Bmp"`, `"Tiff"`, `"Webp"`
 
-Default file format when saving filtered images. Unfiltered images keep their original format.
+Default file format when saving filtered images.  Unfiltered images keep their original format.
 
 ```json
 "default_save_format": "Png"
@@ -251,7 +251,7 @@ Controls visual appearance and UI elements.
 **Default**: `[30, 30, 30]`  
 **Range**: Each value 0 - 255
 
-Background color behind images in RGB format. Default is dark gray `(30, 30, 30)`.
+Background color behind images in RGB format.  Default is dark gray `(30, 30, 30)`.
 
 ```json
 "background_color": [30, 30, 30]
@@ -262,7 +262,7 @@ Background color behind images in RGB format. Default is dark gray `(30, 30, 30)
 **Default**: `204`  
 **Range**: 0 - 255
 
-Alpha transparency for overlay backgrounds (help, debug, filters). 0 = fully transparent, 255 = fully opaque. Default `204` = ~80% opaque.
+Alpha transparency for overlay backgrounds (help, debug, filters). 0 = fully transparent, 255 = fully opaque.  Default `204` = ~80% opaque.
 
 ```json
 "overlay_transparency": 204
@@ -273,7 +273,7 @@ Alpha transparency for overlay backgrounds (help, debug, filters). 0 = fully tra
 **Default**: `1.0`  
 **Range**: 0.5 - 2.0
 
-Multiplier for all UI text sizes. 1.0 = default size, 1.5 = 150% larger, 0.8 = 80% smaller. Useful for high-DPI displays or accessibility.
+Multiplier for all UI text sizes. 1.0 = default size, 1.5 = 150% larger, 0.8 = 80% smaller.  Useful for high-DPI displays or accessibility.
 
 ```json
 "font_size_scale": 1.0
@@ -283,7 +283,7 @@ Multiplier for all UI text sizes. 1.0 = default size, 1.5 = 150% larger, 0.8 = 8
 **Type**: String  
 **Default**: `"{filename} ({index}/{total})"`
 
-Template for window title text. Supports placeholders:
+Template for window title text.  Supports placeholders:
 - `{filename}`: Current image filename
 - `{index}`: Current image index (1-based)
 - `{total}`: Total number of images
@@ -338,7 +338,7 @@ Default gamma correction when resetting filters. 1.0 = no change, <1.0 = darker 
 **Type**: Boolean  
 **Default**: `true`
 
-When enabled, filter settings are saved per-image. Currently always enabled (cannot be disabled).
+When enabled, filter settings are saved per-image.  Currently always enabled (cannot be disabled).
 
 ```json
 "remember_filter_state": true
@@ -375,7 +375,7 @@ Default sorting mode when opening images:
 **Type**: Boolean  
 **Default**: `true`
 
-When enabled, navigation wraps around: pressing → on the last image goes to the first, and ← on the first image goes to the last. When disabled, navigation stops at boundaries.
+When enabled, navigation wraps around: pressing → on the last image goes to the first, and ← on the first image goes to the last.  When disabled, navigation stops at boundaries.
 
 ```json
 "wrap_navigation": true
@@ -385,7 +385,7 @@ When enabled, navigation wraps around: pressing → on the last image goes to th
 **Type**: Boolean  
 **Default**: `true`
 
-Controls whether image counter `(index/total)` is shown in the window title. When disabled, only the filename is shown.
+Controls whether image counter `(index/total)` is shown in the window title.  When disabled, only the filename is shown.
 
 ```json
 "show_image_counter": true
@@ -399,7 +399,7 @@ Controls integration with external applications.
 **Type**: Array of viewer objects  
 **Default**: Platform-specific
 
-List of external image viewers to try when using Cmd+Option+F. RPView tries each enabled viewer in order until one succeeds, then falls back to system default.
+List of external image viewers to try when using Cmd+Option+F.  RPView tries each enabled viewer in order until one succeeds, then falls back to system default.
 
 Each viewer object has:
 - `name`: Display name
@@ -459,7 +459,7 @@ Each viewer object has:
 **Type**: String (optional)  
 **Default**: `null`
 
-Path to external image editor for Cmd+E shortcut. When `null`, the feature is disabled.
+Path to external image editor for Cmd+E shortcut.  When `null`, the feature is disabled.
 
 ```json
 "external_editor": null
@@ -474,7 +474,7 @@ Or:
 **Type**: Boolean  
 **Default**: `true`
 
-Placeholder for future "Show in Finder/Explorer" feature.
+Placeholder for future “Show in Finder/Explorer” feature.
 
 ```json
 "enable_file_manager_integration": true
@@ -482,7 +482,7 @@ Placeholder for future "Show in Finder/Explorer" feature.
 
 ## Complete Example
 
-Here's a complete `settings.json` file with all defaults:
+Here’s a complete `settings.json` file with all defaults:
 
 ```json
 {
@@ -548,11 +548,11 @@ Here's a complete `settings.json` file with all defaults:
 
 ### Settings Not Persisting
 
-If your settings aren't being saved:
+If your settings aren’t being saved:
 1. Check file permissions on the config directory
 2. Look for error messages in the terminal output
 3. Verify the JSON file is valid (use a JSON validator)
-4. Make sure you clicked "Apply" in the settings window
+4. Make sure you clicked “Apply” in the settings window
 
 ### Corrupt Settings File
 
@@ -579,8 +579,8 @@ To completely reset all settings:
 
 **Option 1: Via Settings Window**
 1. Press `Cmd+,` (or `Ctrl+,`)
-2. Click "Reset to Defaults"
-3. Click "Apply"
+2. Click “Reset to Defaults”
+3. Click “Apply”
 
 **Option 2: Delete Settings File**
 ```bash
@@ -598,7 +598,7 @@ RPView will create a new settings file with defaults on next launch.
 
 ### Finding the Settings File
 
-If you can't find the settings file, check the console output when launching RPView. It prints:
+If you can’t find the settings file, check the console output when launching RPView.  It prints:
 ```
 Settings loaded from: /path/to/settings.json
 ```
@@ -610,7 +610,7 @@ When editing `settings.json` manually:
 - Validate your JSON before saving (use jsonlint.com or similar)
 - Keep a backup before making changes
 - Close RPView before editing (changes load at startup)
-- Numbers don't need quotes, strings and enum values do
+- Numbers don’t need quotes, strings and enum values do
 - Booleans are lowercase: `true` and `false`
 
 ### Common Mistakes

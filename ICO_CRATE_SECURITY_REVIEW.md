@@ -28,13 +28,13 @@
 | **Open PRs** | 0 |
 
 Recent security-relevant commits (Dec 2025):
-- "Validate ICO entry data size against file length" — prevents reading past EOF
-- "Implement MAX_PIXELS constant for image size limits" (8192x8192) — prevents memory exhaustion
-- "Refactor error message for invalid ICO entries"
+- “Validate ICO entry data size against file length” — prevents reading past EOF
+- “Implement MAX_PIXELS constant for image size limits” (8192x8192) — prevents memory exhaustion
+- “Refactor error message for invalid ICO entries”
 
 ## Author / Maintainer
 
-**Matthew D. Steele** (`mdsteele`, MIT alum, ex-Google)
+**Matthew D.  Steele** (`mdsteele`, MIT alum, ex-Google)
 
 Other crates maintained:
 
@@ -67,7 +67,7 @@ Combined download count exceeds 50 million across all crates.
 | `flate2` | 409,302,091 | MIT/Apache-2.0 | None |
 | `miniz_oxide` | 570,370,842 | MIT/Zlib/Apache-2.0 | None |
 
-Total transitive dependency count: ~8 runtime crates. All maintained by prominent Rust ecosystem figures.
+Total transitive dependency count: ~8 runtime crates.  All maintained by prominent Rust ecosystem figures.
 
 ## Security History
 
@@ -116,4 +116,4 @@ Total transitive dependency count: ~8 runtime crates. All maintained by prominen
 
 ---
 
-*Review date: 2026-03-13*
+_Review date: 2026-03-13_

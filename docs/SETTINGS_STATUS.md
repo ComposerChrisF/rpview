@@ -2,7 +2,7 @@
 
 ## Overview
 
-The rpview settings system is **fully functional** with a **fully interactive UI** for all numeric and boolean settings. Users can modify virtually all settings through the settings window (Cmd+,) and changes are saved immediately when applying.
+The rpview settings system is **fully functional** with a **fully interactive UI** for all numeric and boolean settings.  Users can modify virtually all settings through the settings window (Cmd+,) and changes are saved immediately when applying.
 
 ## Current Status Summary
 
@@ -27,7 +27,7 @@ The rpview settings system is **fully functional** with a **fully interactive UI
    - All numeric values are automatically clamped to valid ranges
 4. **Apply Changes**: Press `Cmd+Enter` or click the Apply button
 5. **Cancel Changes**: Press `Esc` or click the Cancel button
-6. **Reset to Defaults**: Click "Reset to Defaults" to restore all settings to their default values
+6. **Reset to Defaults**: Click “Reset to Defaults” to restore all settings to their default values
 
 ### Method 2: Manual JSON Editing (For text-only settings)
 
@@ -45,7 +45,7 @@ For the few settings that still require text editing (window title format, file 
 ## Available Settings Categories
 
 ### Viewer Behavior
-- `default_zoom_mode`: "FitToWindow" or "OneHundredPercent"
+- `default_zoom_mode`: “FitToWindow” or “OneHundredPercent”
 - `remember_per_image_state`: true/false
 - `state_cache_size`: number (default: 1000)
 - `animation_auto_play`: true/false
@@ -63,7 +63,7 @@ For the few settings that still require text editing (window title format, file 
 
 ### File Operations
 - `default_save_directory`: path string or null
-- `default_save_format`: "Png", "Jpeg", "Bmp", "Tiff", or "Webp"
+- `default_save_format`: “Png”, “Jpeg”, “Bmp”, “Tiff”, or “Webp”
 
 ### Filters
 - `default_brightness`: -100 to 100 (default: 0.0)
@@ -71,7 +71,7 @@ For the few settings that still require text editing (window title format, file 
 - `default_gamma`: 0.1 to 10.0 (default: 1.0)
 
 ### Sort & Navigation
-- `default_sort_mode`: "Alphabetical" or "ModifiedDate"
+- `default_sort_mode`: “Alphabetical” or “ModifiedDate”
 - `wrap_navigation`: true/false
 - `show_image_counter`: true/false
 
@@ -79,7 +79,7 @@ For the few settings that still require text editing (window title format, file 
 - `external_viewers`: array of viewer configs
 - `external_editor`: viewer config or null
 
-## What's Working
+## What’s Working
 
 ✅ **All settings are fully integrated and most are interactively editable:**
 - Images load with configured default zoom mode
@@ -95,7 +95,7 @@ For the few settings that still require text editing (window title format, file 
 - Navigation wraparound is controllable
 - Image counter can be shown/hidden
 
-## What's Not Interactive (Low Priority)
+## What’s Not Interactive (Low Priority)
 
 ⏳ **A few text-based settings still require JSON editing:**
 - **Window title format** (template string)
@@ -107,7 +107,7 @@ All other settings (25+ settings including all numeric and boolean values) can b
 
 ## Making the Settings UI Fully Interactive
 
-**Current Status:** Phase 16.7 is **COMPLETE** for all numeric and boolean settings. The following interactive controls are working:
+**Current Status:** Phase 16.7 is **COMPLETE** for all numeric and boolean settings.  The following interactive controls are working:
 - ✅ Checkboxes (all boolean settings - 10+ settings)
 - ✅ Radio buttons (zoom mode, sort mode, save format)
 - ✅ Numeric inputs with increment/decrement buttons (15+ settings)
@@ -121,7 +121,7 @@ All other settings (25+ settings including all numeric and boolean values) can b
 3. ⏳ Add file browser for default save directory
 4. ⏳ Build external viewer list editor (add/remove/reorder)
 
-**Estimated effort for optional features:** 6-10 hours for text inputs, color picker, file browser, and list editor. These are low priority since they affect infrequently-changed settings.
+**Estimated effort for optional features:** 6-10 hours for text inputs, color picker, file browser, and list editor.  These are low priority since they affect infrequently-changed settings.
 
 ## Implementation Files
 
@@ -200,4 +200,4 @@ All other settings (25+ settings including all numeric and boolean values) can b
 
 ## Conclusion
 
-The settings system is **production-ready** with a **fully interactive UI for all numeric and boolean settings**. Over 25 settings can now be changed directly in the settings window (Cmd+,) using checkboxes, radio buttons, and increment/decrement controls. Only a few rarely-changed text-based settings (window title format, file paths) still require JSON editing. All settings are properly loaded, validated with range checking, and applied throughout the application. The interactive UI provides an excellent user experience for nearly all configurable settings.
+The settings system is **production-ready** with a **fully interactive UI for all numeric and boolean settings**.  Over 25 settings can now be changed directly in the settings window (Cmd+,) using checkboxes, radio buttons, and increment/decrement controls.  Only a few rarely-changed text-based settings (window title format, file paths) still require JSON editing.  All settings are properly loaded, validated with range checking, and applied throughout the application.  The interactive UI provides an excellent user experience for nearly all configurable settings.

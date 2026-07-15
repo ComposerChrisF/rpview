@@ -14,9 +14,9 @@
 
 ## Overview
 
-This document provides comprehensive research findings on implementing sliders and interactive drag components in GPUI. As of December 2024, GPUI does not include built-in slider components, requiring either custom implementation or third-party libraries.
+This document provides comprehensive research findings on implementing sliders and interactive drag components in GPUI.  As of December 2024, GPUI does not include built-in slider components, requiring either custom implementation or third-party libraries.
 
-**Key Challenge:** Proper mouse capture is essential for sliders. Without it, dragging outside the slider bounds or releasing the mouse outside the window causes incorrect behavior.
+**Key Challenge:** Proper mouse capture is essential for sliders.  Without it, dragging outside the slider bounds or releasing the mouse outside the window causes incorrect behavior.
 
 ---
 
@@ -44,7 +44,7 @@ div()
 **Issues:**
 1. `on_mouse_move` only fires when the cursor is over the element
 2. If the user drags outside the slider area, movement stops being tracked
-3. If the user releases the mouse outside the window, the slider stays "stuck" in dragging mode
+3. If the user releases the mouse outside the window, the slider stays “stuck” in dragging mode
 4. No way to constrain cursor or capture global mouse events
 
 ### Proper Mouse Capture Solutions
@@ -97,9 +97,9 @@ impl SliderView {
 }
 ```
 
-#### Solution 2: Using GPUI's Active Mousedown Tracking
+#### Solution 2: Using GPUI’s Active Mousedown Tracking
 
-Based on Zed's implementation patterns, GPUI tracks active mouse button state globally:
+Based on Zed’s implementation patterns, GPUI tracks active mouse button state globally:
 
 ```rust
 fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
@@ -418,9 +418,9 @@ use gpui_component::*;
 // as API may vary
 ```
 
-### 3. Custom Implementation
+### 3.  Custom Implementation
 
-For full control and learning purposes, custom implementation is valuable. See [Implementation Examples](#implementation-examples) section below.
+For full control and learning purposes, custom implementation is valuable.  See [Implementation Examples](#implementation-examples) section below.
 
 ---
 
@@ -518,7 +518,7 @@ fn render_scrollbar(&self, cx: &mut Context) -> impl IntoElement {
 
 ## Best Practices
 
-### 1. State Management
+### 1.  State Management
 
 **Use Clear State Tracking:**
 
@@ -544,7 +544,7 @@ fn update_value(&mut self, value: f32, cx: &mut ViewContext<Self>) {
 }
 ```
 
-### 2. Layout Calculation
+### 2.  Layout Calculation
 
 **Store Bounds During Render:**
 
@@ -583,7 +583,7 @@ fn calculate_slider_layout(viewport: Size<Pixels>) -> (Pixels, Pixels) {
 }
 ```
 
-### 3. Visual Feedback
+### 3.  Visual Feedback
 
 **Show Active State:**
 
@@ -623,7 +623,7 @@ div()
 )
 ```
 
-### 4. Value Mapping
+### 4.  Value Mapping
 
 **Support Non-Linear Mappings:**
 
@@ -657,7 +657,7 @@ fn set_value(&mut self, value: f32) {
 }
 ```
 
-### 5. Accessibility
+### 5.  Accessibility
 
 **Provide Text Labels and Values:**
 
@@ -686,7 +686,7 @@ div()
 }))
 ```
 
-### 6. Performance
+### 6.  Performance
 
 **Avoid Unnecessary Re-renders:**
 
@@ -721,7 +721,7 @@ fn on_slider_change(&mut self, value: f32, cx: &mut ViewContext<Self>) {
 }
 ```
 
-### 7. Testing Edge Cases
+### 7.  Testing Edge Cases
 
 **Test These Scenarios:**
 
@@ -903,7 +903,7 @@ impl RenderOnce for Slider {
 }
 ```
 
-**Note:** The above is a simplified example. For production use, you'll need to manage state properly, likely using a `View<Slider>` pattern or integrating with a parent view's state.
+**Note:** The above is a simplified example.  For production use, you’ll need to manage state properly, likely using a `View<Slider>` pattern or integrating with a parent view’s state.
 
 ### Stateful Slider in Parent View
 
@@ -1273,7 +1273,7 @@ struct App {
 
 ## Conclusion
 
-Implementing sliders in GPUI requires careful attention to mouse capture, state management, and visual feedback. The key challenges are:
+Implementing sliders in GPUI requires careful attention to mouse capture, state management, and visual feedback.  The key challenges are:
 
 1. **Mouse Capture:** GPUI lacks native capture APIs, requiring manual state tracking and `pressed_button` checks
 2. **Layout Calculation:** Element bounds must be retrieved and cached for position calculations
