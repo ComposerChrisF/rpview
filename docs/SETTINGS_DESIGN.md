@@ -15,7 +15,7 @@ This document outlines the design and implementation plan for a comprehensive se
 
 ## Overview
 
-The settings system will provide users with fine-grained control over rpview's behavior, appearance, and performance. Settings will be accessible through a modal overlay window (similar to the existing Help/Debug overlays) and will persist across sessions.
+The settings system will provide users with fine-grained control over rpview’s behavior, appearance, and performance.  Settings will be accessible through a modal overlay window (similar to the existing Help/Debug overlays) and will persist across sessions.
 
 ### Key Goals
 
@@ -376,7 +376,7 @@ pub struct ViewerConfig {
 
 ## Settings Categories
 
-### 1. Viewer Behavior
+### 1.  Viewer Behavior
 
 **Priority: High**
 
@@ -393,7 +393,7 @@ Controls how images are initially displayed and how state is managed.
 - Numeric input/slider for cache size (100-10000)
 - Checkbox for animation auto-play
 
-### 2. Performance
+### 2.  Performance
 
 **Priority: Medium**
 
@@ -408,7 +408,7 @@ Performance tuning options for power users.
 - Numeric input for thread count (1-16)
 - Two numeric inputs for width/height limits
 
-### 3. Keyboard & Mouse
+### 3.  Keyboard & Mouse
 
 **Priority: High**
 
@@ -425,13 +425,13 @@ Customize input sensitivity and behavior.
 - Slider for Z-drag sensitivity (0.001 - 0.1)
 - Checkbox for spacebar acceleration
 
-### 4. File Operations
+### 4.  File Operations
 
 **Priority: Medium**
 
 Configure save behavior and file dialog preferences.
 
-- **Default save location**: Directory path or "Ask every time"
+- **Default save location**: Directory path or “Ask every time”
 - **Default save format**: PNG, JPEG, BMP, TIFF, WEBP
 - **Auto-save filtered cache**: Keep filtered versions permanently
 - **Remember last directory**: For Open File dialog
@@ -442,7 +442,7 @@ Configure save behavior and file dialog preferences.
 - Checkbox for auto-save
 - Checkbox for remember directory
 
-### 5. Appearance
+### 5.  Appearance
 
 **Priority: Medium**
 
@@ -459,7 +459,7 @@ Visual customization options.
 - Slider for font scale (50%-200%)
 - Text input for title format with preview
 
-### 6. Filters
+### 6.  Filters
 
 **Priority: Low**
 
@@ -474,7 +474,7 @@ Filter-related preferences.
 - Checkbox for per-image persistence
 - List view for presets (add/remove/apply)
 
-### 7. Sort & Navigation
+### 7.  Sort & Navigation
 
 **Priority: Low**
 
@@ -489,7 +489,7 @@ Navigation behavior settings.
 - Checkbox for wrap navigation
 - Checkbox for image counter
 
-### 8. External Tools
+### 8.  External Tools
 
 **Priority: High** (Original request)
 
@@ -497,7 +497,7 @@ Configure external applications for opening images.
 
 - **External viewers**: Ordered list with command, args, enable/disable
 - **External editor**: Launch in Photoshop, GIMP, etc.
-- **File manager integration**: "Show in Finder/Explorer" command
+- **File manager integration**: “Show in Finder/Explorer” command
 
 **UI Elements:**
 - List view with:
@@ -796,7 +796,7 @@ pub fn load_settings() -> AppSettings {
 4. **File operations settings**
    - [ ] Use default save directory
    - [ ] Use default save format
-   - [ ] Implement "remember last directory" behavior
+   - [ ] Implement “remember last directory” behavior
 
 ### Phase 5: Testing & Polish (1-2 hours)
 

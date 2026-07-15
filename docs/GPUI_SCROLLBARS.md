@@ -8,7 +8,7 @@ This document describes how scrollbars work in GPUI and gpui-component, based on
 
 **This is the most important thing to understand about GPUI scrolling.**
 
-In flexbox, the default `min-height: auto` and `min-width: auto` prevent flex items from shrinking below their content size. This causes scroll containers to **grow to fit their content** instead of constraining content and enabling scrolling.
+In flexbox, the default `min-height: auto` and `min-width: auto` prevent flex items from shrinking below their content size.  This causes scroll containers to **grow to fit their content** instead of constraining content and enabling scrolling.
 
 **Solution**: Add `min_h_0()` (and/or `min_w_0()`) to ALL flex containers in the parent chain of a scroll area.
 
@@ -72,7 +72,7 @@ div()
 
 ## GPUI Native Scrolling
 
-GPUI's native scrolling is enabled via methods on `Div`:
+GPUI’s native scrolling is enabled via methods on `Div`:
 
 ```rust
 div()
@@ -81,7 +81,7 @@ div()
     .overflow_y_scroll()    // Vertical only
 ```
 
-**Important**: These methods only enable scroll *behavior* (via mouse wheel, trackpad). They do NOT render visible scrollbars.
+**Important**: These methods only enable scroll _behavior_ (via mouse wheel, trackpad).  They do NOT render visible scrollbars.
 
 ### Scroll Handle
 
@@ -130,7 +130,7 @@ Application::new().run(|cx: &mut App| {
 
 ### Manual Scrollbar Setup (Recommended)
 
-The `overflow_scrollbar()` convenience method has quirks. For reliable results, set up scrollbars manually:
+The `overflow_scrollbar()` convenience method has quirks.  For reliable results, set up scrollbars manually:
 
 ```rust
 use gpui_component::scroll::Scrollbar;
@@ -189,7 +189,7 @@ Manual setup gives you full control over the scroll area and scrollbar behavior.
 
 ## Content Sizing
 
-For scrolling to work, content must exceed container size. Key techniques:
+For scrolling to work, content must exceed container size.  Key techniques:
 
 ### Calculate Content Dimensions
 
@@ -263,23 +263,23 @@ eprintln!("scrollbar_thumb: {:?}", theme.scrollbar_thumb);
 eprintln!("scrollbar_thumb_hover: {:?}", theme.scrollbar_thumb_hover);
 ```
 
-If colors are `Hsla { h: 0.0, s: 0.0, l: 0.0, a: 0.0 }` (transparent), scrollbars won't be visible.
+If colors are `Hsla { h: 0.0, s: 0.0, l: 0.0, a: 0.0 }` (transparent), scrollbars won’t be visible.
 
 ## Troubleshooting Checklist
 
-### Scrolling doesn't work at all
+### Scrolling doesn’t work at all
 
 1. **Check `min_h_0()` / `min_w_0()`** - Add to ALL flex parents in the chain
 2. **Check overflow setting** - Ensure `.overflow_scroll()` is set
 3. **Check container constraints** - Container needs bounded size
 
-### Vertical scrolling doesn't work
+### Vertical scrolling doesn’t work
 
 1. **Add `min_h_0()`** to all flex column parents
 2. **Check content height** - Content must exceed container height
 3. **Set `min_h()` on content** to ensure minimum height
 
-### Horizontal scrolling doesn't work
+### Horizontal scrolling doesn’t work
 
 1. **Add `min_w_0()`** to all flex row parents
 2. **Use `whitespace_nowrap()`** on text to prevent wrapping
@@ -292,7 +292,7 @@ If colors are `Hsla { h: 0.0, s: 0.0, l: 0.0, a: 0.0 }` (transparent), scrollbar
 2. **Check show mode** - Set `ScrollbarShow::Always` to test
 3. **Check content exceeds container** - Both dimensions must be larger
 4. **Pass explicit `scroll_size()`** to the Scrollbar component
-5. **Check theme colors** - Ensure thumb colors aren't transparent
+5. **Check theme colors** - Ensure thumb colors aren’t transparent
 
 ### Content extends beyond window
 
@@ -424,7 +424,7 @@ When using `adabraka_ui::scrollable_vertical` (or similar scroll wrappers), if y
 ```
 
 **Symptoms:**
-- Scrollbar appears but doesn't respond to mouse wheel
+- Scrollbar appears but doesn’t respond to mouse wheel
 - Clicking/dragging the scrollbar does nothing
 - Scroll position resets unexpectedly
 
@@ -484,7 +484,7 @@ When using `scrollable_vertical` from adabraka_ui, also ensure you:
 
 ### Why This Matters
 
-- `ScrollHandle` maintains scroll position and connects to GPUI's event system
+- `ScrollHandle` maintains scroll position and connects to GPUI’s event system
 - Recreating components loses the handle, breaking event routing
 - GPUI entities are designed to be persistent and reused across renders
 
@@ -497,7 +497,7 @@ When using `scrollable_vertical` from adabraka_ui, also ensure you:
 5. **Content must exceed container** - Use `min_w()` and `min_h()` on content
 6. **Initialize gpui-component** - Call `gpui_component::init(cx)` at startup
 7. **Set `ScrollbarShow::Always`** - For debugging or to override macOS auto-hide
-8. **Persist scrollable components** - Store as `Entity<T>` and reuse; don't recreate on every render
+8. **Persist scrollable components** - Store as `Entity<T>` and reuse; don’t recreate on every render
 
 ## Version Information
 

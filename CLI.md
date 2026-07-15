@@ -2,7 +2,7 @@
 
 ## Overview
 
-rpview provides a simple command-line interface for opening images and directories. The application is designed to be launched from the command line with optional file or directory arguments.
+rpview provides a simple command-line interface for opening images and directories.  The application is designed to be launched from the command line with optional file or directory arguments.
 
 ## Usage
 
@@ -19,9 +19,9 @@ rpview [IMAGE_PATHS]...
 
 **Behavior:**
 - **No arguments provided**: Treated the same as specifying `.` (the current directory) on the command line
-- **Single file**: Adds all images in the file's directory to the navigation list, with the current image set to the specified file
+- **Single file**: Adds all images in the file’s directory to the navigation list, with the current image set to the specified file
 - **Multiple files**: Adds all specified image files to the navigation list, displaying the first one
-- **Single directory**: Scans the directory for supported image files, adds them to the navigation list, and displays the "first" one (where "first" depends on the current sort mode: alphabetical or modified date)
+- **Single directory**: Scans the directory for supported image files, adds them to the navigation list, and displays the “first” one (where “first” depends on the current sort mode: alphabetical or modified date)
 - **Multiple paths**: Can mix files and directories; all will be scanned and added to the navigation list
 
 **Examples:**
@@ -90,10 +90,10 @@ Once the application launches:
 ## Error Handling
 
 **File Not Found:**
-- If a specified file doesn't exist, the application will display an error message and continue with other valid files
+- If a specified file doesn’t exist, the application will display an error message and continue with other valid files
 
 **No Images Found:**
-- If no supported image files are found in the specified paths, the application will display a "No images found" message
+- If no supported image files are found in the specified paths, the application will display a “No images found” message
 
 **Unsupported Format:**
 - If a file has an unsupported format, it will be skipped during directory scanning
@@ -130,7 +130,7 @@ rpview photo.jpg
 ### File Associations (Planned)
 
 Future versions will support file associations, allowing users to:
-- Right-click an image and select "Open with rpview"
+- Right-click an image and select “Open with rpview”
 - Set rpview as the default image viewer
 - Double-click images to open in rpview
 

@@ -1,6 +1,6 @@
 # GPUI Async Rendering Patterns
 
-This document covers patterns and pitfalls when implementing asynchronous operations in GPUI's render loop.
+This document covers patterns and pitfalls when implementing asynchronous operations in GPUI’s render loop.
 
 ## Problem: Async Operations Not Updating UI
 
@@ -10,12 +10,12 @@ When an asynchronous operation completes (e.g., background image processing, net
 
 ### Root Cause
 
-GPUI's render loop is event-driven. The `render()` function is called when:
+GPUI’s render loop is event-driven.  The `render()` function is called when:
 1. An explicit event occurs (mouse, keyboard, etc.)
 2. `cx.notify()` is called
 3. `window.request_animation_frame()` is called
 
-**Critical Issue:** If you modify state that triggers async processing AFTER checking whether to request animation frames, the render loop will stop and won't poll for completion.
+**Critical Issue:** If you modify state that triggers async processing AFTER checking whether to request animation frames, the render loop will stop and won’t poll for completion.
 
 ### Example Scenario
 
@@ -109,9 +109,9 @@ if slider_changed {
 
 ## Key Principles
 
-### 1. Request Animation Frames at Point of Async Initiation
+### 1.  Request Animation Frames at Point of Async Initiation
 
-When you start an async operation that sets a "processing" flag, immediately check that flag and request animation frames:
+When you start an async operation that sets a “processing” flag, immediately check that flag and request animation frames:
 
 ```rust
 self.start_async_work();
@@ -120,7 +120,7 @@ if self.is_async_working {
 }
 ```
 
-### 2. Poll Completion at Top of Render
+### 2.  Poll Completion at Top of Render
 
 Check for async completion early in the render function:
 
@@ -141,7 +141,7 @@ fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoEl
 }
 ```
 
-### 3. Use Non-Blocking Channel Reads
+### 3.  Use Non-Blocking Channel Reads
 
 Use `try_recv()` instead of blocking `recv()` to avoid freezing the UI:
 
@@ -158,7 +158,7 @@ pub fn check_async_completion(&mut self) -> bool {
 }
 ```
 
-### 4. Request One More Frame After Completion
+### 4.  Request One More Frame After Completion
 
 Even after an async operation completes, request one more animation frame to ensure the UI updates:
 
@@ -228,11 +228,11 @@ if let Ok(result) = receiver.try_recv() {
 To test if your async operations update the UI properly:
 
 1. **Start the async operation** (e.g., move a slider, click a button)
-2. **Immediately stop all input** (don't move mouse, don't press keys)
+2. **Immediately stop all input** (don’t move mouse, don’t press keys)
 3. **Wait for operation to complete**
 4. **Verify UI updates without any further input**
 
-If the UI doesn't update until you move the mouse or press a key, you have this bug.
+If the UI doesn’t update until you move the mouse or press a key, you have this bug.
 
 ## Related Files
 

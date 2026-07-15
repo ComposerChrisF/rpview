@@ -8,7 +8,7 @@ The `.ico` file is needed to embed a Windows application icon and version resour
 
 ## ImageMagick — Security Assessment (Rejected)
 
-ImageMagick was the originally documented approach (`convert icon.png -define icon:auto-resize=... rpview.ico`). A full security review found it unsuitable for this narrow use case:
+ImageMagick was the originally documented approach (`convert icon.png -define icon:auto-resize=... rpview.ico`).  A full security review found it unsuitable for this narrow use case:
 
 - **723 lifetime CVEs** — one of the highest counts of any open-source project
 - **70 security advisories in just 3.5 months** (Jan–Mar 2026), including heap/stack overflows, integer overflows, policy bypasses, and use-after-free bugs
@@ -22,7 +22,7 @@ ImageMagick was the originally documented approach (`convert icon.png -define ic
 
 ## Recommended Approach — `ico` Rust Crate
 
-Use the `ico` Rust crate to write a small one-time conversion script that generates the `.ico` file, which is then committed to the repository. No runtime or build-time dependency on external tools.
+Use the `ico` Rust crate to write a small one-time conversion script that generates the `.ico` file, which is then committed to the repository.  No runtime or build-time dependency on external tools.
 
 **Why this is better**:
 - Memory-safe (Rust) — eliminates buffer overflows, use-after-free, etc.

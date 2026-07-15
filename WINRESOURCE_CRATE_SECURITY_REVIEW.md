@@ -27,11 +27,11 @@
 | **Open issues** | 8 |
 | **Open PRs** | 3 |
 
-Actively maintained with regular releases every 1–3 months. Recent commits include fixing MSVC resource linking and removing unnecessary `cargo:rustc-link-search` directives.
+Actively maintained with regular releases every 1–3 months.  Recent commits include fixing MSVC resource linking and removing unnecessary `cargo:rustc-link-search` directives.
 
 ## Author / Maintainer
 
-**Benjamin Richner** (`BenjaminRi` on GitHub). Forked `winres` when the original by Max Resch was abandoned. 10+ contributors have submitted patches.
+**Benjamin Richner** (`BenjaminRi` on GitHub).  Forked `winres` when the original by Max Resch was abandoned. 10+ contributors have submitted patches.
 
 ## Dependencies
 
@@ -74,7 +74,7 @@ Build-time only — does **not** execute at runtime:
 3. Invokes system resource compiler (`rc.exe` for MSVC, `windres` for GNU)
 4. Emits `cargo:rustc-link-arg` directives to link the compiled resource
 
-**Does NOT download anything.** No network access. Writes only to `OUT_DIR`. External tools invoked via `Command::new()` (no shell interpretation).
+**Does NOT download anything.** No network access.  Writes only to `OUT_DIR`.  External tools invoked via `Command::new()` (no shell interpretation).
 
 ## Used By
 
@@ -106,8 +106,8 @@ Build-time only — does **not** execute at runtime:
 
 ### Note on `winres` vs `winresource`
 
-The original `winres` crate (9.9M downloads) is **abandoned and broken on Rust 1.61+**. Use `winresource` instead — it is the maintained successor with a compatible API.
+The original `winres` crate (9.9M downloads) is **abandoned and broken on Rust 1.61+**.  Use `winresource` instead — it is the maintained successor with a compatible API.
 
 ---
 
-*Review date: 2026-03-13*
+_Review date: 2026-03-13_

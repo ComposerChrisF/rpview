@@ -5,7 +5,7 @@ A fast, keyboard-driven image viewer built with Rust and GPUI.
 ## Overview
 
 rpview (Rust Picture Viewer) is a cross-platform image viewer designed for
-fast browsing of large image directories. Built with the GPUI framework, it
+fast browsing of large image directories.  Built with the GPUI framework, it
 emphasizes instant navigation, precise zoom/pan, and a keyboard-first workflow
 with minimal UI distractions.
 
@@ -20,7 +20,7 @@ with minimal UI distractions.
 PNG, JPEG, BMP, GIF (animated), TIFF, ICO, WebP (animated), SVG
 
 SVGs are re-rasterized at the current zoom level for always-crisp vector
-display. Large SVGs use viewport-only rendering with padding for performance.
+display.  Large SVGs use viewport-only rendering with padding for performance.
 
 ## Architecture
 
@@ -135,7 +135,7 @@ Pan direction mode (configurable): Move Image (default) or Move Viewport.
 ### Image Filters
 
 Brightness (-100 to +100), Contrast (-100 to +100), Gamma (0.1 to 10.0) —
-applied as a 256-entry RGB LUT on a background thread. Filter state is
+applied as a 256-entry RGB LUT on a background thread.  Filter state is
 remembered per-image.
 
 - `Cmd/Ctrl+F` or `F` — toggle floating filter window
@@ -143,13 +143,13 @@ remembered per-image.
 - `Shift+Cmd/Ctrl+R` — reset filters to defaults
 
 The filter panel is a separate always-on-top OS window with persisted
-position. Platform FFI: `NSFloatingWindowLevel` (macOS),
+position.  Platform FFI: `NSFloatingWindowLevel` (macOS),
 `SetWindowPos(HWND_TOPMOST)` (Windows), `WM_TRANSIENT_FOR` (Linux).
 
 ### Local Contrast
 
 Perceptual local luminance normalization ported from FraleyMusic-ImageDsp,
-operating in OkLCh color space. Opens as a floating dialog
+operating in OkLCh color space.  Opens as a floating dialog
 (`Shift+Cmd/Ctrl+L`) with:
 
 - **Sliders**: Contrast, Lighten Shadows, Darken Highlights
@@ -159,16 +159,16 @@ operating in OkLCh color space. Opens as a floating dialog
 - **Preview toggle**: suppress/resume LC render without losing the cached result
 
 Processing runs on a rayon thread pool with cancellation and progress
-reporting. The viewer treats the LC output's pixel dimensions as the
+reporting.  The viewer treats the LC output’s pixel dimensions as the
 effective image size (zoom, fit, pan constraints, resolution indicator all
-reflect the output). Zoom is rescaled on size transitions for clean A/B
+reflect the output).  Zoom is rescaled on size transitions for clean A/B
 comparison.
 
 ### Save/Recall Slots
 
 `Ctrl+3–9` saves a snapshot of the current display (raw, filtered, or
-LC-processed) into a numbered slot. Plain `3–9` recalls the saved snapshot.
-`1` / `2` returns to the normal display path. Zoom and pan are rescaled on
+LC-processed) into a numbered slot.  Plain `3–9` recalls the saved snapshot.
+`1` / `2` returns to the normal display path.  Zoom and pan are rescaled on
 slot transitions so the apparent image position stays constant.
 
 ### File Operations
@@ -185,8 +185,8 @@ slot transitions so the apparent image position stays constant.
 | `Cmd/Ctrl+Delete` | Delete file (move to Trash) |
 | `Shift+Cmd/Ctrl+Delete` | Permanently delete file |
 
-Delete shows a confirmation card with filename and path; ESC cancels. Toast
-notification confirms the outcome. Auto-increment filenames on save:
+Delete shows a confirmation card with filename and path; ESC cancels.  Toast
+notification confirms the outcome.  Auto-increment filenames on save:
 `image.png` → `image_filtered.png` → `image_filtered_2.png`.
 
 ### Navigation & Sorting
@@ -215,20 +215,20 @@ GIF and animated WebP playback with:
 ### GPU Preloading
 
 Adjacent images (next/previous) are preloaded into GPU texture memory during
-the render loop. Navigation is instant — no loading spinner, no flash.
-Off-screen rendering at `left(-10000px)` with `opacity(0.0)`. Only 2
+the render loop.  Navigation is instant — no loading spinner, no flash.
+Off-screen rendering at `left(-10000px)` with `opacity(0.0)`.  Only 2
 additional GPU textures in memory.
 
 ### Settings Window
 
-Press `Cmd/Ctrl+,` to open the interactive settings window. All 30+ settings
+Press `Cmd/Ctrl+,` to open the interactive settings window.  All 30+ settings
 are editable through the UI:
 - Toggle switches for booleans
 - Segmented controls for enums (zoom mode, sort mode, save format, pan direction)
 - Number steppers with clamped ranges for numeric values
 - Color swatches for background colors
 - Per-setting reset buttons (↺) — grayed at default, active when changed
-- Global "Reset to Defaults" button
+- Global “Reset to Defaults” button
 - Apply (`Cmd/Ctrl+Enter`) / Cancel (`Esc`)
 
 Settings are also editable as JSON at the platform config path:
@@ -254,7 +254,7 @@ Settings are also editable as JSON at the platform config path:
 
 ### Platform-Specific Behavior
 
-- **macOS**: Cmd modifier, native ⌘⇧⌥ glyphs in UI, .app bundle with DMG creation, Finder "Open With" integration, `NSFloatingWindowLevel` for floating panels
+- **macOS**: Cmd modifier, native ⌘⇧⌥ glyphs in UI, .app bundle with DMG creation, Finder “Open With” integration, `NSFloatingWindowLevel` for floating panels
 - **Windows**: Ctrl modifier, .exe with embedded icon and version resource (winresource), `SetWindowPos(HWND_TOPMOST)` for floating panels, `/SUBSYSTEM:WINDOWS` (bins only)
 - **Linux**: Ctrl modifier, `WM_TRANSIENT_FOR` hints for floating panels
 

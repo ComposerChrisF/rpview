@@ -2,17 +2,17 @@
 
 ## Overview
 
-This document describes the GPU texture preloading system that eliminates black flashing during image navigation. The implementation ensures that when users navigate between images, the GPU has already loaded the texture into memory, providing instant, seamless transitions.
+This document describes the GPU texture preloading system that eliminates black flashing during image navigation.  The implementation ensures that when users navigate between images, the GPU has already loaded the texture into memory, providing instant, seamless transitions.
 
 ## Problem Statement
 
 ### The Black Flash Issue
 
-When navigating between images (pressing Next/Previous), users would experience a brief black flash before the new image appeared. This occurred because:
+When navigating between images (pressing Next/Previous), users would experience a brief black flash before the new image appeared.  This occurred because:
 
 1. User presses Next/Previous
 2. App immediately switches to new image path
-3. GPUI's `img()` element receives new path
+3. GPUI’s `img()` element receives new path
 4. GPU needs to load texture from disk into GPU memory (100-200ms)
 5. During texture loading, screen shows black
 6. Once texture is loaded, image appears
@@ -26,7 +26,7 @@ This black flash was particularly noticeable with:
 
 ### Core Concept
 
-Instead of loading textures on-demand during navigation, we **continuously preload** the next and previous images in the background during every render frame. When the user navigates, the texture is already in GPU memory.
+Instead of loading textures on-demand during navigation, we **continuously preload** the next and previous images in the background during every render frame.  When the user navigates, the texture is already in GPU memory.
 
 ### Implementation Strategy
 
@@ -69,10 +69,10 @@ for preload_path in &self.preload_paths {
 
 3. **Size**: Images are rendered at full zoomed dimensions (`zoomed_width`, `zoomed_height`) to ensure GPUI loads the complete texture, not a scaled-down version.
 
-4. **Timing**: Preloading happens in `App::render()`, which is called every frame. This ensures:
+4. **Timing**: Preloading happens in `App::render()`, which is called every frame.  This ensures:
    - Images are preloaded BEFORE navigation occurs
    - Preload state updates if the image list changes
-   - No special triggers needed - it's always running
+   - No special triggers needed - it’s always running
 
 5. **Element IDs**: Each preload image gets a unique ID based on its path:
    ```rust
@@ -85,8 +85,8 @@ for preload_path in &self.preload_paths {
 ### Memory Usage
 
 - **Minimal overhead**: Only 2 additional textures in GPU memory at any time (next and previous)
-- **No CPU overhead**: Images aren't decoded multiple times - GPUI handles texture caching
-- **Automatic cleanup**: When preload paths change, old textures are naturally evicted by GPUI's cache
+- **No CPU overhead**: Images aren’t decoded multiple times - GPUI handles texture caching
+- **Automatic cleanup**: When preload paths change, old textures are naturally evicted by GPUI’s cache
 
 ### Render Performance
 
@@ -106,13 +106,13 @@ This implementation mirrors the animation frame preloading that was already succ
 
 | Aspect | Animation Frames | Navigation Images |
 |--------|------------------|-------------------|
-| **What's preloaded** | Next frame in animation | Next/previous images in list |
+| **What’s preloaded** | Next frame in animation | Next/previous images in list |
 | **When preloading happens** | During animation playback | Every render frame |
 | **Rendering technique** | Off-screen, opacity 0, full size | Off-screen, opacity 0, full size |
 | **Number preloaded** | 1 frame ahead | 2 images (next + previous) |
 | **Cache invalidation** | On frame advance | On navigation or list change |
 
-The key insight was recognizing that the same technique that worked for animation frames would work for navigation - both scenarios involve loading textures from disk into GPU memory before they're needed for display.
+The key insight was recognizing that the same technique that worked for animation frames would work for navigation - both scenarios involve loading textures from disk into GPU memory before they’re needed for display.
 
 ## Code Locations
 
@@ -132,25 +132,25 @@ The key insight was recognizing that the same technique that worked for animatio
 
 ## Alternative Approaches Considered
 
-### 1. Keep Old Image Until New Is Ready
+### 1.  Keep Old Image Until New Is Ready
 
-**Concept**: Don't replace `current_image` until the new texture is loaded.
+**Concept**: Don’t replace `current_image` until the new texture is loaded.
 
 **Why not chosen**: 
 - No way to detect when GPUI has loaded a texture
 - Would require complex state management (old + new image simultaneously)
 - Continuous preloading is simpler and more reliable
 
-### 2. Async Image Loading
+### 2.  Async Image Loading
 
 **Concept**: Load images on background threads, show loading spinner.
 
 **Why not chosen**:
-- Doesn't solve GPU texture loading (GPU work must happen on main thread)
+- Doesn’t solve GPU texture loading (GPU work must happen on main thread)
 - Adds complexity without solving the root problem
 - Preloading is more elegant and seamless
 
-### 3. Larger Preload Window
+### 3.  Larger Preload Window
 
 **Concept**: Preload 5-10 images ahead instead of just 2.
 
@@ -202,6 +202,6 @@ cargo run --release -- test_images/rust-logo.png test_images/rust-logo.tiff
 
 ## Conclusion
 
-GPU texture preloading provides a seamless navigation experience with minimal code and zero user-visible overhead. By continuously rendering adjacent images off-screen, we ensure GPU textures are always ready when needed, eliminating the black flash that was previously visible during navigation.
+GPU texture preloading provides a seamless navigation experience with minimal code and zero user-visible overhead.  By continuously rendering adjacent images off-screen, we ensure GPU textures are always ready when needed, eliminating the black flash that was previously visible during navigation.
 
 The implementation is robust, efficient, and follows established patterns already present in the codebase for animation frame handling.

@@ -22,13 +22,13 @@
 
 ## Overview
 
-GPUI provides multiple approaches for displaying images, ranging from simple high-level APIs to low-level control. This document covers all discovered methods, with recommendations for each use case.
+GPUI provides multiple approaches for displaying images, ranging from simple high-level APIs to low-level control.  This document covers all discovered methods, with recommendations for each use case.
 
 ### Key Findings
 
 - GPUI uses **BGRA format** internally for optimal GPU performance (up to 6x faster on NVIDIA hardware)
 - Images are automatically cached and unloaded when no longer needed
-- Supports all common formats via Rust's `image` crate
+- Supports all common formats via Rust’s `image` crate
 - Three main approaches: `img()` function (recommended), `ImageSource` enum, and manual `RenderImage` creation
 
 ---
@@ -53,7 +53,7 @@ Fully supported formats:
 
 ### Format Detection
 
-Zed's image viewer uses extension-based detection:
+Zed’s image viewer uses extension-based detection:
 
 ```rust
 // From crates/image_viewer
@@ -176,7 +176,7 @@ img(ImageSource::Render(render_img))
 **Cons:**
 - Most complex approach
 - Must manually convert to BGRA format
-- Requires understanding of GPUI's rendering pipeline
+- Requires understanding of GPUI’s rendering pipeline
 - Need to manage caching yourself
 
 **When to Use:**
@@ -375,7 +375,7 @@ pub struct RenderImage {
 - **Format:** BGRA (Blue, Green, Red, Alpha) - 8 bits per channel
 - **Why BGRA?** Avoids texture swizzling on GPU, significantly faster
 - **Wrapped in:** `Arc<RenderImage>` for efficient sharing across UI
-- **Cached:** Automatically by GPUI's image cache system
+- **Cached:** Automatically by GPUI’s image cache system
 
 #### Image
 
@@ -386,7 +386,7 @@ pub struct Image {
 }
 ```
 
-- Basic container: "An image, with a format and certain bytes"
+- Basic container: “An image, with a format and certain bytes”
 - Less commonly used directly
 - Automatically converted to `RenderImage` when needed
 
@@ -463,7 +463,7 @@ pub struct ImageId {
 **ImageAssetLoader:**
 - Handles async loading of image files
 - Supports local file paths and HTTP(S) URIs
-- Integrated with GPUI's asset system
+- Integrated with GPUI’s asset system
 
 **Usage in Context:**
 
@@ -1054,7 +1054,7 @@ GPUI internally uses BGRA (Blue, Green, Red, Alpha) format instead of the more c
 
 **Performance Impact:**
 - **Up to 6x faster** on NVIDIA GPUs
-- Avoids "texture swizzling" operation on GPU
+- Avoids “texture swizzling” operation on GPU
 - Direct memory upload to GPU texture
 
 **Automatic Conversion:**
@@ -1106,8 +1106,8 @@ GPUI uses a **three-phase rendering approach**:
 
 **Async Loading:**
 - Image decoding happens asynchronously
-- Doesn't block UI thread
-- Uses GPUI's asset loading system
+- Doesn’t block UI thread
+- Uses GPUI’s asset loading system
 
 **Caching Benefits:**
 - First load: File I/O → Decode → BGRA conversion → GPU upload
@@ -1137,14 +1137,14 @@ GPUI uses a **three-phase rendering approach**:
    ```
 
 4. **Lazy loading:**
-   - Only load images when they're visible
+   - Only load images when they’re visible
    - Use viewport detection for galleries
 
 ### Memory Management
 
 **Automatic Unloading:**
 - Images removed from cache when no longer displayed
-- "images are removed from all windows when they are no longer needed"
+- “images are removed from all windows when they are no longer needed”
 
 **Manual Memory Control:**
 - Implement custom `ImageCache` for fine-grained control
@@ -1214,12 +1214,12 @@ For large images (photos), individual textures are used.
 
 ### Technical Deep Dives
 
-9. **"Leveraging Rust and GPU to Render UIs at 120 FPS"**
+9. **“Leveraging Rust and GPU to Render UIs at 120 FPS”**
    - URL: https://zed.dev/blog/videogame
    - Content: GPUI rendering architecture, performance optimizations
    - **Excellent for understanding BGRA choice and rendering pipeline**
 
-10. **"GPUI: A Technical Overview"**
+10. **“GPUI: A Technical Overview”**
     - URL: https://beckmoulton.medium.com/gpui-a-technical-overview-of-the-high-performance-rust-ui-framework-powering-zed-ac65975cda9f
     - Content: Comprehensive technical overview of GPUI architecture
     - **Great for understanding the big picture**
@@ -1240,10 +1240,10 @@ For large images (photos), individual textures are used.
     - Content: Real-world example of using `img()` for avatars
     - **Practical styling examples**
 
-14. **"Adding Image Info to Zed" Blog Post**
+14. **“Adding Image Info to Zed” Blog Post**
     - URL: https://www.meje.dev/blog/adding-image-info-to-zed
     - Content: How image metadata display was implemented
-    - **Shows integration with Zed's architecture**
+    - **Shows integration with Zed’s architecture**
 
 ### Community Resources
 
@@ -1284,7 +1284,7 @@ For large images (photos), individual textures are used.
 - Breaking changes occur between versions
 - Always check your GPUI version: `cargo tree | grep gpui`
 - Consult release notes for migration guides
-- When in doubt, check Zed's usage of the API (they use latest)
+- When in doubt, check Zed’s usage of the API (they use latest)
 
 ---
 
@@ -1390,7 +1390,7 @@ use gpui::{img, ObjectFit};
 
 ### Common Issues
 
-**1. Image not displaying**
+**1.  Image not displaying**
 
 Check:
 - File exists at path: `path.exists()`
@@ -1405,7 +1405,7 @@ println!("Exists: {}", path.exists());
 println!("Extension: {:?}", path.extension());
 ```
 
-**2. Image distorted or wrong aspect ratio**
+**2.  Image distorted or wrong aspect ratio**
 
 Fix:
 ```rust
@@ -1413,7 +1413,7 @@ Fix:
 .object_fit(ObjectFit::Contain)  // Maintains aspect ratio
 ```
 
-**3. Performance issues with large images**
+**3.  Performance issues with large images**
 
 Solutions:
 - Generate thumbnails for preview
@@ -1421,14 +1421,14 @@ Solutions:
 - Implement lazy loading
 - Consider image dimensions before loading
 
-**4. Animated GIF not animating**
+**4.  Animated GIF not animating**
 
 Check:
 - GPUI version supports animated GIFs
 - Image is actually an animated GIF (multiple frames)
 - No errors in console
 
-**5. Memory issues**
+**5.  Memory issues**
 
 Solutions:
 - Implement custom `ImageCache` with size limits
@@ -1536,7 +1536,7 @@ match format {
 **Zed Version Referenced:** Latest main branch (2025-12-27)  
 **Image Crate Version:** 0.24+ recommended  
 
-**Note:** GPUI is evolving. Some APIs may change. Always refer to the official Zed repository for the most current implementation patterns.
+**Note:** GPUI is evolving.  Some APIs may change.  Always refer to the official Zed repository for the most current implementation patterns.
 
 ---
 

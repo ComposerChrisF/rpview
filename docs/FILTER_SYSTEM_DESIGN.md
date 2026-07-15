@@ -2,7 +2,7 @@
 
 ## Overview
 
-The filter system provides real-time image adjustments (brightness, contrast, gamma) with an interactive UI overlay. This document describes the architecture, key design decisions, and implementation details.
+The filter system provides real-time image adjustments (brightness, contrast, gamma) with an interactive UI overlay.  This document describes the architecture, key design decisions, and implementation details.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ App (main.rs)
 2. **Slider Update**: adabraka-ui Slider updates its internal SliderState
 3. **Polling**: App::render() polls FilterControls for changes
 4. **Change Detection**: FilterControls compares current vs last values
-5. **Filter Application**: If changed, update ImageViewer's FilterSettings
+5. **Filter Application**: If changed, update ImageViewer’s FilterSettings
 6. **Cache Regeneration**: ImageViewer generates new filtered image
 7. **Display Update**: GPUI loads new filtered image and renders
 
@@ -87,7 +87,7 @@ impl Render for App {
 
 ## Critical Design Decisions
 
-### 1. Polling vs Callbacks
+### 1.  Polling vs Callbacks
 
 **Decision**: Poll FilterControls in App::render() instead of using on_change callbacks.
 
@@ -104,9 +104,9 @@ impl Render for App {
 - ✅ Always reads current values
 - ❌ Checks every frame even when not changed (negligible cost)
 
-### 2. GPUI Image Caching Solution
+### 2.  GPUI Image Caching Solution
 
-**Problem**: GPUI caches images by file path. When we updated the filtered image at the same path, GPUI continued showing the cached version.
+**Problem**: GPUI caches images by file path.  When we updated the filtered image at the same path, GPUI continued showing the cached version.
 
 **Solution**: Generate unique filenames using nanosecond timestamps.
 
@@ -127,15 +127,15 @@ let temp_path = temp_dir.join(format!("rpview_filtered_{}_{}.png", std::process:
 
 **Alternatives Considered**:
 - In-memory images: Would require low-level GPUI rendering (complex)
-- Cache invalidation: GPUI doesn't expose this API
+- Cache invalidation: GPUI doesn’t expose this API
 - Data URLs: Unknown if GPUI supports, adds base64 overhead
 
-### 3. Disk-Based Filter Cache
+### 3.  Disk-Based Filter Cache
 
 **Decision**: Save filtered images to temp files on disk.
 
 **Rationale**:
-- Leverages GPUI's high-level img() API
+- Leverages GPUI’s high-level img() API
 - Simple implementation
 - GPUI handles texture management, GPU upload
 - Disk I/O negligible for small images (<1ms on modern SSDs)
@@ -148,7 +148,7 @@ let temp_path = temp_dir.join(format!("rpview_filtered_{}_{}.png", std::process:
 - ❌ Slight disk I/O overhead (acceptable)
 - ❌ Creates temp files (cleaned up properly)
 
-### 4. CPU-Based Filtering
+### 4.  CPU-Based Filtering
 
 **Decision**: Apply filters on CPU, not GPU shaders.
 
@@ -179,7 +179,7 @@ let factor = if contrast > 0.0 {
 let mid = 128.0;
 new_value = clamp(mid + (old_value - mid) * factor, 0, 255)
 ```
-Factor-based scaling around middle gray. Full range: 0.1 to 3.0.
+Factor-based scaling around middle gray.  Full range: 0.1 to 3.0.
 
 ### Gamma (0.1 to 10.0)
 ```rust
@@ -221,7 +221,7 @@ Filters can be toggled without losing values:
 
 ## Focus Management
 
-**Problem**: After dismissing filter panel, keyboard shortcuts didn't work until clicking the window.
+**Problem**: After dismissing filter panel, keyboard shortcuts didn’t work until clicking the window.
 
 **Solution**: Explicitly restore focus to main app on panel dismiss.
 
@@ -359,17 +359,17 @@ Filter system is designed to be resilient:
 ### GPU Shader Implementation (Future)
 When GPU acceleration is needed:
 - Implement fragment shaders for each filter
-- Use GPUI's custom rendering pipeline
+- Use GPUI’s custom rendering pipeline
 - Apply filters during render, not as preprocessing
 - Eliminates disk I/O completely
 - Enables real-time 60fps filter adjustments
 
 ## Conclusion
 
-The filter system successfully provides real-time image adjustments with a clean, maintainable architecture. The polling-based design avoids common GPUI pitfalls, the unique filename approach solves caching issues elegantly, and the disk-based filtering provides adequate performance while keeping code simple.
+The filter system successfully provides real-time image adjustments with a clean, maintainable architecture.  The polling-based design avoids common GPUI pitfalls, the unique filename approach solves caching issues elegantly, and the disk-based filtering provides adequate performance while keeping code simple.
 
 Key takeaways:
-- **Polling > Callbacks** in GPUI's reactive model
+- **Polling > Callbacks** in GPUI’s reactive model
 - **Unique filenames** solve image cache invalidation
 - **Disk-based approach** is simpler than in-memory
 - **adabraka-ui** provides production-ready components

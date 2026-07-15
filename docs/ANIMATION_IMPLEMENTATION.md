@@ -4,9 +4,9 @@ This document describes the lessons learned while implementing automatic animati
 
 ## Overview
 
-Implementing continuous animation in GPUI requires understanding how GPUI's reactive rendering model works. Unlike traditional game loops that render continuously, GPUI only re-renders when notified of changes. This makes animation implementation non-trivial.
+Implementing continuous animation in GPUI requires understanding how GPUI’s reactive rendering model works.  Unlike traditional game loops that render continuously, GPUI only re-renders when notified of changes.  This makes animation implementation non-trivial.
 
-## What DIDN'T Work
+## What DIDN’T Work
 
 ### Approach 1: Calling `cx.notify()` in the Render Method
 **What we tried:**
@@ -27,7 +27,7 @@ impl Render for App {
 
 **Why it failed:**
 - `cx.notify()` called during rendering is a no-op
-- GPUI doesn't schedule a new render just because you notified during the current render
+- GPUI doesn’t schedule a new render just because you notified during the current render
 - The animation would render the first frame and then stall
 - Result: Animation stuck at frame 1 or 2
 
@@ -48,15 +48,15 @@ fn start_animation_timer(&mut self, cx: &mut Context<Self>) {
 ```
 
 **Why it failed:**
-- Rust lifetime issues: Can't hold `&mut AsyncApp` across `await` points
+- Rust lifetime issues: Can’t hold `&mut AsyncApp` across `await` points
 - Error: `lifetime may not live long enough`
 - The `async move` block captures `cx` but we need to use it after the `.await`
-- After the timer awaits, we can't use the captured `cx` reference anymore
+- After the timer awaits, we can’t use the captured `cx` reference anymore
 - Even with type annotations, the borrow checker rejects this pattern
 
 **Attempted fixes that also failed:**
-1. Storing executor separately before async block - still can't use `cx` after await
-2. Using `cx.update()` - `cx` isn't accessible in async context
+1. Storing executor separately before async block - still can’t use `cx` after await
+2. Using `cx.update()` - `cx` isn’t accessible in async context
 3. Using `cx.dispatch_action()` - same lifetime issues
 4. Using background executor spawn directly - no access to GPUI context
 
@@ -73,16 +73,16 @@ if anim_state.is_playing {
 **Why it failed:**
 - The deferred closure receives `AppContext`, not `Context<Self>`
 - `AppContext` requires an `EntityId` parameter for `notify()`
-- We don't have the entity ID in the closure scope
+- We don’t have the entity ID in the closure scope
 - Type mismatch errors
 
 ## What DID Work
 
 ### The Solution: `window.request_animation_frame()` from Render Method
 
-**The key insight:** GPUI provides `window.request_animation_frame()` specifically for continuous animation. This API is explicitly documented for "video players and animated GIFs" and can be called directly from the render method.
+**The key insight:** GPUI provides `window.request_animation_frame()` specifically for continuous animation.  This API is explicitly documented for “video players and animated GIFs” and can be called directly from the render method.
 
-**Current Implementation (GPUI's Recommended Pattern):**
+**Current Implementation (GPUI’s Recommended Pattern):**
 ```rust
 impl Render for App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -115,12 +115,12 @@ impl Render for App {
 ```
 
 **Why this works:**
-1. `window.request_animation_frame()` is GPUI's high-level API for continuous animation
+1. `window.request_animation_frame()` is GPUI’s high-level API for continuous animation
 2. It internally calls `on_next_frame()` with a notify callback
 3. The render method is called every frame while animation is playing
 4. When `is_playing` becomes false, the loop stops automatically
 5. No manual callback scheduling needed
-6. Follows GPUI's documented pattern for GIF/video playback
+6. Follows GPUI’s documented pattern for GIF/video playback
 
 **Key requirements:**
 - Call `window.request_animation_frame()` from render method when animation is playing
@@ -129,7 +129,7 @@ impl Render for App {
 
 ## Critical Implementation Details
 
-### 1. Starting Animation on Load
+### 1.  Starting Animation on Load
 Initialize the frame update timestamp when loading an animated image:
 
 ```rust
@@ -150,7 +150,7 @@ fn update_viewer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
 
 **The render method will then automatically handle the continuous animation loop.**
 
-### 2. Frame Timing
+### 2.  Frame Timing
 Respect the frame durations from GIF/WEBP metadata:
 
 ```rust
@@ -166,7 +166,7 @@ if elapsed >= frame_duration {
 
 This ensures animations play at their intended speed.
 
-### 3. State Management
+### 3.  State Management
 Track when the last frame update occurred:
 
 ```rust
@@ -182,7 +182,7 @@ self.last_frame_update = Instant::now();
 self.start_animation_timer(window, cx);
 ```
 
-### 4. Stopping Animation
+### 4.  Stopping Animation
 The loop stops automatically when `is_playing` becomes false:
 
 ```rust
@@ -197,7 +197,7 @@ fn handle_toggle_animation(&mut self, _window: &mut Window, cx: &mut Context<Sel
 }
 ```
 
-When `is_playing` is false, the render method won't call `request_animation_frame()`, so the loop stops naturally.
+When `is_playing` is false, the render method won’t call `request_animation_frame()`, so the loop stops naturally.
 
 ## Architecture Pattern
 
@@ -226,7 +226,7 @@ render() called again  ← Loop continues
 ## Performance Considerations
 
 ### Frame Rate
-The `request_animation_frame()` API runs at GPUI's render rate (typically 60 FPS). This is appropriate for animation because:
+The `request_animation_frame()` API runs at GPUI’s render rate (typically 60 FPS).  This is appropriate for animation because:
 - Most GIF/WEBP frame rates are ≤ 60 FPS
 - We check elapsed time to respect actual frame durations
 - Higher frame rates would waste CPU on identical frames
@@ -240,26 +240,26 @@ Each animation frame is cached to a temporary PNG file:
 
 ## Common Pitfalls
 
-### 1. Forgetting to Initialize last_frame_update
+### 1.  Forgetting to Initialize last_frame_update
 **Symptom:** Animation starts but has incorrect timing.
 **Fix:** Set `self.last_frame_update = Instant::now()` when starting playback.
 
-### 2. Calling cx.notify() Instead of window.request_animation_frame()
-**Symptom:** Animation doesn't continue automatically.
+### 2.  Calling cx.notify() Instead of window.request_animation_frame()
+**Symptom:** Animation doesn’t continue automatically.
 **Fix:** Use `window.request_animation_frame()` from the render method to schedule continuous updates.
 
-### 3. Placing Animation Logic Outside render()
+### 3.  Placing Animation Logic Outside render()
 **Symptom:** More complex code, harder to maintain.
-**Fix:** GPUI's pattern is to handle continuous animation directly in the render method.
+**Fix:** GPUI’s pattern is to handle continuous animation directly in the render method.
 
 ## Testing
 
 To test animation implementation:
 1. Open an animated GIF: `cargo run path/to/animated.gif`
 2. Animation should play automatically
-3. Press 'O' to pause - animation should stop
-4. Press 'O' again to resume - animation should continue
-5. Press '[' or ']' to step through frames manually
+3. Press ‘O’ to pause - animation should stop
+4. Press ‘O’ again to resume - animation should continue
+5. Press ‘[‘ or ‘]’ to step through frames manually
 6. Navigate to another image and back - animation state should persist
 
 ## Summary
@@ -267,7 +267,7 @@ To test animation implementation:
 **The correct pattern for continuous rendering in GPUI:**
 - Use `window.request_animation_frame()` from the render method for continuous animation
 - Update animation state directly in render when `is_playing` is true
-- Don't try to use async/await with GPUI contexts for animation
+- Don’t try to use async/await with GPUI contexts for animation
 - Initialize timing state when starting animation, then let render handle the loop
 - The animation loop stops naturally when `is_playing` becomes false
 
@@ -275,31 +275,31 @@ This pattern is idiomatic for GPUI, explicitly documented for GIF/video playback
 
 
 # Recent Additional Research (CLF)
-GPUI (the framework powering the Zed editor) does not have a "traditional" timer-based animation system like CSS Transitions or JavaScript's `setTimeout` for UI. Instead, it relies on its **async executor** and a **reactive state pattern** to handle timing and frame updates.
+GPUI (the framework powering the Zed editor) does not have a “traditional” timer-based animation system like CSS Transitions or JavaScript’s `setTimeout` for UI.  Instead, it relies on its **async executor** and a **reactive state pattern** to handle timing and frame updates.
 
-While still evolving (GPUI is pre-1.0), here is how the "timer infrastructure" typically works for animations:
+While still evolving (GPUI is pre-1.0), here is how the “timer infrastructure” typically works for animations:
 
-### 1. The Async Timer (Executor)
+### 1.  The Async Timer (Executor)
 
-GPUI provides an integrated async runtime. You can spawn a task that "sleeps" and then updates the state to trigger a re-render.
+GPUI provides an integrated async runtime.  You can spawn a task that “sleeps” and then updates the state to trigger a re-render.
 
 * **Method:** Use `cx.spawn()` to create an async task.
 * **Timer:** Inside that task, you can call `cx.background_executor().timer(duration).await`.
 * **Update:** After the timer finishes, you use `this.update()` to modify state and call `cx.notify()` to tell GPUI to repaint the view.
 
-### 2. Built-in Animation Elements
+### 2.  Built-in Animation Elements
 
 In recent versions (GPUI 2), there is a more structured `Animation` and `AnimationElement` system appearing in the API.
 
 * **`gpui::Animation`**: A struct used to track the progress of a transition.
 * **`with_animation`**: Some elements (like SVGs or specific Divs) have helper methods to apply rotations or transitions over a specified `Duration`.
 
-### 3. External Transitions (`gpui_transitions`)
+### 3.  External Transitions (`gpui_transitions`)
 
-There is a companion crate called `gpui_transitions` often used in the Zed ecosystem. It provides:
+There is a companion crate called `gpui_transitions` often used in the Zed ecosystem.  It provides:
 
 * **`use_transition`**: An API similar to React hooks that interpolates between values (like colors or sizes) over time.
-* **Evaluation**: When you call `.evaluate(window, cx)` on a transition that isn't finished, it automatically requests a new animation frame from the platform's event loop.
+* **Evaluation**: When you call `.evaluate(window, cx)` on a transition that isn’t finished, it automatically requests a new animation frame from the platform’s event loop.
 
 ---
 
@@ -315,7 +315,7 @@ There is a companion crate called `gpui_transitions` often used in the Zed ecosy
 
 ## Validation from GPUI Documentation Research
 
-The `on_next_frame()` pattern we discovered aligns with GPUI's intended approach for custom frame-by-frame animation logic. According to GPUI's animation infrastructure, there are three main approaches:
+The `on_next_frame()` pattern we discovered aligns with GPUI’s intended approach for custom frame-by-frame animation logic.  According to GPUI’s animation infrastructure, there are three main approaches:
 
 1. **`cx.spawn()` with async timers**: For simple delays or one-off state changes
    - We confirmed this has lifetime issues when trying to use it for continuous animation
@@ -332,7 +332,7 @@ The `on_next_frame()` pattern we discovered aligns with GPUI's intended approach
    - Allows us to respect per-frame timing metadata from the image format
    - No async complexity or lifetime issues
 
-**Conclusion**: Our implementation correctly uses the frame-by-frame callback pattern, which is the idiomatic GPUI approach for animations that require custom timing logic. The self-scheduling loop pattern we developed is exactly what GPUI intended for use cases like ours, where we need to advance through discrete frames at variable intervals based on embedded metadata.
+**Conclusion**: Our implementation correctly uses the frame-by-frame callback pattern, which is the idiomatic GPUI approach for animations that require custom timing logic.  The self-scheduling loop pattern we developed is exactly what GPUI intended for use cases like ours, where we need to advance through discrete frames at variable intervals based on embedded metadata.
 
 ---
 
@@ -342,7 +342,7 @@ After examining the GPUI 0.2.2 source code, here are the key findings:
 
 ### APIs Available for Animation
 
-**1. `on_next_frame()`** - The low-level API we're using
+**1. `on_next_frame()`** - The low-level API we’re using
 ```rust
 /// Schedule the given closure to be run directly after the current frame is rendered.
 pub fn on_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'static)
@@ -358,7 +358,7 @@ pub fn on_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'stat
 /// such as a video player or an animated GIF.
 pub fn request_animation_frame(&self)
 ```
-- GPUI's documentation explicitly mentions **"such as a video player or an animated GIF"** as the use case
+- GPUI’s documentation explicitly mentions **“such as a video player or an animated GIF”** as the use case
 - Internally, it just calls: `self.on_next_frame(move |_, cx| cx.notify(entity))`
 - Can be called from within the `render()` method itself
 
@@ -366,9 +366,9 @@ pub fn request_animation_frame(&self)
 - The research document mentioned this API, but it does not exist in GPUI 0.2.2
 - The actual API is `request_animation_frame()`, not `on_animation_frame()`
 
-### Alternative Pattern from GPUI's Examples
+### Alternative Pattern from GPUI’s Examples
 
-GPUI's official `opacity.rs` example demonstrates a different pattern than we used:
+GPUI’s official `opacity.rs` example demonstrates a different pattern than we used:
 
 ```rust
 impl Render for HelloWorld {
@@ -386,11 +386,11 @@ impl Render for HelloWorld {
 }
 ```
 
-**This contradicts our earlier finding** that calling animation-related methods from `render()` doesn't work. The difference:
-- `cx.notify()` from render = doesn't work (we confirmed this)
-- `window.request_animation_frame()` from render = works (GPUI's official pattern)
+**This contradicts our earlier finding** that calling animation-related methods from `render()` doesn’t work.  The difference:
+- `cx.notify()` from render = doesn’t work (we confirmed this)
+- `window.request_animation_frame()` from render = works (GPUI’s official pattern)
 
-### Our Implementation vs. GPUI's Suggested Pattern
+### Our Implementation vs. GPUI’s Suggested Pattern
 
 **Our current approach:**
 - Separate `update_animation_frame()` method outside of render
@@ -398,18 +398,18 @@ impl Render for HelloWorld {
 - Explicitly call `cx.notify()`
 - More code, but very explicit control
 
-**GPUI's example approach:**
+**GPUI’s example approach:**
 - Update animation state directly in `render()`
 - Call `window.request_animation_frame()` from render
 - Simpler, less code
-- Follows GPUI's documented pattern
+- Follows GPUI’s documented pattern
 
 ### Implementation Evolution
 
-**We initially used `on_next_frame()` with a separate method**, but **switched to GPUI's recommended pattern** of calling `request_animation_frame()` from render because:
+**We initially used `on_next_frame()` with a separate method**, but **switched to GPUI’s recommended pattern** of calling `request_animation_frame()` from render because:
 
 1. **Simpler code**: Less boilerplate, no manual callback scheduling
-2. **Official pattern**: GPUI's docs explicitly show this approach for GIF/video
+2. **Official pattern**: GPUI’s docs explicitly show this approach for GIF/video
 3. **More maintainable**: Animation logic is in one place (the render method)
 4. **Less error-prone**: No forgotten method calls or callback lifetime issues
 
@@ -421,16 +421,16 @@ The render-based approach is the idiomatic GPUI pattern for continuous animation
 |-----|----------|-------------|-----------|
 | `on_next_frame()` | Low-level frame scheduling | Outside render | ✓ Currently using |
 | `request_animation_frame()` | Continuous animation (GIFs, video) | Inside or outside render | Could use as alternative |
-| `cx.notify()` in render | N/A | Don't use | ✗ Confirmed doesn't work |
+| `cx.notify()` in render | N/A | Don’t use | ✗ Confirmed doesn’t work |
 | `cx.spawn()` async | One-off delays | Outside render | ✗ Has lifetime issues |
 
-Both `on_next_frame()` and `request_animation_frame()` are valid approaches for our GIF/WEBP animation. We chose the more explicit `on_next_frame()` pattern, which gives us finer control over the animation loop.
+Both `on_next_frame()` and `request_animation_frame()` are valid approaches for our GIF/WEBP animation.  We chose the more explicit `on_next_frame()` pattern, which gives us finer control over the animation loop.
 
 ---
 
 ## Frame Caching Strategy
 
-A critical component of smooth animation is the frame caching system. Simply advancing frame indices isn't enough - we need to handle both **disk caching** (extracting frames from the GIF/WEBP) and **GPU caching** (loading frames into GPU memory for display).
+A critical component of smooth animation is the frame caching system.  Simply advancing frame indices isn’t enough - we need to handle both **disk caching** (extracting frames from the GIF/WEBP) and **GPU caching** (loading frames into GPU memory for display).
 
 ### The Two-Level Caching Problem
 
@@ -439,7 +439,7 @@ A critical component of smooth animation is the frame caching system. Simply adv
 - Need to cache frames to disk as temporary PNG files
 
 **Problem 2: GPU Texture Loading Latency**
-- Even with frames cached to disk, GPUI's `img()` function needs time to load them into GPU memory
+- Even with frames cached to disk, GPUI’s `img()` function needs time to load them into GPU memory
 - Without GPU preloading, frames flash black when first displayed
 
 ### Progressive Loading Strategy (3-Phase Approach)
@@ -466,7 +466,7 @@ for _ in initial_cache_count..anim_data.frames.len() {
 **Benefits:**
 - User sees the animation within 100-200ms (frame 0 displays immediately)
 - UI remains responsive even for large GIFs
-- No "frozen on previous image" perception
+- No “frozen on previous image” perception
 
 #### **Phase 2: Playback (Look-Ahead Caching)**
 ```rust
@@ -484,7 +484,7 @@ if let Some(ref anim_state) = self.viewer.image_state.animation {
 ```
 
 **Benefits:**
-- Frames are cached just before they're needed (3-frame lookahead)
+- Frames are cached just before they’re needed (3-frame lookahead)
 - Caching happens during playback (non-blocking)
 - After first loop, all frames are cached (perfectly smooth playback)
 
@@ -507,8 +507,8 @@ container = container.child(
 ```
 
 **Why this works:**
-- GPUI's `img()` loads the file into GPU memory when rendered
-- By rendering the next frame invisibly, we force GPU loading before it's displayed
+- GPUI’s `img()` loads the file into GPU memory when rendered
+- By rendering the next frame invisibly, we force GPU loading before it’s displayed
 - When we advance to the next frame, the texture is already in GPU memory
 - Result: Zero black flashing between frames
 
@@ -566,7 +566,7 @@ pub fn cache_frame(&mut self, frame_index: usize) -> bool {
 4. **No Black Flashing:** GPU preloading ensures textures are loaded before display
 5. **Low Memory Usage:** Only 1-2 frames in GPU memory at a time
 
-### Alternative Approaches We Didn't Use
+### Alternative Approaches We Didn’t Use
 
 **❌ Cache all frames upfront:**
 - Pro: No stuttering after initial load
@@ -581,7 +581,7 @@ pub fn cache_frame(&mut self, frame_index: usize) -> bool {
 **❌ Keep all frames in GPU memory:**
 - Pro: Fastest playback
 - Con: Excessive GPU memory usage for large GIFs
-- Con: GPUI doesn't provide direct control over GPU texture caching
+- Con: GPUI doesn’t provide direct control over GPU texture caching
 
 ### Summary
 

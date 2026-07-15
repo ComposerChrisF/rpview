@@ -2,13 +2,13 @@
 
 ## Overview
 
-This document describes a critical issue encountered during Phase 11.5 (Drag & Drop Support) implementation and its solution. This is essential reading for anyone working with dynamic image loading in GPUI applications.
+This document describes a critical issue encountered during Phase 11.5 (Drag & Drop Support) implementation and its solution.  This is essential reading for anyone working with dynamic image loading in GPUI applications.
 
 ## The Problem
 
 ### Symptom
 
-When implementing drag-and-drop file loading, images would load successfully into the `ImageViewer` component (verified by debug logging), but would not display on screen. The screen remained blank or showed the previous image until the user navigated to another image and back.
+When implementing drag-and-drop file loading, images would load successfully into the `ImageViewer` component (verified by debug logging), but would not display on screen.  The screen remained blank or showed the previous image until the user navigated to another image and back.
 
 ### Debug Evidence
 
@@ -24,14 +24,14 @@ The data was correct, the render method was being called, but the screen showed 
 
 ## Root Cause
 
-GPUI's `img()` component caches images based on the **component's position in the UI tree**, not based on the image path or content. When the `ImageViewer` component is cloned and recreated during render:
+GPUI’s `img()` component caches images based on the **component’s position in the UI tree**, not based on the image path or content.  When the `ImageViewer` component is cloned and recreated during render:
 
 ```rust
 // In App::render()
 .child(cx.new(|_cx| self.viewer.clone()))
 ```
 
-GPUI sees the same component structure and assumes the image hasn't changed, even though the `path` parameter to `img()` has changed. This causes GPUI to display cached (blank or old) content instead of loading the new image.
+GPUI sees the same component structure and assumes the image hasn’t changed, even though the `path` parameter to `img()` has changed.  This causes GPUI to display cached (blank or old) content instead of loading the new image.
 
 ## The Solution
 
@@ -55,7 +55,7 @@ img(path.clone())
 
 ### Why This Works
 
-GPUI's element system uses the `id` field to track element identity across renders. When you provide an ID that changes with the content:
+GPUI’s element system uses the `id` field to track element identity across renders.  When you provide an ID that changes with the content:
 
 1. GPUI recognizes this as a **different element** (not the same element with updated props)
 2. This triggers a full re-initialization of the image component
@@ -63,9 +63,9 @@ GPUI's element system uses the `id` field to track element identity across rende
 
 ## Key Lessons
 
-### 1. GPUI Caching Behavior
+### 1.  GPUI Caching Behavior
 
-GPUI's image caching is **structure-based**, not **content-based**. If you have:
+GPUI’s image caching is **structure-based**, not **content-based**.  If you have:
 
 ```rust
 // Render 1
@@ -77,7 +77,7 @@ img("image2.png")
 
 GPUI may show `image1.png` in both renders because the component structure is identical.
 
-### 2. When to Use Element IDs
+### 2.  When to Use Element IDs
 
 **Always** provide unique element IDs when:
 - Dynamically changing image sources
@@ -85,7 +85,7 @@ GPUI may show `image1.png` in both renders because the component structure is id
 - Implementing navigation between different pieces of content
 - Any scenario where the same component structure displays different content
 
-### 3. Element Identity vs Component Identity
+### 3.  Element Identity vs Component Identity
 
 In GPUI:
 - **Component identity** is determined by position in the UI tree
@@ -146,17 +146,17 @@ To verify the fix works:
 
 ## Alternative Solutions Considered
 
-### 1. Force Image Cache Clear (Not Possible)
-GPUI doesn't expose an API to manually clear the image cache.
+### 1.  Force Image Cache Clear (Not Possible)
+GPUI doesn’t expose an API to manually clear the image cache.
 
-### 2. Recreate Entire Component Tree (Inefficient)
+### 2.  Recreate Entire Component Tree (Inefficient)
 Could force a new component tree, but this would lose all state and be very inefficient.
 
-### 3. Use Different Component Instances (Complex)
+### 3.  Use Different Component Instances (Complex)
 Could manage separate `ImageViewer` instances, but adds significant complexity.
 
-### 4. Unique IDs (Chosen Solution)
-Simple, efficient, and idiomatic to GPUI's design.
+### 4.  Unique IDs (Chosen Solution)
+Simple, efficient, and idiomatic to GPUI’s design.
 
 ## Performance Considerations
 
@@ -175,7 +175,7 @@ This allocates on every render, but:
 
 ### Image Loading
 
-GPUI's image loading is asynchronous and cached internally. The unique ID doesn't cause redundant loads - GPUI still caches by file path internally, it just knows to **check** the cache when the ID changes.
+GPUI’s image loading is asynchronous and cached internally.  The unique ID doesn’t cause redundant loads - GPUI still caches by file path internally, it just knows to **check** the cache when the ID changes.
 
 ## Future Considerations
 
@@ -209,12 +209,12 @@ let temp_path = format!("rpview_filtered_{pid}_{nanos}.png");
 
 ## Summary
 
-When working with GPUI's `img()` component and dynamically changing image sources:
+When working with GPUI’s `img()` component and dynamically changing image sources:
 
 1. ✅ **DO** provide unique `.id()` based on content (e.g., file path)
 2. ✅ **DO** call `cx.notify()` to trigger re-render after updating state
 3. ✅ **DO** expect image loading to be asynchronous
-4. ❌ **DON'T** assume GPUI will detect content changes without explicit IDs
-5. ❌ **DON'T** rely on component structure alone for dynamic content
+4. ❌ **DON’T** assume GPUI will detect content changes without explicit IDs
+5. ❌ **DON’T** rely on component structure alone for dynamic content
 
 This pattern applies to any GPUI component that displays dynamic external content (images, videos, web views, etc.).

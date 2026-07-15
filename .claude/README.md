@@ -9,12 +9,12 @@
 1. **DO NOT** automatically commit changes after making code modifications
 2. **DO NOT** commit changes as part of completing a task
 3. **ALWAYS** wait for the user to explicitly request a commit with phrases like:
-   - "commit these changes"
-   - "please commit"
-   - "git commit"
-   - "save to git"
+   - “commit these changes”
+   - “please commit”
+   - “git commit”
+   - “save to git”
 
-4. **Exception**: The user may ask you to "commit changes" as part of their initial request. Only in this case should you commit without asking again.
+4. **Exception**: The user may ask you to “commit changes” as part of their initial request.  Only in this case should you commit without asking again.
 
 ### Correct Workflow
 

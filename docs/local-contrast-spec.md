@@ -2,9 +2,9 @@
 
 ## Context
 
-rpview-gpui currently has three simple per-channel filters (brightness, contrast, gamma) implemented as a 256-entry RGB LUT in `src/utils/filters.rs`. The user has a mature C# image-processing library at `/Users/chris/Chris/Dev/Util/PView/FraleyMusic-ImageDsp` whose flagship algorithm is **local-contrast luminance normalization** in a perceptual color space. Goal: port that algorithm to Rust, with an optional upgrade from HSL to a modern perceptual model (Oklab / OkLCh).
+rpview-gpui currently has three simple per-channel filters (brightness, contrast, gamma) implemented as a 256-entry RGB LUT in `src/utils/filters.rs`.  The user has a mature C# image-processing library at `/Users/chris/Chris/Dev/Util/PView/FraleyMusic-ImageDsp` whose flagship algorithm is **local-contrast luminance normalization** in a perceptual color space.  Goal: port that algorithm to Rust, with an optional upgrade from HSL to a modern perceptual model (Oklab / OkLCh).
 
-This document is a **language-neutral spec** derived by reading the three C# source files. It describes what the algorithm does in enough detail to reimplement without needing the C# code open. It does *not* prescribe a Rust module layout — that's a follow-up design step after you've reviewed and tweaked this spec.
+This document is a **language-neutral spec** derived by reading the three C# source files.  It describes what the algorithm does in enough detail to reimplement without needing the C# code open.  It does _not_ prescribe a Rust module layout — that’s a follow-up design step after you’ve reviewed and tweaked this spec.
 
 **Source files analyzed** (all in `/Users/chris/Chris/Dev/Util/PView/FraleyMusic-ImageDsp`):
 - `HslSupport.cs` (192 lines) — RGB↔HSL conversion.
@@ -14,23 +14,23 @@ This document is a **language-neutral spec** derived by reading the three C# sou
 
 ---
 
-## 1. Data model: FloatMap
+## 1.  Data model: FloatMap
 
-A `FloatMap` is a planar float32 bitmap. Each channel is a separate `float[width, height]` array, values in **[0.0, 1.0]** (255 is the integer conversion factor). Channels stored:
+A `FloatMap` is a planar float32 bitmap.  Each channel is a separate `float[width, height]` array, values in **[0.0, 1.0]** (255 is the integer conversion factor).  Channels stored:
 
 - `RGB_r`, `RGB_g`, `RGB_b` — always present.
 - `Alpha` — present iff the source had an alpha channel.
 - `HSL_h`, `HSL_s`, `HSL_l` — populated on demand.
 
-Integer round-trip: `float_to_byte(f) = clamp(round(f * 255), 0, 255)`. Byte-to-float is `b / 255.0`.
+Integer round-trip: `float_to_byte(f) = clamp(round(f * 255), 0, 255)`.  Byte-to-float is `b / 255.0`.
 
-**Rust port note:** rpview already has `image::RgbaImage` as interleaved `u8[4]`. We'll need a planar-float equivalent (e.g. `Vec<f32>` per channel or a struct of `Box<[f32]>` plane handles) for the perceptual pipeline — interleaved u8 loses precision across stages. Could live in a new `src/utils/float_map.rs`.
+**Rust port note:** rpview already has `image::RgbaImage` as interleaved `u8[4]`.  We’ll need a planar-float equivalent (e.g. `Vec<f32>` per channel or a struct of `Box<[f32]>` plane handles) for the perceptual pipeline — interleaved u8 loses precision across stages.  Could live in a new `src/utils/float_map.rs`.
 
 ---
 
-## 2. Perceptual transform: RGB ↔ HSL
+## 2.  Perceptual transform: RGB ↔ HSL
 
-Reference: `HslSupport.cs:34-175`. Standard HSL ("lightness" variant, not HSV/value).
+Reference: `HslSupport.cs:34-175`.  Standard HSL (“lightness” variant, not HSV/value).
 
 ### 2.1 RGB → HSL (per pixel)
 
@@ -62,7 +62,7 @@ Note: the C# file carries commented-out alternates for intensity/value/luma comp
 
 ### 2.2 HSL → RGB (per pixel)
 
-Given `H ∈ [0,1), S, L ∈ [0,1]` (Wikipedia's HSL reference formula):
+Given `H ∈ [0,1), S, L ∈ [0,1]` (Wikipedia’s HSL reference formula):
 
 ```
 if S == 0:
@@ -87,30 +87,30 @@ Round-trip is accurate to ≈1e-6 (verified by `TestRgbToHslToRgb.cs`).
 
 ### 2.3 Optional: swap HSL for Oklab / OkLCh
 
-HSL is not perceptually uniform — equal changes in L don't produce equal perceived lightness changes, and hue wraps non-linearly. Modern alternatives:
+HSL is not perceptually uniform — equal changes in L don’t produce equal perceived lightness changes, and hue wraps non-linearly.  Modern alternatives:
 
-- **Oklab** (Björn Ottosson, 2020): perceptually uniform Lab, simple matrix + cube-root, fast. L ∈ [0,1], a/b roughly [-0.5, 0.5].
+- **Oklab** (Björn Ottosson, 2020): perceptually uniform Lab, simple matrix + cube-root, fast.  L ∈ [0,1], a/b roughly [-0.5, 0.5].
 - **OkLCh**: polar form of Oklab (L, chroma, hue) — the drop-in equivalent for HSL.
 - **CIE L\*a\*b\*** / **CIELCh**: older but still industry standard; more expensive (XYZ intermediate, sRGB gamma decode).
 
 Recommended for this port: **OkLCh**, because:
-1. Local luminance normalization fundamentally operates on perceived lightness — Oklab's L is closer to human perception than HSL's mechanical midpoint.
-2. The algorithm's "desaturate when moving toward black/white" heuristic is a workaround for HSL's hue instability near extremes; Oklab chroma degrades more gracefully, possibly letting us drop that heuristic.
-3. All of the LocallyNormalizeLuminance math operates on scalar L — swapping the color space doesn't require rewriting the histogram logic, only the conversion routines and the meaning of "L" (and "S" → chroma).
+1. Local luminance normalization fundamentally operates on perceived lightness — Oklab’s L is closer to human perception than HSL’s mechanical midpoint.
+2. The algorithm’s “desaturate when moving toward black/white” heuristic is a workaround for HSL’s hue instability near extremes; Oklab chroma degrades more gracefully, possibly letting us drop that heuristic.
+3. All of the LocallyNormalizeLuminance math operates on scalar L — swapping the color space doesn’t require rewriting the histogram logic, only the conversion routines and the meaning of “L” (and “S” → chroma).
 
 The port should keep the color-space transform behind a trait so we can A/B test HSL vs OkLCh.
 
 ---
 
-## 3. Local contrast algorithm: `LocallyNormalizeLuminance`
+## 3.  Local contrast algorithm: `LocallyNormalizeLuminance`
 
-Reference: `AdaptiveContrastDsp.cs:247-527`. This is the core deliverable.
+Reference: `AdaptiveContrastDsp.cs:247-527`.  This is the core deliverable.
 
 ### 3.1 Parameters
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `cxyWindow` | `width/32` (if 0) | Radius of circular sampling window around each pixel, in pixels. Larger = slower + smoother local gray-point. |
+| `cxyWindow` | `width/32` (if 0) | Radius of circular sampling window around each pixel, in pixels.  Larger = slower + smoother local gray-point. |
 | `cxyBlock` | `cxyWindow/4`, min 2 | Stride between histogram sample sites (for optimization — see §3.3). |
 | `alphaBlack` | 0.04 (0.2 in doc) | Blend weight toward normalized value in dark regions. |
 | `alphaWhite` | 0.04 | Blend weight toward normalized value in bright regions. |
@@ -142,9 +142,9 @@ for x, y in kernel size:
 
 ### 3.3 Sparse histogram grid (the key optimization)
 
-Instead of computing a histogram per pixel (O(W·H·window²)), compute one histogram every `cxyBlock` pixels, then bilinearly interpolate. With `cxyBlock = cxyWindow / 4`, the histogram count drops by **16×** with no visible artifacts. `cxyBlock = 2` is the minimum.
+Instead of computing a histogram per pixel (O(W·H·window²)), compute one histogram every `cxyBlock` pixels, then bilinearly interpolate.  With `cxyBlock = cxyWindow / 4`, the histogram count drops by **16×** with no visible artifacts. `cxyBlock = 2` is the minimum.
 
-**Per-pixel bin map:** `binMap[x, y] = clamp(round(L[x, y] * 255), 0, 255)`. Precomputed once.
+**Per-pixel bin map:** `binMap[x, y] = clamp(round(L[x, y] * 255), 0, 255)`.  Precomputed once.
 
 **Per grid-site `(xBlock, yBlock)` histogram** is a `float[259]`:
 - `hist[0..=255]` — weighted luminance histogram, bucket `i` counts pixels with bin `i`, each contributing its kernel weight.
@@ -159,7 +159,7 @@ Instead of computing a histogram per pixel (O(W·H·window²)), compute one hist
    - `hist[binMap[wx, wy]] += w`
    - `hist[256] += w`
    - `hist[258] += w * L_src[wx, wy]`
-3. Median: walk cumulative weight until half of `hist[256]` reached. With `ibinMedian` the first bin that crosses the halfway point:
+3. Median: walk cumulative weight until half of `hist[256]` reached.  With `ibinMedian` the first bin that crosses the halfway point:
    ```
    if hist[ibinMedian - 1] != 0:
        hist[257] = ibinMedian - (sumTest - halfWeight) / hist[ibinMedian - 1]
@@ -168,7 +168,7 @@ Instead of computing a histogram per pixel (O(W·H·window²)), compute one hist
    ```
 4. Mean: `hist[258] = (hist[258] / hist[256]) * 255`.
 
-Parallelized with `Parallel.For` over `xBlock` rows. Progress is reported via `FeedbackCallback` every ~1% of blocks.
+Parallelized with `Parallel.For` over `xBlock` rows.  Progress is reported via `FeedbackCallback` every ~1% of blocks.
 
 ### 3.4 Per-pixel processing
 
@@ -179,7 +179,7 @@ Inner loop over each output pixel `(x, y)` inside block `(xBlock, yBlock)`:
    xWeight = 1 - (xWithinBlock / cxyBlock)
    yWeight = 1 - (yWithinBlock / cxyBlock)
    ```
-2. **Four-corner histograms** `hist1..hist4` = `histograms[xBlock+dx, yBlock+dy]` for `(dx, dy) ∈ {(0,0), (1,0), (0,1), (1,1)}`. Fall back to the adjacent histogram if one is null (edge of image).
+2. **Four-corner histograms** `hist1..hist4` = `histograms[xBlock+dx, yBlock+dy]` for `(dx, dy) ∈ {(0,0), (1,0), (0,1), (1,1)}`.  Fall back to the adjacent histogram if one is null (edge of image).
 3. **Compute `fracSum`** — the normalized value if the histogram were fully equalized — via `NormalizeValueVia4Histograms`:
    ```
    for each of the 4 histograms:
@@ -213,7 +213,7 @@ Inner loop over each output pixel `(x, y)` inside block `(xBlock, yBlock)`:
        lNew = 1 - fracGray * (1 - gray)
        return contrast*lNew + (1-contrast)*lCur
    ```
-   **Bug note in original**: `Contrast_Std` mixes unnormalized scale — the `/ 255` math on input uses `255.0` literally (`(255.0f - lCur)`) even though both values are in [0, 1]. In the original this produces a specific (non-symmetric) behavior. Port faithfully first, then consider whether to normalize the white-side branch.
+   **Bug note in original**: `Contrast_Std` mixes unnormalized scale — the `/ 255` math on input uses `255.0` literally (`(255.0f - lCur)`) even though both values are in [0, 1].  In the original this produces a specific (non-symmetric) behavior.  Port faithfully first, then consider whether to normalize the white-side branch.
 
 7. **Document contrast** (if `UseDocumentContrast`), `Contrast_Doc(grayPoint, lCur, mix, tiltB, tiltW, ...)` (lines 609-620):
    ```
@@ -259,7 +259,7 @@ Inner loop over each output pixel `(x, y)` inside block `(xBlock, yBlock)`:
         distColorableLum  = (fracBWOrig - fracBWFinal) * 2
         S_dest *= fracDesaturate * (1 - distColorableLum)
     ```
-    Purpose: HSL hue is unstable when L → 0 or 1. Pixels that *started* near black/white but are *moved* toward midtones would otherwise gain spurious saturation.
+    Purpose: HSL hue is unstable when L → 0 or 1.  Pixels that _started_ near black/white but are _moved_ toward midtones would otherwise gain spurious saturation.
 
 12. Write `lFinal` to `HSL_l_dest[x, y]`, write possibly-modified `S` to `HSL_s_dest[x, y]`.
 
@@ -279,27 +279,27 @@ These are substituted in step 12; the rest of the pipeline still runs (minor ine
 
 ### 3.7 Parallelism and cancellation
 
-- Both the histogram building loop (step 3.3) and the per-pixel loop (step 3.4) are parallelized over `xBlock`. Rust equivalent: `rayon::prelude::ParallelIterator` over block rows.
-- `FeedbackCallback: Fn(progress: f32, message: &str) -> bool` — returns `true` to cancel. Checked inside loops at ~1% granularity. Early-return produces a null result in C# (caller should handle).
+- Both the histogram building loop (step 3.3) and the per-pixel loop (step 3.4) are parallelized over `xBlock`.  Rust equivalent: `rayon::prelude::ParallelIterator` over block rows.
+- `FeedbackCallback: Fn(progress: f32, message: &str) -> bool` — returns `true` to cancel.  Checked inside loops at ~1% granularity.  Early-return produces a null result in C# (caller should handle).
 
 ---
 
-## 4. What this spec deliberately omits
+## 4.  What this spec deliberately omits
 
-- **Gaussian weighting:** the C# windowing is squared-linear falloff within a disc, not a true Gaussian. The user's description in the task prompt mentioned "Gaussian-weighted local luminances" — this is an approximation, not a mathematically true Gaussian kernel. For the port, we could upgrade to an actual Gaussian (which would be cheaper via separable convolution for the mean, though histograms need per-site work either way).
-- **No existing golden test vectors:** the only C# test is the HSL round-trip. We'll need to hand-build reference cases (small synthetic images, known-good outputs) for the port.
-- **Integration with rpview's filter UI:** not decided. Options include:
-  - Add to the existing `FilterSettings` struct with a new "local contrast" slider group.
-  - Keep as a separate pipeline stage invoked via a menu item (it's much slower than the LUT filters).
-  - Offer it as an "export-only" processing step (can't be real-time on megapixel images).
-- **Progressive preview:** the algorithm can cost seconds on multi-megapixel images. For interactive use, we may want a downsampled preview pass first, then full-res on commit.
+- **Gaussian weighting:** the C# windowing is squared-linear falloff within a disc, not a true Gaussian.  The user’s description in the task prompt mentioned “Gaussian-weighted local luminances” — this is an approximation, not a mathematically true Gaussian kernel.  For the port, we could upgrade to an actual Gaussian (which would be cheaper via separable convolution for the mean, though histograms need per-site work either way).
+- **No existing golden test vectors:** the only C# test is the HSL round-trip.  We’ll need to hand-build reference cases (small synthetic images, known-good outputs) for the port.
+- **Integration with rpview’s filter UI:** not decided.  Options include:
+  - Add to the existing `FilterSettings` struct with a new “local contrast” slider group.
+  - Keep as a separate pipeline stage invoked via a menu item (it’s much slower than the LUT filters).
+  - Offer it as an “export-only” processing step (can’t be real-time on megapixel images).
+- **Progressive preview:** the algorithm can cost seconds on multi-megapixel images.  For interactive use, we may want a downsampled preview pass first, then full-res on commit.
 
 ---
 
-## 5. Decisions (from review)
+## 5.  Decisions (from review)
 
-1. **Color space: OkLCh only.** No HSL port path. The algorithm operates on a scalar L plus chroma/hue — Oklab's perceptual uniformity directly improves output vs HSL.
-2. **UI surface: dedicated "Local Contrast" dialog.** Also hosts the parameters for the other per-pixel processing algorithms (future expansion). Separate from the existing B/C/G filter sliders.
+1. **Color space: OkLCh only.** No HSL port path.  The algorithm operates on a scalar L plus chroma/hue — Oklab’s perceptual uniformity directly improves output vs HSL.
+2. **UI surface: dedicated “Local Contrast” dialog.** Also hosts the parameters for the other per-pixel processing algorithms (future expansion).  Separate from the existing B/C/G filter sliders.
 3. **Preview strategy: background full-res.** Algorithm runs on a worker thread; UI stays live; result streams in when ready.
 4. **Module structure (preliminary):**
    - `src/utils/float_map.rs` — planar f32 bitmap.
@@ -315,81 +315,81 @@ These are substituted in step 12; the rest of the pipeline still runs (minor ine
 
 ---
 
-## 6. Intentional algorithmic deviations for speed
+## 6.  Intentional algorithmic deviations for speed
 
-User guidance: "similar results, exact match not important." These deviations drop significant compute at negligible-to-zero perceptual cost. Each goes behind a feature flag during development so we can A/B against the faithful port.
+User guidance: “similar results, exact match not important”.  These deviations drop significant compute at negligible-to-zero perceptual cost.  Each goes behind a feature flag during development so we can A/B against the faithful port.
 
 ### 6.1 Separable Gaussian instead of squared-linear disc kernel
 
-Replace the `(2k+1)²` weight table with two 1D Gaussian passes (σ ≈ cxyWindow / 2.5, truncated at 3σ). The C# kernel is already a smooth monotonic falloff — not far from a Gaussian, and it matches the user's original description better than the disc does.
+Replace the `(2k+1)²` weight table with two 1D Gaussian passes (σ ≈ cxyWindow / 2.5, truncated at 3σ).  The C# kernel is already a smooth monotonic falloff — not far from a Gaussian, and it matches the user’s original description better than the disc does.
 
-**Win:** O(window²) → O(2·window) weighting work per pixel. At default cxyWindow=120, ~40× less work in the sampling pass.
+**Win:** O(window²) → O(2·window) weighting work per pixel.  At default cxyWindow=120, ~40× less work in the sampling pass.
 
-**Catch:** histograms don't decompose separably. Options:
-- (a) Separable Gaussian for the *mean* path; keep the disc kernel for histograms (median + fracSum paths).
+**Catch:** histograms don’t decompose separably.  Options:
+- (a) Separable Gaussian for the _mean_ path; keep the disc kernel for histograms (median + fracSum paths).
 - (b) Per-column 1D histograms summed under a 1D Gaussian row-wise — reduces histogram work to O(cxyWindow) per site but needs careful cache layout.
 
 Start with (a).
 
 ### 6.2 Integral image (summed-area table) for the mean
 
-When `UseMedianForContrast = false` (default), skip histograms entirely for gray-point computation. Build a 2D prefix-sum of L once; each site's mean is a 4-lookup subtract.
+When `UseMedianForContrast = false` (default), skip histograms entirely for gray-point computation.  Build a 2D prefix-sum of L once; each site’s mean is a 4-lookup subtract.
 
-**Win:** O(W·H) total gray-point work regardless of window size. Orders of magnitude faster than histogram-per-site at large windows.
+**Win:** O(W·H) total gray-point work regardless of window size.  Orders of magnitude faster than histogram-per-site at large windows.
 
 **Approximation note:** a 3-pass repeated box blur gives a smooth ≈Gaussian at O(W·H) total — worth it if the crisp integral-image box edges show artifacts.
 
-**Catch:** `fracSum` still needs histograms. If we keep it, this only replaces the mean derivation. See §6.4.
+**Catch:** `fracSum` still needs histograms.  If we keep it, this only replaces the mean derivation.  See §6.4.
 
 ### 6.3 Downsample-and-upsample the gray-point map
 
-Compute the gray-point map on a 4× downsampled luminance plane, then bilinearly upsample. Local gray varies slowly by construction (it's a low-pass filter), so 16× less compute with no visible artifacts.
+Compute the gray-point map on a 4× downsampled luminance plane, then bilinearly upsample.  Local gray varies slowly by construction (it’s a low-pass filter), so 16× less compute with no visible artifacts.
 
-**Win:** 16× on the gray-point stage. Stacks multiplicatively with §6.1/§6.2.
+**Win:** 16× on the gray-point stage.  Stacks multiplicatively with §6.1/§6.2.
 
-**Catch:** 4× is safe; 8× may work; beyond needs testing. Bilinear upsample is the right filter (area-average down, bilinear up).
+**Catch:** 4× is safe; 8× may work; beyond needs testing.  Bilinear upsample is the right filter (area-average down, bilinear up).
 
 ### 6.4 Drop `fracSum` from the default path
 
-`fracSum` (per-pixel histogram-equalized value) is alpha-blended in at only ~4% weight under default `alphaBlack = alphaWhite = 0.04`. Most of the visible effect comes from the contrast curve.
+`fracSum` (per-pixel histogram-equalized value) is alpha-blended in at only ~4% weight under default `alphaBlack = alphaWhite = 0.04`.  Most of the visible effect comes from the contrast curve.
 
-**Change:** expose `fracSum` as an opt-in "local equalization strength" slider; default it off. Histograms become optional (only computed if median mode or equalization is on).
+**Change:** expose `fracSum` as an opt-in “local equalization strength” slider; default it off.  Histograms become optional (only computed if median mode or equalization is on).
 
-**Behavioral change**, not purely optimization. Flag appropriately during A/B testing.
+**Behavioral change**, not purely optimization.  Flag appropriately during A/B testing.
 
 ### 6.5 Fewer histogram bins (if we keep histograms)
 
-64 bins instead of 256. Median estimate and cumulative-sum curves are indistinguishable at the noise level of photographic images.
+64 bins instead of 256.  Median estimate and cumulative-sum curves are indistinguishable at the noise level of photographic images.
 
 **Win:** 4× less histogram memory, 4× faster median walk, fits in L1 cache better.
 
 ### 6.6 Drop the near-extremes desaturation heuristic
 
-C# lines 494-500. The heuristic exists because HSL hue is unstable at L→0 and L→1. Oklab's chroma scales naturally with L — near-black pixels just have small chroma that doesn't blow up when L changes.
+C# lines 494-500.  The heuristic exists because HSL hue is unstable at L→0 and L→1.  Oklab’s chroma scales naturally with L — near-black pixels just have small chroma that doesn’t blow up when L changes.
 
-**Win:** eliminates one branch, two abs, and a couple of multiplies per pixel. Small per-pixel, meaningful in aggregate.
+**Win:** eliminates one branch, two abs, and a couple of multiplies per pixel.  Small per-pixel, meaningful in aggregate.
 
-**Catch:** verify with test images containing saturated near-black pixels. If Oklab needs an analogue, it'll be a simpler one.
+**Catch:** verify with test images containing saturated near-black pixels.  If Oklab needs an analogue, it’ll be a simpler one.
 
 ### 6.7 Expected combined speedup
 
-4K image, default parameters, mean-based path: combining §6.1 + §6.2 + §6.3 + §6.5 + §6.6 should give **50-200×** vs a faithful port. Median path (keeps histograms) still gains ~5-10× from §6.3 and §6.5 alone.
+4K image, default parameters, mean-based path: combining §6.1 + §6.2 + §6.3 + §6.5 + §6.6 should give **50-200×** vs a faithful port.  Median path (keeps histograms) still gains ~5-10× from §6.3 and §6.5 alone.
 
 Turns multi-second-per-image into tens of milliseconds — approaches interactive for single-slider edits on small previews.
 
 ### 6.8 Status of the deviations
 
-All of §6 was initially scoped as opt-in behind a `use_fast_path` flag. An early iteration shipped only the mean-via-integral-image deviation (§6.2) plus a crude `fracSum` proxy for the alpha blend. In practice the proxy diverged enough from real histogram equalization (a piecewise-linear ramp centered on the local mean, vs a true local CDF) that the fast path looked like a different algorithm, and the `alpha_black` / `alpha_white` sliders didn't behave consistently between paths. The flag and all its supporting code were removed.
+All of §6 was initially scoped as opt-in behind a `use_fast_path` flag.  An early iteration shipped only the mean-via-integral-image deviation (§6.2) plus a crude `fracSum` proxy for the alpha blend.  In practice the proxy diverged enough from real histogram equalization (a piecewise-linear ramp centered on the local mean, vs a true local CDF) that the fast path looked like a different algorithm, and the `alpha_black` / `alpha_white` sliders didn’t behave consistently between paths.  The flag and all its supporting code were removed.
 
-Current baseline: faithful histogram-based algorithm with OkLCh, parallelized across histogram-block rows via rayon. Observed perf is acceptable (hundreds of ms per compute on multi-megapixel images at default window size). §6 remains as a future roadmap — any future optimization should preserve the histogram-derived `fracSum` rather than approximate it.
+Current baseline: faithful histogram-based algorithm with OkLCh, parallelized across histogram-block rows via rayon.  Observed perf is acceptable (hundreds of ms per compute on multi-megapixel images at default window size). §6 remains as a future roadmap — any future optimization should preserve the histogram-derived `fracSum` rather than approximate it.
 
-One idea worth pursuing later: a **local-variance–shaped proxy** for `fracSum` using a second integral image over `L²`. A sigmoid anchored at the local mean with width proportional to local σ would approximate the real CDF's behavior in both narrow (σ→0, stay put) and wide (σ large, stretch toward endpoints) distributions. Unlike the piecewise-linear proxy, it would respect the uniform-region invariant (`fracSum ≈ l_cur`). Cost: O(W·H) for the second prefix sum + a few float ops per pixel.
+One idea worth pursuing later: a **local-variance–shaped proxy** for `fracSum` using a second integral image over `L²`.  A sigmoid anchored at the local mean with width proportional to local σ would approximate the real CDF’s behavior in both narrow (σ→0, stay put) and wide (σ large, stretch toward endpoints) distributions.  Unlike the piecewise-linear proxy, it would respect the uniform-region invariant (`fracSum ≈ l_cur`).  Cost: O(W·H) for the second prefix sum + a few float ops per pixel.
 
 ---
 
-## 7. Next step
+## 7.  Next step
 
-Phase A: `FloatMap` + sRGB↔OkLCh conversion, with round-trip unit tests to ≤1e-5 tolerance. Small, self-contained, unblocks everything else.
+Phase A: `FloatMap` + sRGB↔OkLCh conversion, with round-trip unit tests to ≤1e-5 tolerance.  Small, self-contained, unblocks everything else.
 
 ---
 

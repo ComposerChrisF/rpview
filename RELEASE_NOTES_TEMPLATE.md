@@ -6,7 +6,7 @@
 
 <!-- 1-3 sentences describing the most important changes in plain language. -->
 
-## What's New
+## What’s New
 
 <!-- New features and capabilities. Each entry should explain what it does
      and why it matters, not just what changed in the code. -->

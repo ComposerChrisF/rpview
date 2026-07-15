@@ -151,7 +151,7 @@ impl PixelFilterPipeline {
 - Predictable performance characteristics
 
 **Disadvantages**:
-- Can't handle filters that need surrounding pixels (blur, sharpen, edge detection)
+- Can’t handle filters that need surrounding pixels (blur, sharpen, edge detection)
 - All filters must work on Rgba<u8> (no intermediate formats)
 
 ---
@@ -423,7 +423,7 @@ impl FilterControls {
 
 ## Progress Reporting for Complex Filters
 
-For a real progress bar (0-100%), you'd need filters to report progress:
+For a real progress bar (0-100%), you’d need filters to report progress:
 
 ```rust
 pub trait ProgressReporter: Send {
@@ -471,7 +471,7 @@ impl ProgressiveFilter for BrightnessFilter {
 }
 ```
 
-This would allow the GUI to show a real progress bar, but adds complexity. May not be needed for fast filters.
+This would allow the GUI to show a real progress bar, but adds complexity.  May not be needed for fast filters.
 
 ---
 
@@ -505,7 +505,7 @@ The architecture you choose depends on your goals:
 
 ## GPU Acceleration
 
-GPU-based filters are absolutely possible and would provide massive performance improvements for many operations. Here's how they could integrate with the trait-based architectures:
+GPU-based filters are absolutely possible and would provide massive performance improvements for many operations.  Here’s how they could integrate with the trait-based architectures:
 
 ### GPU vs CPU Trade-offs
 
@@ -592,7 +592,7 @@ pub trait Filter: Send + Sync {
 
 #### Option 1: GPUI Integration (Easiest for this project)
 
-Since you're already using GPUI, you could leverage its rendering pipeline:
+Since you’re already using GPUI, you could leverage its rendering pipeline:
 
 ```rust
 // GPUI already handles GPU rendering of images with shaders
@@ -760,7 +760,7 @@ impl Filter for GpuBrightnessFilter {
 
 ### Recommended GPU Strategy
 
-For your project, I'd recommend a **phased approach**:
+For your project, I’d recommend a **phased approach**:
 
 #### Phase 1: CPU Optimization (Do First)
 - Implement single-pass pixel filtering
@@ -837,7 +837,7 @@ For a 4K image (3840x2160) with complex filters (blur):
 
 **macOS-specific**:
 - `metal-rs` - Direct Metal bindings
-- Core Image (via `cocoa` crate) - Apple's built-in filters
+- Core Image (via `cocoa` crate) - Apple’s built-in filters
 
 **Abstraction layers**:
 - `image-gpu` - Higher-level GPU image processing (if it exists)
@@ -847,7 +847,7 @@ For a 4K image (3840x2160) with complex filters (blur):
 
 Start with **CPU optimization** (Phase 1), then when you need GPU:
 
-1. **For display-only filters**: Integrate with GPUI's shader system
+1. **For display-only filters**: Integrate with GPUI’s shader system
    - Minimal code changes
    - Leverages existing GPU context
    - Real-time preview performance
@@ -858,7 +858,7 @@ Start with **CPU optimization** (Phase 1), then when you need GPU:
    - Good performance
 
 3. **For maximum performance**: Consider Metal on macOS
-   - Only if WGPU isn't fast enough
+   - Only if WGPU isn’t fast enough
    - Native optimization
 
 The trait-based architecture supports all of these - you just need to add GPU backend implementations alongside CPU ones.

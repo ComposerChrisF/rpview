@@ -4,7 +4,7 @@ This document captures our attempts to render images in GPUI 0.2.2 during Phase 
 
 ## Goal
 
-Display image pixels on screen using GPUI's rendering system, starting with a loaded `image::RgbaImage`.
+Display image pixels on screen using GPUI’s rendering system, starting with a loaded `image::RgbaImage`.
 
 ## Background
 
@@ -32,8 +32,8 @@ img(pixels_arc)
 **Error**: `the trait bound 'Arc<Vec<u8>>: Into<ImageSource>' is not satisfied`
 
 **Analysis**:
-- GPUI's `img()` function signature: `pub fn img(source: impl Into<ImageSource>) -> Img`
-- `ImageSource` doesn't implement `From<Arc<Vec<u8>>>`
+- GPUI’s `img()` function signature: `pub fn img(source: impl Into<ImageSource>) -> Img`
+- `ImageSource` doesn’t implement `From<Arc<Vec<u8>>>`
 - The `ImageSource` enum likely expects specific formats (PNG/JPEG bytes, not raw RGBA)
 
 **File**: `src/components/image_viewer.rs:84`
@@ -69,7 +69,7 @@ img(Arc::new(png_bytes))
 **Error**: Same `Arc<Vec<u8>>: Into<ImageSource>` issue
 
 **Analysis**:
-- Even with proper PNG-encoded bytes, `Arc<Vec<u8>>` still doesn't satisfy `ImageSource`
+- Even with proper PNG-encoded bytes, `Arc<Vec<u8>>` still doesn’t satisfy `ImageSource`
 - The issue is the wrapper type, not the data format
 - Tried both `Vec<u8>` and `Arc<Vec<u8>>` - neither worked
 
@@ -106,7 +106,7 @@ canvas(
 **Analysis**:
 - Inside the `canvas()` paint closure, `cx` is `&mut App` (the application context)
 - `paint_image()` requires a paint context, not an app context
-- The closure signature doesn't provide access to the actual paint context
+- The closure signature doesn’t provide access to the actual paint context
 
 **File**: `src/components/image_viewer.rs:135`
 
@@ -152,7 +152,7 @@ However, neither closure provides the correct context type for `paint_image()`.
 
 **Analysis**:
 - Components in GPUI have their own context type
-- Can't call `ImageViewer::render()` with an `App` context
+- Can’t call `ImageViewer::render()` with an `App` context
 - The render method expects `Context<Self>`, not `Context<ParentComponent>`
 
 **File**: `src/main.rs:47`
@@ -188,7 +188,7 @@ struct App {
 
 **Analysis**:
 - GPUI 0.2.2 may not export `View<T>` the same way as other versions
-- The `View` type wasn't found in the `gpui::*` wildcard import
+- The `View` type wasn’t found in the `gpui::*` wildcard import
 - Suggested import `use image::flat::View;` is the wrong View (from image crate)
 
 **File**: `src/main.rs:17`
@@ -209,12 +209,12 @@ help: consider importing this struct
 
 ## Key Learnings
 
-### 1. ImageSource Type Mystery
+### 1.  ImageSource Type Mystery
 
 The `ImageSource` type in GPUI 0.2.2 is not well-documented in our attempts:
-- Doesn't accept `Vec<u8>` or `Arc<Vec<u8>>`
-- Doesn't accept raw RGBA pixel data
-- Doesn't accept PNG-encoded bytes (at least not wrapped in Arc or Vec)
+- Doesn’t accept `Vec<u8>` or `Arc<Vec<u8>>`
+- Doesn’t accept raw RGBA pixel data
+- Doesn’t accept PNG-encoded bytes (at least not wrapped in Arc or Vec)
 - Unknown what it DOES accept
 
 **Next steps to investigate**:
@@ -222,9 +222,9 @@ The `ImageSource` type in GPUI 0.2.2 is not well-documented in our attempts:
 - Look for GPUI examples that use `img()` successfully
 - Check if `ImageSource` expects a file path, URL, or specific wrapper type
 
-### 2. Canvas Paint Context
+### 2.  Canvas Paint Context
 
-The `canvas()` element's paint closure provides an `&mut App` context, not a paint-specific context:
+The `canvas()` element’s paint closure provides an `&mut App` context, not a paint-specific context:
 - This prevents calling paint methods like `paint_image()`
 - May need a different API for custom painting
 - GPUI might expect images to come through `img()` exclusively
@@ -234,11 +234,11 @@ The `canvas()` element's paint closure provides an `&mut App` context, not a pai
 - Use a different rendering primitive
 - Convert to a format `img()` accepts
 
-### 3. Component Nesting Challenges
+### 3.  Component Nesting Challenges
 
 Rendering nested components in GPUI requires careful context management:
 - Each component has its own `Context<Self>` type
-- Can't pass parent context to child render methods
+- Can’t pass parent context to child render methods
 - Need to use proper GPUI component composition patterns
 
 **Working approach**:
@@ -280,7 +280,7 @@ This proves:
 2. **Is there a different image rendering API?**
    - Check for `Texture` or `RenderImage` types
    - Look for GPU-specific rendering paths
-   - Check GPUI's image handling in Zed editor source
+   - Check GPUI’s image handling in Zed editor source
 
 3. **Can we use a different element type?**
    - Custom elements with GPU access

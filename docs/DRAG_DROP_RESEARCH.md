@@ -11,9 +11,9 @@ GPUI (the GPU UI framework from Zed Industries) supports drag-and-drop operation
 ### ExternalPaths
 
 GPUI provides an `ExternalPaths` type which represents:
-> "A collection of paths from the platform, such as from a file drop"
+> “A collection of paths from the platform, such as from a file drop”
 
-This is the primary type you'll receive when files are dropped onto your application window.
+This is the primary type you’ll receive when files are dropped onto your application window.
 
 ### Event Handler
 
@@ -52,7 +52,7 @@ This example shows:
 
 1. **GPUI Rust Docs**: https://docs.rs/gpui
    - Official API documentation
-   - Search for "ExternalPaths", "on_drop", and drag-related types
+   - Search for “ExternalPaths”, “on_drop”, and drag-related types
 
 2. **GPUI Website**: https://www.gpui.rs/
    - High-level overview and getting started guides
@@ -68,20 +68,20 @@ This example shows:
    - Best place to see real working code
 
 2. **Zed Source Code**: https://github.com/zed-industries/zed
-   - Search for "on_drop" to see production usage in Zed editor
+   - Search for “on_drop” to see production usage in Zed editor
    - Shows advanced patterns and edge case handling
 
 ### Community Discussions
 
 1. **Files panel drag and drop support**: https://github.com/zed-industries/zed/issues/7386
-   - Discussion about implementing drag-and-drop in Zed's file panel
+   - Discussion about implementing drag-and-drop in Zed’s file panel
    - Contains implementation ideas and challenges
 
 2. **Feature Request: Support for Drag and Drop Functionality**: https://github.com/zed-industries/zed/issues/16830
    - General discussion about drag-and-drop features
    - Community requests and use cases
 
-3. **Drag'n'drop file to Zed window**: https://github.com/zed-industries/zed/issues/6069
+3. **Drag’n’drop file to Zed window**: https://github.com/zed-industries/zed/issues/6069
    - Specific discussion about dropping files into Zed
    - Platform-specific considerations
 
@@ -128,7 +128,7 @@ The rpview codebase already has most of the necessary infrastructure:
 3. **Add visual feedback** (optional but recommended):
    - Highlight window border during drag-over
    - Show drop indicator
-   - Use GPUI's drag state tracking
+   - Use GPUI’s drag state tracking
 
 4. **Handle edge cases**:
    - Empty directories
@@ -139,7 +139,7 @@ The rpview codebase already has most of the necessary infrastructure:
 ### Estimated Complexity
 
 - **Difficulty**: Moderate (4-6 hours)
-- **Main Challenge**: Understanding GPUI's event system
+- **Main Challenge**: Understanding GPUI’s event system
 - **Code Reuse**: High - most logic already exists
 - **Cross-Platform**: GPUI handles platform differences automatically
 
