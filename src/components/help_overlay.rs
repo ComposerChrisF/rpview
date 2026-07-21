@@ -177,7 +177,7 @@ impl HelpOverlay {
             .into_any_element(),
             self.render_shortcut(
                 "Esc (3x)".to_string(),
-                "Quick quit (press 3 times within 2s)".to_string(),
+                "Quick close window (press 3 times within 2s)".to_string(),
             )
             .into_any_element(),
             // Filters section

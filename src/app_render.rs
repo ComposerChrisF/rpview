@@ -653,8 +653,11 @@ impl Render for App {
                 }
             }))
             // Action handlers - registered on focused element so menu items work
-            .on_action(|_: &CloseWindow, _window, cx| {
-                cx.quit();
+            // Cmd+W closes just this image window; the app quits once the last
+            // one is gone (see `on_window_closed` in `main.rs`).  Cmd+Q is the
+            // gesture that quits outright.
+            .on_action(|_: &CloseWindow, window, _cx| {
+                window.remove_window();
             })
             .on_action(cx.listener(|this, _: &EscapePressed, window, cx| {
                 this.handle_escape(window, cx);

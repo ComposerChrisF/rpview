@@ -190,9 +190,9 @@ between dark and light to check edges and transparency.
 | `H` / `?` / `F1` | Help overlay (all shortcuts) |
 | `F12` | Debug overlay |
 | `Cmd+,` | Settings |
-| `Cmd+W` | Close window |
-| `Cmd+Q` | Quit |
-| `Esc` | Close Filter/LC window (or x3 within 2 sec to quit) |
+| `Cmd+W` | Close this window (quits if it was the last one) |
+| `Cmd+Q` | Quit, however many windows are open |
+| `Esc` | Close Filter/GPU Pipeline window (or x3 within 2 sec to close the image window) |
 
 ## Features in Detail
 
