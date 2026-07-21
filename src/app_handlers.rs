@@ -56,18 +56,36 @@ impl App {
         self.register_escape_press(cx);
     }
 
-    /// Record an ESC press for the 3-presses-in-2-seconds quit shortcut.
-    /// Used both by the main-window handler above and by floating sub-
-    /// windows (Filter / Local Contrast) — an ESC in any of our windows
-    /// counts toward the same quit counter.
+    /// Record an ESC press for the 3-presses-in-2-seconds close shortcut.
+    /// Used both by the image-window handler above and by this window's
+    /// floating panels (Filter / GPU Pipeline) — an ESC in any of them counts
+    /// toward the same counter.
+    ///
+    /// Three presses close *this* window; the app quits once the last image
+    /// window goes (see `on_window_closed` in `main.rs`).  Cmd+Q still quits
+    /// outright regardless of how many windows are open.
     pub(crate) fn register_escape_press(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         self.escape_presses
             .retain(|&time| now.duration_since(time) < Duration::from_secs(2));
         self.escape_presses.push(now);
         if self.escape_presses.len() >= 3 {
-            cx.quit();
+            self.escape_presses.clear();
+            self.close_own_window(cx);
         }
+    }
+
+    /// Close this App's own window.
+    ///
+    /// Deferred rather than immediate: callers arrive mid-update — a floating
+    /// panel's ESC handler runs inside *its* window's update and reaches us
+    /// through a weak entity handle — and GPUI cannot re-enter a window that
+    /// is already being updated.
+    pub(crate) fn close_own_window(&self, cx: &mut Context<Self>) {
+        let handle = self.window_handle;
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, _| window.remove_window());
+        });
     }
 
     pub(crate) fn handle_toggle_help(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -1082,51 +1100,65 @@ impl App {
         }
     }
 
-    fn import_image_paths(
+    /// Expand a set of dropped or "Open With" paths into an alphabetically
+    /// sorted image list plus the index of the file to show first.
+    ///
+    /// A single file expands to its whole containing directory (so navigation
+    /// works), a single directory to its contents.  Several paths at once are
+    /// taken as an explicit set and start at the first.  Returns `None` when
+    /// nothing usable was found.
+    ///
+    /// Kept separate from `import_image_paths` because "Open With" now builds a
+    /// brand-new window from this list rather than mutating an existing one.
+    pub(crate) fn resolve_import_paths(paths: &[PathBuf]) -> Option<(Vec<PathBuf>, usize)> {
+        if paths.len() == 1 {
+            return utils::file_scanner::process_dropped_path(&paths[0]).ok();
+        }
+
+        let mut all_images: Vec<PathBuf> = Vec::new();
+        for path in paths {
+            if path.is_file() && utils::file_scanner::is_supported_image(path) {
+                all_images.push(path.to_path_buf());
+            } else if path.is_dir() {
+                if let Ok(dir_images) = utils::file_scanner::scan_directory(path) {
+                    all_images.extend(dir_images);
+                }
+            }
+        }
+        // Dedup using a set instead of sort+dedup+sort
+        let set: std::collections::HashSet<PathBuf> = all_images.drain(..).collect();
+        all_images = set.into_iter().collect();
+        utils::file_scanner::sort_alphabetically(&mut all_images);
+
+        (!all_images.is_empty()).then_some((all_images, 0))
+    }
+
+    /// Replace this window's image list with `paths`.  Used by drag-and-drop,
+    /// where the drop explicitly targets this window, and by "Open With" when
+    /// the only window is the empty startup placeholder.
+    pub(crate) fn import_image_paths(
         &mut self,
         paths: &[PathBuf],
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut all_images: Vec<PathBuf> = Vec::new();
-        let mut target_index: usize = 0;
+        let Some((all_images, target_index)) = Self::resolve_import_paths(paths) else {
+            return;
+        };
 
-        if paths.len() == 1 {
-            if let Ok((images, index)) = utils::file_scanner::process_dropped_path(&paths[0]) {
-                all_images = images;
-                target_index = index;
-            }
-        } else {
-            for path in paths {
-                if path.is_file() && utils::file_scanner::is_supported_image(path) {
-                    all_images.push(path.to_path_buf());
-                } else if path.is_dir() {
-                    if let Ok(dir_images) = utils::file_scanner::scan_directory(path) {
-                        all_images.extend(dir_images);
-                    }
-                }
-            }
-            // Dedup using a set instead of sort+dedup+sort
-            let set: std::collections::HashSet<PathBuf> = all_images.drain(..).collect();
-            all_images = set.into_iter().collect();
-            utils::file_scanner::sort_alphabetically(&mut all_images);
-        }
+        // Set the paths and a temporary index pointing at the target file
+        self.app_state.image_paths = all_images;
+        self.app_state.current_index = target_index;
 
-        if !all_images.is_empty() {
-            // Set the paths and a temporary index pointing at the target file
-            self.app_state.image_paths = all_images;
-            self.app_state.current_index = target_index;
+        // Re-sort according to the active sort mode (process_dropped_path
+        // always sorts alphabetically; this corrects for ModifiedDate mode).
+        // sort_images() preserves current_index by tracking the current path.
+        self.app_state.sort_images();
 
-            // Re-sort according to the active sort mode (process_dropped_path
-            // always sorts alphabetically; this corrects for ModifiedDate mode).
-            // sort_images() preserves current_index by tracking the current path.
-            self.app_state.sort_images();
-
-            self.update_viewer(window, cx);
-            self.update_window_title(window);
-            self.focus_handle.focus(window);
-            cx.notify();
-        }
+        self.update_viewer(window, cx);
+        self.update_window_title(window);
+        self.focus_handle.focus(window);
+        cx.notify();
     }
 
     pub(crate) fn handle_dropped_files(
@@ -1137,32 +1169,6 @@ impl App {
     ) {
         let dropped: Vec<PathBuf> = paths.paths().to_vec();
         self.import_image_paths(&dropped, window, cx);
-    }
-
-    /// Check for and process any pending file open requests from macOS "Open With" events.
-    pub(crate) fn process_pending_open_paths(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        #[allow(unused_mut)]
-        let mut pending_paths: Vec<PathBuf> = {
-            let Ok(mut pending) = PENDING_OPEN_PATHS.lock() else {
-                return;
-            };
-            std::mem::take(&mut *pending)
-        };
-
-        #[cfg(target_os = "macos")]
-        {
-            pending_paths.extend(macos_open_handler::take_pending_paths());
-        }
-
-        if pending_paths.is_empty() {
-            return;
-        }
-
-        self.import_image_paths(&pending_paths, window, cx);
     }
 
     pub(crate) fn handle_next_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {

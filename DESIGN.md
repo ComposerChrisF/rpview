@@ -243,12 +243,27 @@ Settings are also editable as JSON at the platform config path:
 - `H` / `?` / `F1` — help overlay (all shortcuts)
 - `F12` — debug overlay (image metadata, zoom/pan state, performance)
 
+### Windows
+
+Image windows are peers.  Each owns its own image list, viewer state, overlays,
+and floating panels; the application quits when the last one closes.
+
+Opening a file from Finder (“Open With”, double-click) opens a **new** window,
+except when that exact file is already the current image of an open window — then
+that window is brought forward instead.  Dropping a file onto a window is
+different: the drop targets that window explicitly, so it loads there.
+
+A cold-start “Open With” is the one case that reuses a window, because AppKit
+delivers the file only after launching finishes: the empty startup window is
+filled in rather than left beside the real one.
+
 ### Exit Handling
 
-- `Cmd/Ctrl+W` — close window
-- `Cmd/Ctrl+Q` — quit
-- `ESC` — closes Filter or LC window first, then counts toward triple-ESC quit (3× within 2 seconds)
-- Window close button (X)
+- `Cmd/Ctrl+W` — close this window (quits when it was the last one)
+- `Cmd/Ctrl+Q` — quit, however many windows are open
+- `ESC` — closes Filter or GPU Pipeline window first, then counts toward the
+  triple-ESC close (3× within 2 seconds), which closes the image window
+- Window close button (X) — same as `Cmd/Ctrl+W`
 
 ## Cross-Platform
 

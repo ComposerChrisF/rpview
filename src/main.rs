@@ -117,6 +117,10 @@ pub(crate) struct App {
     app_state: AppState,
     viewer: ImageViewer,
     focus_handle: FocusHandle,
+    /// This App's own window.  Needed because several close paths reach the
+    /// App without a `&mut Window` in hand — notably ESC forwarded from a
+    /// floating panel, which arrives through a weak entity handle.
+    window_handle: AnyWindowHandle,
     escape_presses: Vec<Instant>,
     /// Tracks if Z key is currently held down (for Z+drag zoom mode)
     z_key_held: bool,
@@ -171,13 +175,14 @@ fn main() {
     // Parse command-line arguments first.  This makes clap short-circuit on
     // `--help` / `--version` before any settings I/O, so the help output
     // isn't preceded by debug logs in dev builds.
-    let (image_paths, start_path) = match Cli::parse_image_paths() {
+    let cli_paths = match Cli::parse_image_paths() {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Error: {}", e);
             std::process::exit(1);
         }
     };
+    let (image_paths, start_path) = (cli_paths.images, cli_paths.start);
 
     // Load settings from disk (or use defaults if file doesn't exist)
     let settings = settings_io::load_settings();
@@ -206,23 +211,8 @@ fn main() {
         std::path::PathBuf::new()
     };
 
-    // Initialize application state with the starting path and settings
-    let app_state = AppState::new_with_settings(
-        image_paths,
-        start_path,
-        settings.sort_navigation.default_sort_mode,
-        settings.viewer_behavior.state_cache_size,
-    );
-
     // Print startup info
     debug_eprintln!("rpview starting...");
-    debug_eprintln!("Loaded {} image(s)", app_state.image_paths.len());
-    if let Some(_first_image) = app_state.current_image() {
-        debug_eprintln!("Current image: {}", _first_image.display());
-    }
-
-    // Get the first image path to load (or None if no images)
-    let first_image_path = app_state.current_image().cloned();
 
     let application = Application::new();
 
@@ -261,176 +251,52 @@ fn main() {
             cx.quit();
         });
 
+        // Cmd+W fallback for windows with no local `CloseWindow` handler —
+        // i.e. the floating Filter / GPU Pipeline panels.  An image window
+        // handles the action itself (see `app_render.rs`), so this never
+        // double-fires.
+        cx.on_action(|_: &CloseWindow, cx| {
+            if let Some(handle) = cx.active_window() {
+                let _ = handle.update(cx, |_, window, _| window.remove_window());
+            }
+        });
+
         cx.activate(true);
+
+        // AppKit turns each path argument into an `application:openFiles:`
+        // event and delivers it *before* this launch callback runs, so the
+        // command line is already sitting in the pending queue — where it
+        // would be read as a second, independent "open this" request and get
+        // its own window.  Drop that one launch batch; argv is already on
+        // screen.  A Finder double-click that supplied no argv paths is left
+        // alone, since the event is the only way it reaches us at all.
+        if cli_paths.from_arguments {
+            discard_pending_open_paths();
+        }
 
         let reopen_filter_window = settings.appearance.filter_window_open;
         let reopen_gpu_pipeline_window = settings.appearance.gpu_pipeline_window_open;
-        let main_window = match cx.open_window(
-            WindowOptions {
-                ..Default::default()
-            },
-            move |window, cx| {
-                cx.new::<App>(|inner_cx| {
-                    let focus_handle = inner_cx.focus_handle();
-                    focus_handle.focus(window);
-
-                    // Create the viewer and load the first image if available
-                    let mut viewer = ImageViewer::new(inner_cx.focus_handle());
-
-                    if let Some(ref path) = first_image_path {
-                        let max_dim = Some(settings.performance.max_image_dimension);
-                        viewer.load_image_async(path.clone(), max_dim, false);
-                    } else {
-                        // No images found - show friendly notice (not an error)
-                        let canonical_dir = search_dir
-                            .canonicalize()
-                            .unwrap_or_else(|_| search_dir.clone());
-                        viewer.no_images_path = Some(canonical_dir);
-                    }
-
-                    // Set initial window title using the user's format setting
-                    let title = window_title::format_window_title(
-                        app_state.current_image().map(|p| p.as_path()),
-                        app_state.current_index,
-                        app_state.image_paths.len(),
-                        app_state.sort_mode,
-                        &settings,
-                    );
-                    window.set_window_title(&title);
-
-                    // Create filter controls (shared between no-window state and the floating filter window)
-                    let filter_controls = inner_cx.new(|cx| {
-                        FilterControls::new(
-                            viewer.image_state.filters,
-                            settings.appearance.font_size_scale,
-                            cx,
-                        )
-                    });
-
-                    // Subscribe to filter control changes (event-based, not polling)
-                    inner_cx
-                        .subscribe(
-                            &filter_controls,
-                            |this, _fc, _event: &FilterControlsEvent, cx| {
-                                // Update viewer with new filter values
-                                let current_filters = this.filter_controls.read(cx).get_filters(cx);
-                                this.viewer.image_state.filters = current_filters;
-                                this.viewer.update_filtered_cache();
-                                this.save_current_image_state();
-                                cx.notify();
-                            },
-                        )
-                        .detach();
-
-                    // Create GPU-pipeline controls (sliders + per-stage enables).
-                    // Lives on the App so values persist across window open/close.
-                    let gpu_pipeline_controls = inner_cx.new(|cx| {
-                        GpuPipelineControls::new(settings.appearance.font_size_scale, cx)
-                    });
-                    inner_cx
-                        .subscribe(
-                            &gpu_pipeline_controls,
-                            |this, _entity, event: &GpuPipelineControlsEvent, cx| match event {
-                                GpuPipelineControlsEvent::ParametersChanged => {
-                                    let params = this.gpu_pipeline_controls.read(cx).get_params(cx);
-                                    this.viewer.update_gpu_pipeline(params);
-                                    cx.notify();
-                                }
-                                GpuPipelineControlsEvent::ResetRequested => {
-                                    this.viewer.reset_gpu_pipeline();
-                                    cx.notify();
-                                }
-                            },
-                        )
-                        .detach();
-
-                    // Create settings window
-                    let settings_window =
-                        inner_cx.new(|cx| SettingsWindow::new(settings.clone(), cx));
-
-                    // Create help overlay
-                    let help_overlay = inner_cx.new(|_cx| {
-                        HelpOverlay::new(
-                            settings.appearance.overlay_transparency,
-                            settings.appearance.font_size_scale,
-                        )
-                    });
-
-                    // Create debug overlay
-                    let debug_overlay = inner_cx.new(|_cx| {
-                        DebugOverlay::new(DebugOverlayConfig {
-                            current_path: None,
-                            current_index: 0,
-                            total_images: 0,
-                            zoom: 1.0,
-                            pan: (0.0, 0.0),
-                            is_fit_to_window: true,
-                            image_dimensions: None,
-                            viewport_size: None,
-                            sort_mode: app_state.sort_mode,
-                            overlay_transparency: settings.appearance.overlay_transparency,
-                            font_size_scale: settings.appearance.font_size_scale,
-                        })
-                    });
-
-                    // Create menu bar for Windows/Linux
-                    #[cfg(not(target_os = "macos"))]
-                    let menu_bar = inner_cx.new(|cx| components::MenuBar::new(cx));
-
-                    App {
-                        app_state,
-                        viewer,
-                        focus_handle,
-                        escape_presses: Vec::new(),
-                        z_key_held: false,
-                        mouse_button_down: false,
-                        show_zoom_indicator: true,
-                        show_help: false,
-                        show_debug: false,
-                        show_settings: false,
-                        filter_window: None,
-                        filter_controls,
-                        gpu_pipeline_window: None,
-                        gpu_pipeline_controls,
-                        settings_window,
-                        help_overlay,
-                        debug_overlay,
-                        #[cfg(not(target_os = "macos"))]
-                        menu_bar,
-                        last_frame_update: Instant::now(),
-                        drag_over: false,
-                        pending_delete: None,
-                        toast: None,
-                        settings: settings.clone(),
-                    }
-                })
-            },
-        ) {
-            Ok(handle) => handle,
-            Err(e) => {
-                eprintln!("Failed to open window: {:?}", e);
-                return;
-            }
+        let Some(main_window) =
+            open_image_window(cx, image_paths, start_path, &settings, Some(search_dir))
+        else {
+            return;
         };
 
-        // Closing the main window quits the app, even if floating panels
-        // (Filter / Local Contrast / GPU Pipeline) are still open.  Probe
-        // the main window's liveness via `update` — when it returns `Err`
-        // the entity has been dropped, and any remaining secondary windows
-        // are about to be torn down by `cx.quit()` anyway.
-        cx.on_window_closed(move |cx| {
-            // `update` returns `Err` once the main window's entity is dropped —
-            // that means the main window itself closed, so quit. Otherwise a
-            // secondary floating window (Filter / GPU Pipeline) just closed, and
-            // the OS may not hand focus back to us automatically; re-activate the
-            // main window so it regains keyboard focus and ESC keeps working
-            // (including the 3-press quit shortcut).
-            if main_window
-                .update(cx, |_, window, _| window.activate_window())
-                .is_err()
-            {
+        // The app lives as long as at least one image window does.  Closing
+        // the last one quits, even if floating panels (Filter / GPU Pipeline)
+        // are still open — they are torn down by `cx.quit()` anyway.
+        cx.on_window_closed(|cx| {
+            // Observers fire *after* the closed window has been removed from
+            // `cx.windows()`, so this no longer counts the one that just went.
+            let Some(front) = app_windows(cx).into_iter().next() else {
                 cx.quit();
-            }
+                return;
+            };
+            // Something else closed — a floating panel, or one image window of
+            // several.  The OS may not hand focus back to us automatically, so
+            // re-activate the frontmost image window; that keeps keyboard focus
+            // (and the 3-press ESC shortcut) working.
+            let _ = front.update(cx, |_, window, _| window.activate_window());
         })
         .detach();
 
@@ -453,15 +319,18 @@ fn main() {
         }
 
         // Register global action handlers so keyboard shortcuts work even
-        // when a floating window (Filter, Local Contrast) has focus. When
-        // the main window is focused its per-element handlers take priority
+        // when a floating window (Filter, GPU Pipeline) has focus. When an
+        // image window is focused its per-element handlers take priority
         // and these don't fire. When a floating window is focused and has
         // no handler for the action, it bubbles here.
+        //
+        // The target is resolved per-invocation rather than captured, because
+        // there may now be several image windows: `active_app_window` picks
+        // the focused one, or the frontmost one behind the focused panel.
         macro_rules! forward {
             ($action:ty, $method:ident) => {
-                cx.on_action({
-                    let wh = main_window;
-                    move |_: &$action, cx| {
+                cx.on_action(move |_: &$action, cx| {
+                    if let Some(wh) = active_app_window(cx) {
                         let _ = wh.update(cx, |app, window, cx| app.$method(window, cx));
                     }
                 });
@@ -469,9 +338,8 @@ fn main() {
         }
         macro_rules! forward_slot {
             ($action:ty, $method:ident, $slot:expr) => {
-                cx.on_action({
-                    let wh = main_window;
-                    move |_: &$action, cx| {
+                cx.on_action(move |_: &$action, cx| {
+                    if let Some(wh) = active_app_window(cx) {
                         let _ = wh.update(cx, |app, window, cx| app.$method($slot, window, cx));
                     }
                 });
@@ -599,15 +467,388 @@ fn main() {
     });
 }
 
-/// Helper function to check for and process pending file open paths
+/// Throw away any file-open requests the OS has queued but nobody has read.
+fn discard_pending_open_paths() {
+    if let Ok(mut pending) = PENDING_OPEN_PATHS.lock() {
+        for _path in pending.iter() {
+            debug_eprintln!("Discarding launch-echo open request: {}", _path.display());
+        }
+        pending.clear();
+    }
+
+    #[cfg(target_os = "macos")]
+    for _path in macos_open_handler::take_pending_paths() {
+        debug_eprintln!("Discarding launch-echo open request: {}", _path.display());
+    }
+}
+
+/// Every open image window, frontmost first.  Floating panels (Filter / GPU
+/// Pipeline) are filtered out by the downcast.
+///
+/// The two GPUI sources are used for different things on purpose:
+///
+/// - `windows()` decides **which** windows exist.  It is authoritative — a
+///   closed window is out of it by the time `on_window_closed` observers run.
+/// - `window_stack()` only supplies front-to-back **order**, and only on macOS
+///   (elsewhere it is `None` and creation order stands in).
+///
+/// They must not be swapped.  `window_stack()` reads `NSApp.orderedWindows`,
+/// which still lists a programmatically-removed window (Cmd+W, 3×ESC) at the
+/// moment the close observers fire — trusting it for existence would resurrect
+/// a dead window and stop the app quitting when its last window closed.
+fn app_windows(cx: &gpui::App) -> Vec<WindowHandle<App>> {
+    let live: Vec<WindowHandle<App>> = cx
+        .windows()
+        .into_iter()
+        .filter_map(|handle| handle.downcast::<App>())
+        .collect();
+
+    let Some(stack) = cx.window_stack() else {
+        return live;
+    };
+
+    let mut ordered: Vec<WindowHandle<App>> = stack
+        .into_iter()
+        .filter_map(|handle| handle.downcast::<App>())
+        .filter(|handle| live.contains(handle))
+        .collect();
+    // A window the platform stack doesn't mention yet (just opened, or not on
+    // screen) is still live; keep it, at the back.
+    let missing: Vec<WindowHandle<App>> = live
+        .into_iter()
+        .filter(|handle| !ordered.contains(handle))
+        .collect();
+    ordered.extend(missing);
+    ordered
+}
+
+/// The image window a globally-dispatched action should act on: the focused
+/// one, or — when a floating panel has focus — the frontmost one behind it.
+fn active_app_window(cx: &gpui::App) -> Option<WindowHandle<App>> {
+    let windows = app_windows(cx);
+    cx.active_window()
+        .and_then(|handle| handle.downcast::<App>())
+        // Same caveat as in `app_windows`: the platform's idea of the key
+        // window can outlive GPUI's, so confirm it is still live.
+        .filter(|handle| windows.contains(handle))
+        .or_else(|| windows.into_iter().next())
+}
+
+/// A window with nothing loaded — the placeholder rpview opens when launched
+/// with no file to show, or what is left after the last image is deleted.
+///
+/// A cold-start "Open With" arrives *after* that window exists (AppKit sends
+/// `application:openFiles:` once launching is done), so its file belongs in
+/// the placeholder rather than in a second window opened beside it.
+fn empty_app_window(cx: &gpui::App) -> Option<WindowHandle<App>> {
+    app_windows(cx).into_iter().find(|handle| {
+        handle
+            .read(cx)
+            .is_ok_and(|app| app.app_state.image_paths.is_empty())
+    })
+}
+
+/// The image window currently displaying `path`, if any.
+///
+/// Paths are compared canonicalized so that `/tmp/x.png` and
+/// `/private/tmp/x.png` (or a relative CLI argument) count as the same file.
+/// A path that can't be canonicalized falls back to its literal form — the
+/// worst case is a missed match, which merely opens an extra window.
+fn window_showing(path: &Path, cx: &gpui::App) -> Option<WindowHandle<App>> {
+    let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let target = canonical(path);
+
+    app_windows(cx).into_iter().find(|handle| {
+        handle
+            .read(cx)
+            .ok()
+            .and_then(|app| app.app_state.current_image())
+            .is_some_and(|current| canonical(current) == target)
+    })
+}
+
+/// Settings for a newly opened window: those of an already-open window if
+/// there is one (they are live, and may hold changes still inside the save
+/// debounce), otherwise whatever is on disk.
+fn current_settings(cx: &gpui::App) -> AppSettings {
+    app_windows(cx)
+        .into_iter()
+        .find_map(|handle| handle.read(cx).ok().map(|app| app.settings.clone()))
+        .unwrap_or_else(settings_io::load_settings)
+}
+
+/// Open a new image window and return its handle.
+///
+/// Image windows are peers: each owns its own `AppState`, viewer, overlays and
+/// floating panels, and the app quits when the last one closes (see
+/// `on_window_closed` in `main`).
+///
+/// `no_images_dir` is the directory to name in the "no images here" notice when
+/// `image_paths` is empty; `None` means don't open a window at all in that case.
+fn open_image_window(
+    cx: &mut gpui::App,
+    image_paths: Vec<PathBuf>,
+    start_path: Option<PathBuf>,
+    settings: &AppSettings,
+    no_images_dir: Option<PathBuf>,
+) -> Option<WindowHandle<App>> {
+    if image_paths.is_empty() && no_images_dir.is_none() {
+        return None;
+    }
+
+    let app_state = AppState::new_with_settings(
+        image_paths,
+        start_path,
+        settings.sort_navigation.default_sort_mode,
+        settings.viewer_behavior.state_cache_size,
+    );
+
+    debug_eprintln!(
+        "Opening window with {} image(s)",
+        app_state.image_paths.len()
+    );
+    if let Some(_first_image) = app_state.current_image() {
+        debug_eprintln!("Current image: {}", _first_image.display());
+    }
+
+    let first_image_path = app_state.current_image().cloned();
+    let settings = settings.clone();
+
+    let result = cx.open_window(
+        WindowOptions {
+            ..Default::default()
+        },
+        move |window, cx| {
+            cx.new::<App>(|inner_cx| {
+                let focus_handle = inner_cx.focus_handle();
+                focus_handle.focus(window);
+
+                // Closing an image window closes the floating panels it owns.
+                // Without this they outlive their owner as orphans alongside
+                // whichever image windows remain.
+                inner_cx
+                    .on_release(|app, cx| {
+                        if let Some(handle) = app.filter_window.take() {
+                            let _ = handle.update(cx, |_, window, _| window.remove_window());
+                        }
+                        if let Some(handle) = app.gpu_pipeline_window.take() {
+                            let _ = handle.update(cx, |_, window, _| window.remove_window());
+                        }
+                    })
+                    .detach();
+
+                // Create the viewer and load the first image if available
+                let mut viewer = ImageViewer::new(inner_cx.focus_handle());
+
+                if let Some(ref path) = first_image_path {
+                    let max_dim = Some(settings.performance.max_image_dimension);
+                    viewer.load_image_async(path.clone(), max_dim, false);
+                } else if let Some(ref search_dir) = no_images_dir {
+                    // No images found - show friendly notice (not an error)
+                    let canonical_dir = search_dir
+                        .canonicalize()
+                        .unwrap_or_else(|_| search_dir.clone());
+                    viewer.no_images_path = Some(canonical_dir);
+                }
+
+                build_app(app_state, viewer, focus_handle, settings, window, inner_cx)
+            })
+        },
+    );
+
+    match result {
+        Ok(handle) => Some(handle),
+        Err(e) => {
+            eprintln!("Failed to open window: {:?}", e);
+            None
+        }
+    }
+}
+
+/// Deliver file-open requests from the OS ("Open With", Finder double-click,
+/// dock drop) to the right window.
+///
+/// A request for a file some window is *already* showing just brings that
+/// window forward.  Everything else opens a NEW window — a second "Open With"
+/// must never replace the image you were already looking at.
 fn check_and_process_pending_paths(cx: &mut gpui::App) {
-    if let Some(window) = cx.windows().first() {
-        let _ = window.update(cx, |view, window, cx| {
-            if let Ok(app) = view.downcast::<App>() {
-                app.update(cx, |app, cx| {
-                    app.process_pending_open_paths(window, cx);
-                });
-            }
+    #[allow(unused_mut)]
+    let mut paths: Vec<PathBuf> = {
+        let Ok(mut pending) = PENDING_OPEN_PATHS.lock() else {
+            return;
+        };
+        std::mem::take(&mut *pending)
+    };
+
+    #[cfg(target_os = "macos")]
+    {
+        paths.extend(macos_open_handler::take_pending_paths());
+    }
+
+    if paths.is_empty() {
+        return;
+    }
+
+    // A single path is an "open this file" request, so it can match an open
+    // window.  A multi-selection is a new set of its own and always gets a
+    // fresh window.
+    if paths.len() == 1 {
+        if let Some(existing) = window_showing(&paths[0], cx) {
+            debug_eprintln!(
+                "Open With: {} is already open; activating its window",
+                paths[0].display()
+            );
+            cx.activate(true);
+            let _ = existing.update(cx, |_, window, _| window.activate_window());
+            return;
+        }
+    }
+
+    // Fill the empty placeholder window, if there is one, before opening a peer.
+    if let Some(placeholder) = empty_app_window(cx) {
+        cx.activate(true);
+        let _ = placeholder.update(cx, |app, window, cx| {
+            app.import_image_paths(&paths, window, cx);
+            window.activate_window();
         });
+        return;
+    }
+
+    let Some((images, target_index)) = App::resolve_import_paths(&paths) else {
+        debug_eprintln!(
+            "Open With: no supported images among {} path(s)",
+            paths.len()
+        );
+        return;
+    };
+
+    let start_path = images.get(target_index).cloned();
+    let settings = current_settings(cx);
+    if open_image_window(cx, images, start_path, &settings, None).is_some() {
+        cx.activate(true);
+    }
+}
+
+/// Assemble the `App` entity for one image window: title, controls, overlays,
+/// and the event subscriptions that wire them to the viewer.
+fn build_app(
+    app_state: AppState,
+    viewer: ImageViewer,
+    focus_handle: FocusHandle,
+    settings: AppSettings,
+    window: &mut Window,
+    cx: &mut Context<App>,
+) -> App {
+    // Set initial window title using the user's format setting
+    let title = window_title::format_window_title(
+        app_state.current_image().map(|p| p.as_path()),
+        app_state.current_index,
+        app_state.image_paths.len(),
+        app_state.sort_mode,
+        &settings,
+    );
+    window.set_window_title(&title);
+
+    // Create filter controls (shared between no-window state and the floating filter window)
+    let filter_controls = cx.new(|cx| {
+        FilterControls::new(
+            viewer.image_state.filters,
+            settings.appearance.font_size_scale,
+            cx,
+        )
+    });
+
+    // Subscribe to filter control changes (event-based, not polling)
+    cx.subscribe(
+        &filter_controls,
+        |this, _fc, _event: &FilterControlsEvent, cx| {
+            // Update viewer with new filter values
+            let current_filters = this.filter_controls.read(cx).get_filters(cx);
+            this.viewer.image_state.filters = current_filters;
+            this.viewer.update_filtered_cache();
+            this.save_current_image_state();
+            cx.notify();
+        },
+    )
+    .detach();
+
+    // Create GPU-pipeline controls (sliders + per-stage enables).
+    // Lives on the App so values persist across window open/close.
+    let gpu_pipeline_controls =
+        cx.new(|cx| GpuPipelineControls::new(settings.appearance.font_size_scale, cx));
+    cx.subscribe(
+        &gpu_pipeline_controls,
+        |this, _entity, event: &GpuPipelineControlsEvent, cx| match event {
+            GpuPipelineControlsEvent::ParametersChanged => {
+                let params = this.gpu_pipeline_controls.read(cx).get_params(cx);
+                this.viewer.update_gpu_pipeline(params);
+                cx.notify();
+            }
+            GpuPipelineControlsEvent::ResetRequested => {
+                this.viewer.reset_gpu_pipeline();
+                cx.notify();
+            }
+        },
+    )
+    .detach();
+
+    // Create settings window
+    let settings_window = cx.new(|cx| SettingsWindow::new(settings.clone(), cx));
+
+    // Create help overlay
+    let help_overlay = cx.new(|_cx| {
+        HelpOverlay::new(
+            settings.appearance.overlay_transparency,
+            settings.appearance.font_size_scale,
+        )
+    });
+
+    // Create debug overlay
+    let debug_overlay = cx.new(|_cx| {
+        DebugOverlay::new(DebugOverlayConfig {
+            current_path: None,
+            current_index: 0,
+            total_images: 0,
+            zoom: 1.0,
+            pan: (0.0, 0.0),
+            is_fit_to_window: true,
+            image_dimensions: None,
+            viewport_size: None,
+            sort_mode: app_state.sort_mode,
+            overlay_transparency: settings.appearance.overlay_transparency,
+            font_size_scale: settings.appearance.font_size_scale,
+        })
+    });
+
+    // Create menu bar for Windows/Linux
+    #[cfg(not(target_os = "macos"))]
+    let menu_bar = cx.new(|cx| components::MenuBar::new(cx));
+
+    App {
+        app_state,
+        viewer,
+        focus_handle,
+        window_handle: window.window_handle(),
+        escape_presses: Vec::new(),
+        z_key_held: false,
+        mouse_button_down: false,
+        show_zoom_indicator: true,
+        show_help: false,
+        show_debug: false,
+        show_settings: false,
+        filter_window: None,
+        filter_controls,
+        gpu_pipeline_window: None,
+        gpu_pipeline_controls,
+        settings_window,
+        help_overlay,
+        debug_overlay,
+        #[cfg(not(target_os = "macos"))]
+        menu_bar,
+        last_frame_update: Instant::now(),
+        drag_over: false,
+        pending_delete: None,
+        toast: None,
+        settings,
     }
 }

@@ -40,19 +40,35 @@ pub struct Cli {
     pub paths: Vec<PathBuf>,
 }
 
+/// What the command line resolved to.
+pub struct CliPaths {
+    /// Every image to show, unsorted — sorting is handled by `AppState`.
+    pub images: Vec<PathBuf>,
+    /// The image to start on, when a single file was named.
+    pub start: Option<PathBuf>,
+    /// Whether the paths came from explicit arguments rather than the
+    /// current-directory default.
+    ///
+    /// macOS hands the command line back to the app: AppKit turns each path
+    /// argument into an `application:openFiles:` event.  `main` uses this flag
+    /// to tell that echo apart from a genuine Finder "Open With", which is the
+    /// only thing that should open a window.
+    pub from_arguments: bool,
+}
+
 impl Cli {
-    /// Parse command-line arguments and return a list of image paths and an
-    /// optional starting path (when the user specified a single file).
-    /// The returned list is unsorted — sorting is handled by AppState.
-    pub fn parse_image_paths() -> AppResult<(Vec<PathBuf>, Option<PathBuf>)> {
+    /// Parse command-line arguments into the image list, the starting image
+    /// (when a single file was named), and whether any path was given at all.
+    pub fn parse_image_paths() -> AppResult<CliPaths> {
         let cli = Cli::parse();
 
         let paths = if cli.paths.is_empty() {
             // No arguments: default to current directory
-            return Ok((
-                Self::collect_image_paths(&[std::env::current_dir()?])?,
-                None,
-            ));
+            return Ok(CliPaths {
+                images: Self::collect_image_paths(&[std::env::current_dir()?])?,
+                start: None,
+                from_arguments: false,
+            });
         } else {
             cli.paths
         };
@@ -76,18 +92,34 @@ impl Cli {
 
                 // Even if empty, return the result - the app will display a message
                 if all_images.is_empty() {
-                    return Ok((vec![], None));
+                    return Ok(CliPaths {
+                        images: vec![],
+                        start: None,
+                        from_arguments: true,
+                    });
                 }
 
-                return Ok((all_images, Some(specified_file)));
+                return Ok(CliPaths {
+                    images: all_images,
+                    start: Some(specified_file),
+                    from_arguments: true,
+                });
             } else {
                 // File has no parent (shouldn't happen, but handle gracefully)
-                return Ok((vec![specified_file.clone()], Some(specified_file)));
+                return Ok(CliPaths {
+                    images: vec![specified_file.clone()],
+                    start: Some(specified_file),
+                    from_arguments: true,
+                });
             }
         }
 
         // Multiple files or directories: use the existing logic
-        Ok((Self::collect_image_paths(&paths)?, None))
+        Ok(CliPaths {
+            images: Self::collect_image_paths(&paths)?,
+            start: None,
+            from_arguments: true,
+        })
     }
 
     /// Collect all image paths from the given list of files/directories

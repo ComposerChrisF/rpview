@@ -5,6 +5,15 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-07-21
+
+### Changed
+- **“Open With” opens a new window instead of hijacking the current one.**  Double-clicking a second image in Finder used to replace whatever the single rpview window was showing.  Image windows are now peers: each owns its own image list, viewer state, overlays, and floating panels, and a Finder open request gets a window of its own.  The one exception is a request for a file that is already an open window’s current image — that window is brought forward rather than duplicated.  Drag-and-drop is unchanged: a drop targets a specific window, so it still loads there.
+- **`Cmd+W` and 3×ESC close the focused window rather than quitting the app.**  The application quits when its last image window closes; `Cmd+Q` still quits outright however many windows are open.  Closing an image window also closes the Filter and GPU Pipeline panels it owns, so they cannot outlive it as orphans.
+
+### Fixed
+- **Launch no longer opened a duplicate window.**  AppKit re-delivers each command-line path argument as an `application:openFiles:` event, before the launch callback runs — so `rpview <dir>` was seen twice, once via argv and once as an “open this” request.  Harmless while one window was reused for everything; with per-request windows it opened a second window for the same argument.  The launch echo is now discarded when the command line supplied paths, and kept when it did not (a cold-start Finder double-click, where the event is the only delivery).
+
 ## [0.28.1] - 2026-06-07
 
 ### Fixed

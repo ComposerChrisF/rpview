@@ -37,6 +37,10 @@ fn store_paths(paths: Vec<PathBuf>) {
         return;
     }
 
+    for _path in &paths {
+        crate::debug_eprintln!("[macos_open_handler] openFiles: {}", _path.display());
+    }
+
     if let Ok(mut pending) = OPEN_FILES_PATHS.lock() {
         pending.extend(paths);
     }
