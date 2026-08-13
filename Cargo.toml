@@ -2,6 +2,8 @@
 name = "rpview"
 version = "0.29.0"
 edition = "2024"
+# Never published: personal tool; tracked bugs//plans/ would otherwise ship in a crate tarball (bug-reports.md rule 3 mirror clause, 2026-08-12).
+publish = false
 authors = ["rpview contributors"]
 description = "A fast, cross-platform image viewer built with GPUI"
 readme = "README.md"
