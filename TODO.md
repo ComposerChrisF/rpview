@@ -2,6 +2,82 @@
 
 This document outlines the development roadmap for rpview, organized by implementation phases.
 
+## ⚠️ NEXT — Bug Backlog from the 2026-07-15 Deep Review (do this before new features)
+
+A full-project bug hunt (code + spec) filed **61 verified bug reports** in `bugs/bug-NNNN-<slug>.md`.  Each report is self-contained: description, file:line references, a repro detailed enough to write a failing Rust test, the suggested fix, why the fix is correct, and — critically — whether the **spec** or the **code** is at fault.  **Read the report before touching anything it covers; several docs are wrong and “fixing the code to match the doc” would reintroduce removed features or anti-patterns.**  Baseline `cargo test` was green when the reports were filed.
+
+Work the phases in order.  Within a phase, items are grouped by subsystem to minimize merge conflicts; each fix commit should name its bug ID, and per the bug-report lifecycle the fixing commit deletes the report (commit any report amendments first).
+
+### Phase A — Decisions needed from Chris (blocks the fixes marked with them)
+
+Eleven reports end in an explicit decision.  Answer these first (a single review pass over the “Decision required” / “Resolution options” sections is enough):
+
+- [ ] `bug-0041` — Esc semantics in settings: close-and-save vs true cancel (blocks 0041, parts of 0038, 0051)
+- [ ] `bug-0039` — per-field ruling on 8 dead settings: implement vs remove (blocks parts of 0051)
+- [ ] `bug-0031` — are `filters.default_*` starting values or reset-only?
+- [ ] `bug-0004` — keyboard confirm for delete: add Enter binding vs drop dead action
+- [ ] `bug-0006` — Windows delete key: bind Ctrl+Delete too vs relabel docs
+- [ ] `bug-0010` — may fit-to-window go below the 10% zoom floor?
+- [ ] `bug-0015` — LC radius 30 px quantization: fix (also in PSP3?) vs document parity
+- [ ] `bug-0033` — restore per-image cache purge vs strike the TODO claim
+- [ ] `bug-0034` — zoom range vs apparent-size preservation: document exception vs clamp
+- [ ] `bug-0045` — bind bare `F` for the filter window vs strike from DESIGN.md
+- [ ] `bug-0049` — implement save-name auto-increment vs strike from DESIGN.md
+
+### Phase B — Protective spec fixes (cheap, prevents mis-fixes; code is already correct)
+
+- [ ] `bug-0046` — CLI.md error-handling section contradicts code and the portfolio exit-code rule
+- [ ] `bug-0047` — DESIGN.md: Cmd+0 is a deliberate toggle, not a reset
+- [ ] `bug-0050` — DESIGN.md: scroll-wheel zoom requires Cmd/Ctrl
+- [ ] `bug-0052` — DESIGN.md: Space+drag pan was replaced by click-drag
+- [ ] `bug-0053` — DESIGN.md: zoom indicator never showed sort mode
+
+### Phase C — High-severity code fixes (order within groups matters)
+
+Cross-image identity bugs (same root shape — fix together):
+- [ ] `bug-0055` — input during async load poisons the per-image state cache (fix first)
+- [ ] `bug-0024` — GPU job installs onto the wrong image after navigation/reset
+
+Settings persistence stack (one file, fix in this order):
+- [ ] `bug-0044` — missing `#[serde(default)]`: one bad field resets all settings (+ vacuous test)
+- [ ] `bug-0043` — unreadable file treated as absent → later save overwrites user settings
+- [ ] `bug-0042` — restore auto-create on first run + corrupt-file overwrite-after-backup
+- [ ] `bug-0040` — debounce/immediate write race + flush on quit
+
+Settings window (after the `bug-0041` decision):
+- [ ] `bug-0041` — dead Esc/Cmd+Enter keybindings (`SettingsWindow` context never declared)
+- [ ] `bug-0038` — Close reverts settings changed outside the window (re-seed on open)
+
+Silent wrong output:
+- [ ] `bug-0036` — processed GIF/SVG/ICO saved as PNG bytes under the foreign extension
+- [ ] `bug-0035` — save success/failure invisible in GUI (toast)
+- [ ] `bug-0009` — filters freeze animated images on filtered frame 0 (guard now; per-frame filtering optional later)
+
+Platform and input correctness:
+- [ ] `bug-0027` — keyboard zoom / `0` constrain pan against stale zoom (breaks center anchoring)
+- [ ] `bug-0017` — GPU Pipeline window unreachable on Windows/Linux
+- [ ] `bug-0058` — symlinked images silently skipped (regression from v0.9.4)
+
+### Phase D — Medium code fixes (grouped by subsystem)
+
+GPU pipeline: `bug-0018` (playback starves frame cache), `bug-0012` (auto-resize uses stale dims), `bug-0016` (panicked worker wedges pipeline), `bug-0013` (errors silent in release + Auto not limit-gated).
+Zoom/pan: `bug-0060` (Z-drag bypasses pan constraints), `bug-0026` (incremental zoom not anchored).
+Animation: `bug-0028` (manual frame step hits uncached frames), `bug-0061` (zero-delay GIFs play at refresh rate), `bug-0001` (frame cache non-atomic writes).
+SVG: `bug-0056` (re-raster ignores Retina scale factor), `bug-0057` (temp PNG leak).
+Windows/Linux: `bug-0059` (viewport/mouse math off by the 28 px menu bar), `bug-0029` (menu labels and missing items).
+Input/flow: `bug-0030` (drop and “Open With” not gated by modals).
+
+### Phase E — Low-severity fixes and cleanups
+
+`bug-0002` (animation load errors swallowed), `bug-0003` (`--help` names wrong settings key — one-word fix), `bug-0005` (debug overlay “File Size” mislabel), `bug-0007` (delete-last-image blank window), `bug-0008` (drop errors silent), `bug-0011` (window bounds restored offscreen), `bug-0014` (Lanczos straight-alpha fringing), `bug-0019`–`bug-0023` (GPU presets: delete gate, stale dropdown, name collisions, resize-auto capture, test pollution), `bug-0025` (help overlay stale LC / missing shortcuts), `bug-0032` (Open With assumes main window first), `bug-0037` (settings applied only after restart), `bug-0054` (grouped stale comments), plus the Phase-A decision outcomes (`bug-0004`, `bug-0006`, `bug-0010`, `bug-0015`, `bug-0031`, `bug-0033`, `bug-0034`, `bug-0045`, `bug-0049`).
+
+### Phase F — Documentation rewrites (LAST — must describe post-fix behavior)
+
+- [ ] `bug-0048` — replace all removed-Local-Contrast documentation with a GPU Pipeline section (DESIGN.md, README.md, docs/COMPONENTS.md, docs/TESTING.md, docs/TROUBLESHOOTING.md; banner on docs/local-contrast-spec.md; fix Phase 17 notes below)
+- [ ] `bug-0051` — regenerate docs/SETTINGS.md from the (post-fix) schema; mark SETTINGS_DESIGN/STATUS historical
+
+**Why F is last:** these docs must describe the app as it exists _after_ Phases C–E (Esc semantics, dead settings removed or implemented, corrupt-file behavior restored).  Writing them earlier means writing them twice.
+
 ## Progress Overview
 
 - **Phase 1** (Foundation): ✅ Complete
