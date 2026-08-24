@@ -69,7 +69,7 @@ Input/flow: `bug-0030` (drop and “Open With” not gated by modals).
 
 ### Phase E — Low-severity fixes and cleanups
 
-`bug-0002` (animation load errors swallowed), `bug-0003` (`--help` names wrong settings key — one-word fix), `bug-0005` (debug overlay “File Size” mislabel), `bug-0007` (delete-last-image blank window), `bug-0008` (drop errors silent), `bug-0011` (window bounds restored offscreen), `bug-0014` (Lanczos straight-alpha fringing), `bug-0019`–`bug-0023` (GPU presets: delete gate, stale dropdown, name collisions, resize-auto capture, test pollution), `bug-0025` (help overlay stale LC / missing shortcuts), `bug-0032` (Open With assumes main window first), `bug-0037` (settings applied only after restart), `bug-0054` (grouped stale comments), plus the Phase-A decision outcomes (`bug-0004`, `bug-0006`, `bug-0010`, `bug-0015`, `bug-0031`, `bug-0033`, `bug-0034`, `bug-0045`, `bug-0049`).
+`bug-0002` (animation load errors swallowed), `bug-0003` (`--help` names wrong settings key — one-word fix), `bug-0005` (debug overlay “File Size” mislabel), `bug-0007` (delete-last-image blank window), `bug-0008` (drop errors silent), `bug-0011` (window bounds restored offscreen), `bug-0014` (Lanczos straight-alpha fringing), `bug-0019`–`bug-0023` (GPU presets: delete gate, stale dropdown, name collisions, resize-auto capture, test pollution), `bug-0025` (help overlay stale LC / missing shortcuts), `bug-0037` (settings applied only after restart), `bug-0054` (grouped stale comments), plus the Phase-A decision outcomes (`bug-0004`, `bug-0006`, `bug-0010`, `bug-0015`, `bug-0031`, `bug-0033`, `bug-0034`, `bug-0045`, `bug-0049`).
 
 ### Phase F — Documentation rewrites (LAST — must describe post-fix behavior)
 
