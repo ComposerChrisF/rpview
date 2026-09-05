@@ -114,7 +114,7 @@
       "Bash(gh workflow *)",
       "Bash(cargo update *)",
       "WebFetch(domain:www.gpui.rs)",
-      "Read(//tmp/**)",
+      "Read(//tmp/**)"
     ]
   }
 }
