@@ -36,7 +36,7 @@ It exits 101: `cannot update the lock file … because --locked was passed`.  A 
 
 ## Fix Directions (Not Decided)
 
-- **Depend on what is published.**  Release ccf-gpui-widgets to crates.io when rpview needs a change from it, raise the requirement, and generate the committed lock without the patch.
+- **Depend on what is published.**  Release ccf-gpui-widgets to crates.io when rpview needs a change from it, raise the requirement, and generate the committed lock without the patch.  This reverses a standing decision, so it is Chris’s call: ccf-gpui-widgets has carried `publish = false` since 12-Aug-2026 (its commit `4c20c58`, so that `bugs/` and `plans/` never ship), though 0.1.0 had already been published.  Publishing again would also need `bugs/` and `plans/` added to its `exclude` first.
 - **Depend by git revision** (`git = …, rev = …`), so the lock records a source every machine can fetch, and keep the path patch for local work only.
 - **Detection, whichever is chosen:** run CI’s cargo commands with `--locked`, so a lock that needs a local config fails loudly instead of being silently re-resolved.  On its own this turns CI red until one of the above lands.
 
