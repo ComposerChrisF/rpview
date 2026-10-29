@@ -5,6 +5,16 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.1] - 2026-10-29
+
+### Fixed
+- **Security dependency updates.**  A targeted `cargo update` (rustls, rustls-webpki, quinn-proto, h2, bytes, crossbeam-epoch, and the quick-xml pulled in through xcb and wayland-scanner) clears all 21 outstanding RustSec advisories, so the Security Audit CI job passes again.  The audit exceptions that papered over them (`.cargo/audit.toml` and four rustls-webpki ignores in `ci.yml`) are removed.
+- **Build under Rust 1.99.**  The new clippy lint `chunks_exact_to_as_chunks` flagged nine pixel-buffer loops in the GPU pipeline, the filters, and the app handlers; they now use `as_chunks::<4>()` / `as_chunks_mut::<4>()`, as clippy suggests.  Behavior is unchanged.
+
+### Changed
+- **CI test made robust to slow disks.**  `tests/settings_atomic_test.rs` measured fsync latency against wall-clock thresholds, which flaked on slow runners.  The concurrent-reader test now runs for at least 500 ms and at least 10 writes, and the debounced-write test no longer asserts a 5-second budget.
+- **CI branch lists** no longer name the retired `master` branch (the default branch is `main`).
+
 ## [0.29.0] - 2026-07-21
 
 ### Changed

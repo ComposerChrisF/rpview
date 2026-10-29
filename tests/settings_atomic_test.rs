@@ -86,18 +86,23 @@ fn concurrent_readers_never_see_partial_file() {
 
     let stop = Arc::new(AtomicBool::new(false));
 
-    // Writer
+    // Writer.  It runs for at least 500ms *and* at least MIN_WRITES writes,
+    // then stops the readers: each save fsyncs, and on a shared CI runner one
+    // fsync can take over 100ms, so a fixed time alone may yield only a few
+    // writes.
+    const MIN_WRITES: usize = 10;
     let writer_path = Arc::clone(&path);
     let writer_stop = Arc::clone(&stop);
     let writer = thread::spawn(move || {
+        let start = Instant::now();
         let mut i: usize = 0;
-        while !writer_stop.load(Ordering::Relaxed) {
+        while i < MIN_WRITES || start.elapsed() < Duration::from_millis(500) {
             let mut s = AppSettings::default();
             s.viewer_behavior.state_cache_size = (i % 1000) + 1;
             save_settings_to_path(&s, &writer_path).expect("write failed");
             i += 1;
         }
-        i
+        writer_stop.store(true, Ordering::Relaxed);
     });
 
     // Readers
@@ -134,21 +139,16 @@ fn concurrent_readers_never_see_partial_file() {
         }));
     }
 
-    // Run for a short while
-    thread::sleep(Duration::from_millis(500));
-    stop.store(true, Ordering::Relaxed);
-
-    let writes = writer.join().unwrap();
+    writer.join().unwrap();
     let mut total_reads = 0;
     for r in readers {
         let (reads, _empties) = r.join().unwrap();
         total_reads += reads;
     }
 
-    // We should have exercised the race meaningfully — at least a few
-    // writes and reads each.  This isn't a strict performance assertion,
-    // just a smoke check.
-    assert!(writes > 5, "only {} writes happened", writes);
+    // We should have exercised the race meaningfully — the writer guarantees
+    // its own minimum, so check that the readers ran too.  This isn't a
+    // strict performance assertion, just a smoke check.
     assert!(total_reads > 5, "only {} reads happened", total_reads);
 }
 
@@ -184,30 +184,15 @@ fn debounced_writes_eventually_persist() {
 
     // The debouncer writes to the real platform path — we don't exercise
     // that here.  Instead, just verify direct saves remain atomic under a
-    // quick burst.
-    let start = Instant::now();
+    // quick burst.  No wall-clock budget: each save fsyncs, and fsync latency
+    // on shared CI runners is unbounded (5.8s for 100 writes on ubuntu,
+    // 29-Oct-2026), so a budget only measures the runner's disk.
     for i in 0..100 {
         let mut s = AppSettings::default();
         s.viewer_behavior.state_cache_size = i + 1;
         save_settings_to_path(&s, &path).unwrap();
     }
-    let elapsed = start.elapsed();
 
     let loaded = load_settings_from_path(&path);
     assert_eq!(loaded.viewer_behavior.state_cache_size, 100);
-    // 100 atomic writes shouldn't take outrageously long; this is an
-    // upper-bound smoke check, not a perf benchmark.  Windows GitHub
-    // runners are markedly slower at atomic file replace (5–6s observed),
-    // so we use a more generous budget there.
-    let budget = if cfg!(target_os = "windows") {
-        Duration::from_secs(15)
-    } else {
-        Duration::from_secs(5)
-    };
-    assert!(
-        elapsed < budget,
-        "100 atomic writes took {:?} (budget {:?})",
-        elapsed,
-        budget
-    );
 }

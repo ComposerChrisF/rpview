@@ -36,8 +36,10 @@ pub fn apply_filters(
     let input_bytes = rgba_img.as_raw();
     let output_bytes: &mut [u8] = output.as_mut();
     for (src, dst) in input_bytes
-        .chunks_exact(4)
-        .zip(output_bytes.chunks_exact_mut(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(output_bytes.as_chunks_mut::<4>().0.iter_mut())
     {
         dst[0] = lut[src[0] as usize];
         dst[1] = lut[src[1] as usize];
@@ -108,7 +110,12 @@ pub fn apply_filters_to_bgra(
 
     match build_filter_lut(brightness, contrast, gamma) {
         Some(lut) => {
-            for (s, d) in src_bytes.chunks_exact(4).zip(dst_bytes.chunks_exact_mut(4)) {
+            for (s, d) in src_bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(dst_bytes.as_chunks_mut::<4>().0.iter_mut())
+            {
                 // RGBA source → BGRA dest, with LUT applied to RGB channels.
                 d[0] = lut[s[2] as usize];
                 d[1] = lut[s[1] as usize];
@@ -118,7 +125,12 @@ pub fn apply_filters_to_bgra(
         }
         None => {
             // Filters are no-ops; just swap channels.
-            for (s, d) in src_bytes.chunks_exact(4).zip(dst_bytes.chunks_exact_mut(4)) {
+            for (s, d) in src_bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(dst_bytes.as_chunks_mut::<4>().0.iter_mut())
+            {
                 d[0] = s[2];
                 d[1] = s[1];
                 d[2] = s[0];
