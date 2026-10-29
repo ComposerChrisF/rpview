@@ -145,7 +145,7 @@ Use clear commit messages:
 
 ```bash
 git fetch upstream
-git rebase upstream/master
+git rebase upstream/main
 ```
 
 ### 6.  Push to Your Fork
@@ -244,8 +244,8 @@ cargo test test_name
 - Delete your feature branch
 - Update your local repository:
   ```bash
-  git checkout master
-  git pull upstream master
+  git checkout main
+  git pull upstream main
   ```
 
 ## Development Phases
