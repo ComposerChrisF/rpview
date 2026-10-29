@@ -687,7 +687,7 @@ impl App {
             self.viewer.capture_current_display().and_then(|snapshot| {
                 snapshot.render.as_bytes(0).map(|bgra| {
                     let mut rgba = bgra.to_vec();
-                    for px in rgba.chunks_exact_mut(4) {
+                    for px in rgba.as_chunks_mut::<4>().0.iter_mut() {
                         px.swap(0, 2);
                     }
                     SaveSource::Processed {

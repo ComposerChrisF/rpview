@@ -595,8 +595,8 @@ fn read_cdf(ctx: &GpuContext, readback: &wgpu::Buffer) -> Result<[f32; 256], Gpu
 
     let mapped = slice.get_mapped_range();
     let mut hist = [0u32; 256];
-    for (i, chunk) in mapped.chunks_exact(4).take(256).enumerate() {
-        hist[i] = u32::from_le_bytes(chunk.try_into().expect("4-byte chunk"));
+    for (i, chunk) in mapped.as_chunks::<4>().0.iter().take(256).enumerate() {
+        hist[i] = u32::from_le_bytes(*chunk);
     }
     drop(mapped);
     readback.unmap();
@@ -630,7 +630,9 @@ fn read_cdf(ctx: &GpuContext, readback: &wgpu::Buffer) -> Result<[f32; 256], Gpu
 }
 
 fn rgba_to_bgra_passthrough(rgba: &[u8]) -> Vec<u8> {
-    rgba.chunks_exact(4)
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|p| [p[2], p[1], p[0], p[3]])
         .collect()
 }
