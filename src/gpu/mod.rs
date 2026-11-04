@@ -1,7 +1,7 @@
 //! GPU pixel-shader filter pipeline.
 //!
 //! Single unified compute pipeline ported from PixelShaderPaint3
-//! (`~/Chris/Proj/PixelShaderPaint3`).  Public entry point is
+//! shader project.  Public entry point is
 //! [`process_pipeline`], which takes RGBA8 source bytes plus a
 //! [`UnifiedParams`] (per-stage params, each `Option`-wrapped to enable/
 //! disable) and returns BGRA8 bytes ready to wrap in `gpui::RenderImage`.

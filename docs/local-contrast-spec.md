@@ -2,11 +2,11 @@
 
 ## Context
 
-rpview-gpui currently has three simple per-channel filters (brightness, contrast, gamma) implemented as a 256-entry RGB LUT in `src/utils/filters.rs`.  The user has a mature C# image-processing library at `~/Chris/Dev/Util/PView/FraleyMusic-ImageDsp` whose flagship algorithm is **local-contrast luminance normalization** in a perceptual color space.  Goal: port that algorithm to Rust, with an optional upgrade from HSL to a modern perceptual model (Oklab / OkLCh).
+rpview-gpui currently has three simple per-channel filters (brightness, contrast, gamma) implemented as a 256-entry RGB LUT in `src/utils/filters.rs`.  The user has a mature C# image-processing library, FraleyMusic-ImageDsp, whose flagship algorithm is **local-contrast luminance normalization** in a perceptual color space.  Goal: port that algorithm to Rust, with an optional upgrade from HSL to a modern perceptual model (Oklab / OkLCh).
 
 This document is a **language-neutral spec** derived by reading the three C# source files.  It describes what the algorithm does in enough detail to reimplement without needing the C# code open.  It does _not_ prescribe a Rust module layout — that’s a follow-up design step after you’ve reviewed and tweaked this spec.
 
-**Source files analyzed** (all in `~/Chris/Dev/Util/PView/FraleyMusic-ImageDsp`):
+**Source files analyzed** (all in FraleyMusic-ImageDsp):
 - `HslSupport.cs` (192 lines) — RGB↔HSL conversion.
 - `FloatMap.cs` (579 lines) — planar float32 bitmap with RGB[A]+HSL channels.
 - `AdaptiveContrastDsp.cs` (662 lines) — `LocallyNormalizeLuminance` and helpers.

@@ -2,7 +2,7 @@
 
 **Severity:** low — visible UX staircase on the LC radius slider; faithful PSP3 port
 **Type:** NEEDS-DECISION — fixing it here alone diverges from the PSP3 reference shader; Chris must choose parity vs quality (and possibly fix PSP3 too)
-**Where:** `src/gpu/shaders/local_contrast.wgsl:48-49`; parity source: `~/Chris/Proj/PixelShaderPaint3/shaders-builtin/Color Adjustments/local-contrast.wgsl:112-113` (identical lines)
+**Where:** `src/gpu/shaders/local_contrast.wgsl:48-49`; parity source: the PixelShaderPaint3 shader project’s `shaders-builtin/Color Adjustments/local-contrast.wgsl:112-113` (identical lines)
 **Verified:** shader math reviewed against MAX_SAMPLES = 30; strip coverage and shared-memory bounds checked sound by the GPU review pass
 
 ## Description

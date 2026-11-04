@@ -40,4 +40,4 @@ It exits 101: `cannot update the lock file … because --locked was passed`.  A 
 - **Depend by git revision** (`git = …, rev = …`), so the lock records a source every machine can fetch, and keep the path patch for local work only.
 - **Detection, whichever is chosen:** run CI’s cargo commands with `--locked`, so a lock that needs a local config fails loudly instead of being silently re-resolved.  On its own this turns CI red until one of the above lands.
 
-Found while investigating the CI failures (effort-coord request `row:App/Rust/rpview-gpui/r0001`, effort `follow-ups-from-the-29-oct`).
+Found while investigating the CI failures (effort-coord request `rpview-gpui/r0001`, effort `follow-ups-from-the-29-oct`).
