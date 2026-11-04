@@ -18,7 +18,7 @@ Enable GPU resize 4× on any image, set zoom to minimum (10%) first, toggle resi
 - **A (document):** the invariant becomes “10%–2000% for user-initiated zoom; size transitions may exceed it to preserve apparent size”.  Fix DESIGN.md; optionally clamp only user zoom _steps_ from an out-of-range start so `-`/`+` don’t jump.
 - **B (clamp):** apply `clamp_zoom` in `rescale_for_size_change`, accepting an apparent-size jump at the extremes.
 
-Recommendation: A — the apparent-size preservation was built deliberately (v0.21.x series, commits `ac9f98d`/`bc7c197`) and jumping content on resize toggles is worse than a temporarily out-of-range percentage.
+Recommendation: A — the apparent-size preservation was built deliberately (v0.21.x series, commits `6eecfef`/`61ca81b`) and jumping content on resize toggles is worse than a temporarily out-of-range percentage.
 
 ## Why This Fix
 

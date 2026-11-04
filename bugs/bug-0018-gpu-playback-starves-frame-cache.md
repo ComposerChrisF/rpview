@@ -9,7 +9,7 @@
 
 During playback, each frame advance requests GPU processing for the new frame, which cancels the in-flight job for the previous frame.  When a job takes longer than the frame interval, _every_ job is cancelled before completion is checked, and `check_gpu_processing` throws the whole result away — including the part that is still perfectly valid: the finished render belongs in `gpu_frame_renders[completed_job.frame_idx]` regardless of what frame is showing now.  The cancel flag exists to prevent a stale _display_ flash (per the `GpuJob` doc comment); it is being used to also discard durable cache fills.
 
-Consequence: for any parameter set whose per-frame cost exceeds the frame delay, the per-frame cache (`42ed064`, v0.22.2) never fills, playback never shows processed frames, and the worker churns forever.
+Consequence: for any parameter set whose per-frame cost exceeds the frame delay, the per-frame cache (`9aecf9c`, v0.22.2) never fills, playback never shows processed frames, and the worker churns forever.
 
 ## Reproduction
 

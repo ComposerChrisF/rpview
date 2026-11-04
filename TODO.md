@@ -2,10 +2,6 @@
 
 This document outlines the development roadmap for rpview, organized by implementation phases.
 
-## Waiting on Chris
-
-- [ ] Rewrite public history to remove home-directory paths.  It needs a force-push, so it waits on his decision (effort `follow-ups-from-the-29-oct`).  The current tree is already clean; only older commits still hold the paths.
-
 ## ⚠️ NEXT — Bug Backlog from the 2026-07-15 Deep Review (do this before new features)
 
 A full-project bug hunt (code + spec) filed **61 verified bug reports** in `bugs/bug-NNNN-<slug>.md`.  Each report is self-contained: description, file:line references, a repro detailed enough to write a failing Rust test, the suggested fix, why the fix is correct, and — critically — whether the **spec** or the **code** is at fault.  **Read the report before touching anything it covers; several docs are wrong and “fixing the code to match the doc” would reintroduce removed features or anti-patterns.**  Baseline `cargo test` was green when the reports were filed.

@@ -2,7 +2,7 @@
 
 **Severity:** low (documentation, or a small feature — needs a ruling)
 **Type:** NEEDS-DECISION — aspirational spec vs code; either implement the increment or strike the claim
-**Where:** `DESIGN.md:189-190` (“Auto-increment filenames on save: `image.png` → `image_filtered.png` → `image_filtered_2.png`”); code truth: `src/app_handlers.rs:641-646` suggests only `{stem}_filtered.{ext}` — no existence probe, no counter, in any historical version (`git log -S "_filtered_2"` matches only the DESIGN.md commit `cf977e9`; the original Phase 10 implementation `cdd0bd9` already lacked it)
+**Where:** `DESIGN.md:189-190` (“Auto-increment filenames on save: `image.png` → `image_filtered.png` → `image_filtered_2.png`”); code truth: `src/app_handlers.rs:641-646` suggests only `{stem}_filtered.{ext}` — no existence probe, no counter, in any historical version (`git log -S "_filtered_2"` matches only the DESIGN.md commit `cf977e9`; the original Phase 10 implementation `ee83a5a` already lacked it)
 **Verified:** current and original save handlers read; git pickaxe run
 
 ## Description

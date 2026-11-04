@@ -2,7 +2,7 @@
 
 **Severity:** low (documentation; plus one dead setting cross-referenced)
 **Type:** SPEC bug — the replacement was deliberate; fix DESIGN.md (the dead `spacebar_pan_accelerated` setting is tracked in `settings-dead-controls`)
-**Where:** `DESIGN.md:124-131` (pan table row “`Space` + drag | 1:1 mouse tracking”); code truth: `src/app_render.rs:244` comment “(Spacebar-drag removed: click-and-drag pans directly now.)”; commit `d5676d9` (v0.20.0) made the change; the help overlay already says “Click + Drag”
+**Where:** `DESIGN.md:124-131` (pan table row “`Space` + drag | 1:1 mouse tracking”); code truth: `src/app_render.rs:244` comment “(Spacebar-drag removed: click-and-drag pans directly now.)”; commit `aebadbf` (v0.20.0) made the change; the help overlay already says “Click + Drag”
 **Verified:** comment and help text read; git commit identified
 
 ## Description

@@ -7,7 +7,7 @@
 
 ## Description
 
-The action was added with the delete feature (v0.5.0, commit `b54d1e8`) but never bound to a key or menu item, and the card’s button bypasses it.  Consequences: (a) dead action + dead handler registration; (b) the delete confirmation cannot be accepted from the keyboard at all — arm with `Cmd+Backspace`, then the only way forward is the mouse (Esc cancels).
+The action was added with the delete feature (v0.5.0, commit `ff1c670`) but never bound to a key or menu item, and the card’s button bypasses it.  Consequences: (a) dead action + dead handler registration; (b) the delete confirmation cannot be accepted from the keyboard at all — arm with `Cmd+Backspace`, then the only way forward is the mouse (Esc cancels).
 
 ## Reproduction
 

@@ -11,9 +11,9 @@
 
 | Doc says | Code truth | Hazard |
 |---|---|---|
-| `max_image_dimensions`: array `[16384, 16384]` (lines ~116-124 and the “Complete Example” ~498) | `max_image_dimension: u32`, default `17000` (settings.rs:63,73; changed in commit `361ebf6`) | Pasting the doc’s Complete Example fails to parse → full settings reset (see `settings-missing-field-resets-all`) |
+| `max_image_dimensions`: array `[16384, 16384]` (lines ~116-124 and the “Complete Example” ~498) | `max_image_dimension: u32`, default `17000` (settings.rs:63,73; changed in commit `606fa2e`) | Pasting the doc’s Complete Example fails to parse → full settings reset (see `settings-missing-field-resets-all`) |
 | `external_editor`: `String (optional)`, non-null example (~458-471) | `Option<ViewerConfig>` struct (settings.rs:343) | Same full-reset hazard |
-| `background_color: [30,30,30]` (~249-257, ~515) | split into `background_color_dark` / `background_color_light` / `use_light_background` (commit `a234149`, v0.4.0) | Silently ignored key — edit does nothing |
+| `background_color: [30,30,30]` (~249-257, ~515) | split into `background_color_dark` / `background_color_light` / `use_light_background` (commit `aa877d2`, v0.4.0) | Silently ignored key — edit does nothing |
 | `default_save_format` default “Png”; values list omits “SameAsLoaded” | default is `SaveFormat::SameAsLoaded` (settings.rs:138) | Wrong expectations |
 | `window_title_format` default `"{filename} ({index}/{total})"`; placeholder list omits `{sm}`/`{sortmode}` | default `"{filename} ({sm}, {index}/{total})"` (settings.rs:271) | Wrong expectations |
 | `default_sort_mode` lists 2 values | 4 variants incl. `TypeAlpha`, `TypeModified` | Missing features |

@@ -7,9 +7,9 @@
 
 ## Description
 
-Two behaviors were lost in commit `8fc4a2f` (“Fix all clippy warnings and improve code quality”), which refactored `load_settings()` into the testable `load_settings_from_path()`:
+Two behaviors were lost in commit `e0b2b28` (“Fix all clippy warnings and improve code quality”), which refactored `load_settings()` into the testable `load_settings_from_path()`:
 
-1. **Missing file → create with defaults.**  Original code (from `dea6923`, Phase 16.1) called `save_settings(&defaults)` when the file did not exist.  Current code just returns `AppSettings::default()` without writing.  Result: on a fresh machine, `rpview` runs and exits without ever creating `settings.json`, until some save-triggering UI action happens.  `--help` (“Settings file (auto-created on first run)”), the function’s own doc comment (“If the settings file doesn’t exist, creates it with default settings”), and TODO.md Phase 16.5 (“Auto-creates on first run — ✅”) all still promise creation.
+1. **Missing file → create with defaults.**  Original code (from `10d0137`, Phase 16.1) called `save_settings(&defaults)` when the file did not exist.  Current code just returns `AppSettings::default()` without writing.  Result: on a fresh machine, `rpview` runs and exits without ever creating `settings.json`, until some save-triggering UI action happens.  `--help` (“Settings file (auto-created on first run)”), the function’s own doc comment (“If the settings file doesn’t exist, creates it with default settings”), and TODO.md Phase 16.5 (“Auto-creates on first run — ✅”) all still promise creation.
 2. **Corrupt file → back up, then overwrite with defaults.**  Original code backed up and then wrote defaults over the corrupt file.  Current code backs up but leaves the corrupt file in place, so every subsequent launch re-parses it, re-fails, re-copies the same backup, and re-warns.  `docs/SETTINGS.md:559-563` documents a four-step contract whose step 4 is “Overwrite the corrupt file with valid defaults”.
 
 The refactor was almost certainly aiming at purity for tests (a loader that writes as a side effect is awkward to test) and dropped the side effects without updating any of the four spec locations.
@@ -53,6 +53,6 @@ The spec here is self-consistent across four independent locations and matches t
 
 ## Git Evidence
 
-- `dea6923` (Phase 16.1) — original: create-on-missing and overwrite-corrupt both present.
-- `8fc4a2f` — refactor drops both; doc comment above the function left unchanged (still promises creation).
-- `0d29131` (v0.20.6) — adds the `--help` text “auto-created on first run” _after_ the regression, copying the stale doc comment rather than the code.
+- `10d0137` (Phase 16.1) — original: create-on-missing and overwrite-corrupt both present.
+- `e0b2b28` — refactor drops both; doc comment above the function left unchanged (still promises creation).
+- `15229b1` (v0.20.6) — adds the `--help` text “auto-created on first run” _after_ the regression, copying the stale doc comment rather than the code.

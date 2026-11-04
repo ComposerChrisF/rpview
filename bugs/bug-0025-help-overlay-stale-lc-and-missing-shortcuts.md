@@ -7,7 +7,7 @@
 
 ## Description
 
-Commit `247605f` (v0.28.0) deleted the `shift-cmd-l` and `cmd-p` bindings with the CPU Local Contrast feature but did not touch `help_overlay.rs` — the overlay has advertised dead shortcuts since.  Meanwhile the replacement feature’s shortcut (`Shift+Cmd/Ctrl+G`) and `Cmd/Ctrl+0` (reset zoom & center, documented in DESIGN.md:120) appear nowhere in the overlay, though DESIGN.md:243 promises it lists all shortcuts.  (The `shift-cmd-s` SaveFile alias is deliberately unadvertised per the comment at `app_keybindings.rs:99-104` — not part of this bug.)
+Commit `c2c43a9` (v0.28.0) deleted the `shift-cmd-l` and `cmd-p` bindings with the CPU Local Contrast feature but did not touch `help_overlay.rs` — the overlay has advertised dead shortcuts since.  Meanwhile the replacement feature’s shortcut (`Shift+Cmd/Ctrl+G`) and `Cmd/Ctrl+0` (reset zoom & center, documented in DESIGN.md:120) appear nowhere in the overlay, though DESIGN.md:243 promises it lists all shortcuts.  (The `shift-cmd-s` SaveFile alias is deliberately unadvertised per the comment at `app_keybindings.rs:99-104` — not part of this bug.)
 
 ## Reproduction
 
@@ -23,4 +23,4 @@ Makes the in-app reference match the actual keymap; the cross-check confirmed th
 
 ## Git Evidence
 
-`247605f` removed the bindings without touching `help_overlay.rs` (last changed in `d5676d9`, v0.20.0).
+`c2c43a9` removed the bindings without touching `help_overlay.rs` (last changed in `aebadbf`, v0.20.0).

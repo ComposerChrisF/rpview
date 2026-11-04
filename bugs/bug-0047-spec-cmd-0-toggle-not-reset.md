@@ -7,7 +7,7 @@
 
 ## Description
 
-DESIGN.md’s zoom section says `Cmd/Ctrl+0` resets to centered fit-to-window.  The implementation toggles: at fit → centered 100%; anywhere else → centered fit.  So from a fresh image (already at fit), Cmd+0 moves _away_ from fit — the opposite of a reset.  Commit `917f168` (v0.6.3, “Fix Cmd+0 and 0 zoom toggle to properly center and toggle fit-to-window”) made this deliberate; DESIGN.md was edited afterwards (`9a98177`) without correcting the line.  Plain `0` (`reset_zoom`) matches its spec line (viewport-center-preserving toggle).
+DESIGN.md’s zoom section says `Cmd/Ctrl+0` resets to centered fit-to-window.  The implementation toggles: at fit → centered 100%; anywhere else → centered fit.  So from a fresh image (already at fit), Cmd+0 moves _away_ from fit — the opposite of a reset.  Commit `b4d7ec1` (v0.6.3, “Fix Cmd+0 and 0 zoom toggle to properly center and toggle fit-to-window”) made this deliberate; DESIGN.md was edited afterwards (`2afb159`) without correcting the line.  Plain `0` (`reset_zoom`) matches its spec line (viewport-center-preserving toggle).
 
 ## Reproduction
 

@@ -7,7 +7,7 @@
 
 ## Description
 
-`ToggleGpuPipeline` and `ResetGpuPipeline` exist only as `shift-cmd-g` (etc.) bindings and macOS menu items.  On Windows/Linux, where `cmd` bindings don’t fire and the in-app menu bar is the only menu, there is no way to open the GPU Pipeline window.  The Local Contrast feature this replaced _did_ have `shift-ctrl-l`/`ctrl-p` twins — the platform-parity discipline was dropped for the replacement (v0.22.0, commit `4e5c68b`).
+`ToggleGpuPipeline` and `ResetGpuPipeline` exist only as `shift-cmd-g` (etc.) bindings and macOS menu items.  On Windows/Linux, where `cmd` bindings don’t fire and the in-app menu bar is the only menu, there is no way to open the GPU Pipeline window.  The Local Contrast feature this replaced _did_ have `shift-ctrl-l`/`ctrl-p` twins — the platform-parity discipline was dropped for the replacement (v0.22.0, commit `74e60d2`).
 
 ## Reproduction
 

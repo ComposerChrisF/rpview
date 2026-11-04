@@ -6,7 +6,7 @@
 
 The committed `Cargo.lock` resolves the same way on every machine, so the build CI checks, and the build `release.yml` ships, is the build Chris runs.  (`commit-common.md` C7b exists because a local-path dependency once broke that for three weeks in Obsidian-Brain.)
 
-## Observed (HEAD `cccdf3b`, 29-Oct-2026)
+## Observed (HEAD `02fe30e`, 29-Oct-2026)
 
 - The main checkout has a gitignored `.cargo/config.toml`:
 

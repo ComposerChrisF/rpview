@@ -7,7 +7,7 @@
 
 ## Description
 
-Commit `247605f` (“lc: remove CPU DSP (Local Contrast) feature entirely — 0.28.0”) deleted 4,722 lines — `src/utils/local_contrast.rs`, `float_map.rs`, `color.rs`, `lc_presets.rs`, `src/components/local_contrast_controls.rs`, `local_contrast_window.rs` — and touched **no documentation file except CHANGELOG.md**.  Its replacement, the GPU pixel-shader pipeline (shipped v0.22.0, commit `4e5c68b`, expanded through v0.27.0), likewise never received documentation.  The result is that every major doc now describes a feature that does not exist, and does not describe the one that replaced it:
+Commit `c2c43a9` (“lc: remove CPU DSP (Local Contrast) feature entirely — 0.28.0”) deleted 4,722 lines — `src/utils/local_contrast.rs`, `float_map.rs`, `color.rs`, `lc_presets.rs`, `src/components/local_contrast_controls.rs`, `local_contrast_window.rs` — and touched **no documentation file except CHANGELOG.md**.  Its replacement, the GPU pixel-shader pipeline (shipped v0.22.0, commit `74e60d2`, expanded through v0.27.0), likewise never received documentation.  The result is that every major doc now describes a feature that does not exist, and does not describe the one that replaced it:
 
 - `DESIGN.md` module layout lists all six deleted files (lines ~43–44, ~63–66).
 - `DESIGN.md` “Local Contrast” section describes the removed `Shift+Cmd/Ctrl+L` floating dialog, rayon thread pool, OkLCh CPU pipeline, LC presets.  The actual binding today is `shift-cmd-g` → `ToggleGpuPipeline` (`src/app_keybindings.rs:17`).
@@ -44,5 +44,5 @@ The code is the current truth: the CPU LC removal (0.28.0) and the GPU pipeline 
 
 ## Git Evidence
 
-- `247605f` — removal commit; `--stat` shows 21 files changed, only CHANGELOG.md among docs.
-- `4e5c68b` (v0.22.0) through `ab0fad3` (v0.27.0) — GPU pipeline feature commits; none touch DESIGN.md/README.md.
+- `c2c43a9` — removal commit; `--stat` shows 21 files changed, only CHANGELOG.md among docs.
+- `74e60d2` (v0.22.0) through `e81c417` (v0.27.0) — GPU pipeline feature commits; none touch DESIGN.md/README.md.
