@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.2] - 2026-11-03
+
+### Changed
+- **Machine-local files are no longer tracked.**  `.claude/settings.local.json` and `.install-bin.toml` are removed from the index (the local copies stay on disk) and both are gitignored.  Home-directory paths in `docs/local-contrast-spec.md`, `docs/gpui-image-display-research.md`, and one comment in `src/gpu/mod.rs` now use `~/`.  Older history still holds these paths; rewriting it needs a force-push, which is a separate decision (tracked in `TODO.md`).
+
 ## [0.29.1] - 2026-10-29
 
 ### Fixed
