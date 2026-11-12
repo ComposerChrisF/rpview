@@ -32,6 +32,8 @@ actions!(
         SortAlphabetical,
         SortByModified,
         SortByTypeToggle,
+        ToggleTypeFilter,
+        ToggleNearestNeighbor,
         ToggleGpuPipeline,
         ResetGpuPipeline,
         ZoomIn,

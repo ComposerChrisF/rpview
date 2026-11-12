@@ -92,9 +92,9 @@ use rpview::{
     RevealInFinder, SaveFile, SaveFileToDownloads, SortAlphabetical, SortByModified,
     SortByTypeToggle, StoreSlot3, StoreSlot4, StoreSlot5, StoreSlot6, StoreSlot7, StoreSlot8,
     StoreSlot9, ToggleAnimationPlayPause, ToggleBackground, ToggleDebug, ToggleFilters,
-    ToggleGpuPipeline, ToggleHelp, ToggleSettings, ToggleZoomIndicator, ZoomIn, ZoomInFast,
-    ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast, ZoomOutIncremental, ZoomOutSlow,
-    ZoomReset, ZoomResetAndCenter,
+    ToggleGpuPipeline, ToggleHelp, ToggleNearestNeighbor, ToggleSettings, ToggleTypeFilter,
+    ToggleZoomIndicator, ZoomIn, ZoomInFast, ZoomInIncremental, ZoomInSlow, ZoomOut, ZoomOutFast,
+    ZoomOutIncremental, ZoomOutSlow, ZoomReset, ZoomResetAndCenter,
 };
 
 /// What kind of delete is pending
@@ -363,6 +363,7 @@ fn main() {
         forward!(SortAlphabetical, handle_sort_alphabetical);
         forward!(SortByModified, handle_sort_by_modified);
         forward!(SortByTypeToggle, handle_sort_by_type_toggle);
+        forward!(ToggleTypeFilter, handle_toggle_type_filter);
         // Zoom
         forward!(ZoomIn, handle_zoom_in);
         forward!(ZoomOut, handle_zoom_out);
@@ -392,6 +393,7 @@ fn main() {
         forward!(ToggleDebug, handle_toggle_debug);
         forward!(ToggleZoomIndicator, handle_toggle_zoom_indicator);
         forward!(ToggleBackground, handle_toggle_background);
+        forward!(ToggleNearestNeighbor, handle_toggle_nearest_neighbor);
         forward!(ToggleSettings, handle_toggle_settings);
         // Filters
         forward!(ToggleFilters, handle_toggle_filters);
@@ -745,6 +747,7 @@ fn build_app(
         app_state.current_index,
         app_state.image_paths.len(),
         app_state.sort_mode,
+        app_state.type_filter.is_some(),
         &settings,
     );
     window.set_window_title(&title);
@@ -815,6 +818,7 @@ fn build_app(
             image_dimensions: None,
             viewport_size: None,
             sort_mode: app_state.sort_mode,
+            type_filter: app_state.type_filter,
             overlay_transparency: settings.appearance.overlay_transparency,
             font_size_scale: settings.appearance.font_size_scale,
         })

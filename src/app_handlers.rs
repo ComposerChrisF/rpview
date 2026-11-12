@@ -120,6 +120,24 @@ impl App {
         cx.notify();
     }
 
+    pub(crate) fn handle_toggle_nearest_neighbor(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let behavior = &mut self.settings.viewer_behavior;
+        behavior.nearest_neighbor = !behavior.nearest_neighbor;
+        let on = behavior.nearest_neighbor;
+        // Keep the Settings window's copy in step, so closing it later
+        // applies this rather than reverting it.
+        self.settings_window
+            .update(cx, |sw, cx| sw.set_nearest_neighbor(on, cx));
+        if let Err(e) = settings_io::save_settings(&self.settings) {
+            eprintln!("Error saving settings: {}", e);
+        }
+        cx.notify();
+    }
+
     pub(crate) fn handle_toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_settings = !self.show_settings;
 
@@ -138,8 +156,10 @@ impl App {
     }
 
     pub(crate) fn handle_close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Get current settings from the settings window and save to disk
-        let new_settings = self.settings_window.update(cx, |sw, _cx| sw.get_settings());
+        // Get current settings from the settings window and save to disk,
+        // keeping what the app changed outside it since its copy was taken
+        let mut new_settings = self.settings_window.update(cx, |sw, _cx| sw.get_settings());
+        new_settings.keep_app_owned_state(&self.settings);
 
         // Save settings to disk
         if let Err(e) = settings_io::save_settings(&new_settings) {
@@ -561,12 +581,9 @@ impl App {
             // and find the index of the selected file
             match utils::file_scanner::process_dropped_path(&file) {
                 Ok((all_images, start_index)) => {
-                    // Replace the current image list with all images from the directory
-                    self.app_state.image_paths = all_images;
-                    self.app_state.current_index = start_index;
-
-                    // Re-sort according to the active sort mode
-                    self.app_state.sort_images();
+                    // Replace the current image list with all images from the
+                    // directory, re-sorted according to the active sort mode
+                    self.app_state.set_image_paths(all_images, start_index);
 
                     // Update viewer with selected image
                     self.update_viewer(window, cx);
@@ -1146,14 +1163,10 @@ impl App {
             return;
         };
 
-        // Set the paths and a temporary index pointing at the target file
-        self.app_state.image_paths = all_images;
-        self.app_state.current_index = target_index;
-
-        // Re-sort according to the active sort mode (process_dropped_path
-        // always sorts alphabetically; this corrects for ModifiedDate mode).
-        // sort_images() preserves current_index by tracking the current path.
-        self.app_state.sort_images();
+        // Set the paths, re-sorted according to the active sort mode
+        // (process_dropped_path always sorts alphabetically; this corrects
+        // for ModifiedDate mode), showing the target file.
+        self.app_state.set_image_paths(all_images, target_index);
 
         self.update_viewer(window, cx);
         self.update_window_title(window);
@@ -1285,6 +1298,21 @@ impl App {
         };
         self.app_state.set_sort_mode(next);
         self.update_viewer(window, cx);
+        self.update_window_title(window);
+        cx.notify();
+    }
+
+    pub(crate) fn handle_toggle_type_filter(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_modal_open() {
+            return;
+        }
+        // The shown image never changes, so only the title (counter and
+        // indicator) needs refreshing — no reload.
+        self.app_state.toggle_type_filter();
         self.update_window_title(window);
         cx.notify();
     }
@@ -1529,6 +1557,7 @@ impl App {
             self.app_state.current_index,
             self.app_state.image_paths.len(),
             self.app_state.sort_mode,
+            self.app_state.type_filter.is_some(),
             &self.settings,
         );
         window.set_window_title(&title);

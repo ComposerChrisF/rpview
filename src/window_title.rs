@@ -3,12 +3,14 @@ use crate::state::settings::AppSettings;
 
 /// Format the window title for the given image state.
 ///
-/// Returns `"rpview"` when `path` is `None`.
+/// Returns `"rpview"` when `path` is `None`.  `type_filtered` marks the sort
+/// labels (`{sm}`, `{sortmode}`) to show the type filter is on.
 pub(crate) fn format_window_title(
     path: Option<&std::path::Path>,
     index: usize,
     total: usize,
     sort_mode: SortMode,
+    type_filtered: bool,
     settings: &AppSettings,
 ) -> String {
     match path {
@@ -22,6 +24,7 @@ pub(crate) fn format_window_title(
                     position,
                     total,
                     sort_mode,
+                    type_filtered,
                 )
             } else {
                 filename.to_string()
@@ -31,6 +34,11 @@ pub(crate) fn format_window_title(
     }
 }
 
+/// Suffix on `{sm}` while the type filter is on — "A" becomes "AF".
+const TYPE_FILTER_SHORT: &str = "F";
+/// Suffix on `{sortmode}` while the type filter is on.
+const TYPE_FILTER_LONG: &str = "+type-filtered";
+
 /// Single-pass template expansion. Recognises `{filename}`, `{index}`,
 /// `{total}`, `{sortmode}`, and `{sm}`. Unknown placeholders are left as-is.
 fn expand_template(
@@ -39,7 +47,13 @@ fn expand_template(
     position: usize,
     total: usize,
     sort_mode: SortMode,
+    type_filtered: bool,
 ) -> String {
+    let (short_suffix, long_suffix) = if type_filtered {
+        (TYPE_FILTER_SHORT, TYPE_FILTER_LONG)
+    } else {
+        ("", "")
+    };
     let mut result = String::with_capacity(template.len() + filename.len());
     let mut i = 0;
 
@@ -52,8 +66,14 @@ fn expand_template(
                     "filename" => result.push_str(filename),
                     "index" => result.push_str(&position.to_string()),
                     "total" => result.push_str(&total.to_string()),
-                    "sortmode" => result.push_str(sort_mode.long_label()),
-                    "sm" => result.push_str(sort_mode.short_label()),
+                    "sortmode" => {
+                        result.push_str(sort_mode.long_label());
+                        result.push_str(long_suffix);
+                    }
+                    "sm" => {
+                        result.push_str(sort_mode.short_label());
+                        result.push_str(short_suffix);
+                    }
                     _ => {
                         // Unknown placeholder — preserve verbatim
                         result.push_str(&template[i..i + end + 1]);
@@ -89,7 +109,8 @@ mod tests {
         let settings = AppSettings::default();
         let path = Path::new("/photos/sunset.png");
 
-        let title = format_window_title(Some(path), 2, 10, SortMode::Alphabetical, &settings);
+        let title =
+            format_window_title(Some(path), 2, 10, SortMode::Alphabetical, false, &settings);
 
         // Default template: "{filename} ({sm}, {index}/{total})"
         assert_eq!(title, "sunset.png (A, 3/10)");
@@ -100,7 +121,7 @@ mod tests {
         let settings = AppSettings::default();
         let path = Path::new("image.jpg");
 
-        let title = format_window_title(Some(path), 0, 5, SortMode::ModifiedDate, &settings);
+        let title = format_window_title(Some(path), 0, 5, SortMode::ModifiedDate, false, &settings);
 
         assert_eq!(title, "image.jpg (M, 1/5)");
     }
@@ -110,7 +131,8 @@ mod tests {
         let settings = AppSettings::default();
         let path = Path::new("photo.webp");
 
-        let title = format_window_title(Some(path), 4, 20, SortMode::TypeModified, &settings);
+        let title =
+            format_window_title(Some(path), 4, 20, SortMode::TypeModified, false, &settings);
 
         assert_eq!(title, "photo.webp (TM, 5/20)");
     }
@@ -119,7 +141,7 @@ mod tests {
     fn test_format_window_title_no_path_returns_rpview() {
         let settings = AppSettings::default();
 
-        let title = format_window_title(None, 0, 0, SortMode::Alphabetical, &settings);
+        let title = format_window_title(None, 0, 0, SortMode::Alphabetical, false, &settings);
 
         assert_eq!(title, "rpview");
     }
@@ -130,7 +152,8 @@ mod tests {
         settings.sort_navigation.show_image_counter = false;
         let path = Path::new("/dir/photo.png");
 
-        let title = format_window_title(Some(path), 3, 10, SortMode::Alphabetical, &settings);
+        let title =
+            format_window_title(Some(path), 3, 10, SortMode::Alphabetical, false, &settings);
 
         assert_eq!(title, "photo.png");
     }
@@ -142,7 +165,7 @@ mod tests {
             "{filename} [{sortmode}] {index} of {total}".to_string();
         let path = Path::new("pic.gif");
 
-        let title = format_window_title(Some(path), 1, 3, SortMode::TypeAlpha, &settings);
+        let title = format_window_title(Some(path), 1, 3, SortMode::TypeAlpha, false, &settings);
 
         assert_eq!(title, "pic.gif [type+alphabetical] 2 of 3");
     }
@@ -154,9 +177,22 @@ mod tests {
             "{filename} [{sm}] {sortmode} {index}/{total}".to_string();
         let path = Path::new("photo.png");
 
-        let title = format_window_title(Some(path), 0, 5, SortMode::ModifiedDate, &settings);
+        let title = format_window_title(Some(path), 0, 5, SortMode::ModifiedDate, false, &settings);
 
         assert_eq!(title, "photo.png [M] modified 1/5");
+    }
+
+    #[test]
+    fn test_format_window_title_type_filter_marks_sort_labels() {
+        let mut settings = AppSettings::default();
+        let path = Path::new("photo.png");
+
+        let title = format_window_title(Some(path), 0, 4, SortMode::TypeAlpha, true, &settings);
+        assert_eq!(title, "photo.png (TAF, 1/4)");
+
+        settings.appearance.window_title_format = "{sortmode}".to_string();
+        let title = format_window_title(Some(path), 0, 4, SortMode::Alphabetical, true, &settings);
+        assert_eq!(title, "alphabetical+type-filtered");
     }
 
     #[test]
@@ -165,7 +201,7 @@ mod tests {
         settings.appearance.window_title_format = "{filename} {unknown} {index}".to_string();
         let path = Path::new("test.png");
 
-        let title = format_window_title(Some(path), 0, 1, SortMode::Alphabetical, &settings);
+        let title = format_window_title(Some(path), 0, 1, SortMode::Alphabetical, false, &settings);
 
         assert_eq!(title, "test.png {unknown} 1");
     }

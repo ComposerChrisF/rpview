@@ -231,6 +231,7 @@ pub struct SettingsWindow {
     // Toggle switches for boolean settings
     remember_per_image_state_toggle: Entity<ToggleSwitch>,
     animation_auto_play_toggle: Entity<ToggleSwitch>,
+    nearest_neighbor_toggle: Entity<ToggleSwitch>,
     preload_adjacent_images_toggle: Entity<ToggleSwitch>,
     spacebar_pan_accelerated_toggle: Entity<ToggleSwitch>,
     auto_save_filtered_cache_toggle: Entity<ToggleSwitch>,
@@ -609,6 +610,13 @@ impl SettingsWindow {
             |this: &mut Self, on: bool| this.working_settings.viewer_behavior.animation_auto_play =
                 on
         );
+        let nearest_neighbor_toggle = create_toggle!(
+            cx,
+            toggle_theme,
+            settings.viewer_behavior.nearest_neighbor,
+            "Nearest-neighbor zoom",
+            |this: &mut Self, on: bool| this.working_settings.viewer_behavior.nearest_neighbor = on
+        );
         let preload_adjacent_images_toggle = create_toggle!(
             cx,
             toggle_theme,
@@ -829,6 +837,7 @@ impl SettingsWindow {
             default_save_directory_picker,
             remember_per_image_state_toggle,
             animation_auto_play_toggle,
+            nearest_neighbor_toggle,
             preload_adjacent_images_toggle,
             spacebar_pan_accelerated_toggle,
             auto_save_filtered_cache_toggle,
@@ -964,6 +973,9 @@ impl SettingsWindow {
         self.animation_auto_play_toggle.update(cx, |toggle, cx| {
             toggle.set_on(defaults.viewer_behavior.animation_auto_play, cx);
         });
+        self.nearest_neighbor_toggle.update(cx, |toggle, cx| {
+            toggle.set_on(defaults.viewer_behavior.nearest_neighbor, cx);
+        });
         self.preload_adjacent_images_toggle
             .update(cx, |toggle, cx| {
                 toggle.set_on(defaults.performance.preload_adjacent_images, cx);
@@ -993,6 +1005,14 @@ impl SettingsWindow {
             .update(cx, |toggle, cx| {
                 toggle.set_on(defaults.external_tools.enable_file_manager_integration, cx);
             });
+    }
+
+    /// Follow a nearest-neighbor change made with the `N` key, so closing
+    /// Settings applies it rather than this window's older value.
+    pub fn set_nearest_neighbor(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.working_settings.viewer_behavior.nearest_neighbor = on;
+        self.nearest_neighbor_toggle
+            .update(cx, |toggle, cx| toggle.set_on(on, cx));
     }
 
     /// Get the final settings (for apply)
@@ -1217,6 +1237,20 @@ impl SettingsWindow {
             cx,
         );
 
+        let nearest_neighbor_reset = Self::render_reset_button(
+            "reset-nearest-neighbor",
+            self.working_settings.viewer_behavior.nearest_neighbor
+                == defaults.viewer_behavior.nearest_neighbor,
+            |this, _, _, cx| {
+                let d = AppSettings::default().viewer_behavior.nearest_neighbor;
+                this.working_settings.viewer_behavior.nearest_neighbor = d;
+                this.nearest_neighbor_toggle
+                    .update(cx, |t, cx| t.set_on(d, cx));
+                cx.notify();
+            },
+            cx,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -1255,6 +1289,11 @@ impl SettingsWindow {
                 Some("Start animated GIFs/WEBPs playing automatically".to_string()),
                 &self.animation_auto_play_toggle,
                 auto_play_reset,
+            ))
+            .child(self.render_toggle_row(
+                Some("Hard pixel edges when magnified (N)".to_string()),
+                &self.nearest_neighbor_toggle,
+                nearest_neighbor_reset,
             ))
     }
 

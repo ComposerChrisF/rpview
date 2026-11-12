@@ -80,7 +80,8 @@ impl MenuBar {
             OpenInExternalEditor, OpenInExternalViewer, OpenInExternalViewerAndQuit, PreviousFrame,
             PreviousImage, Quit, ResetFilters, RevealInFinder, SaveFile, SaveFileToDownloads,
             SortAlphabetical, SortByModified, ToggleAnimationPlayPause, ToggleDebug, ToggleFilters,
-            ToggleHelp, ToggleSettings, ZoomIn, ZoomOut, ZoomReset,
+            ToggleHelp, ToggleNearestNeighbor, ToggleSettings, ToggleTypeFilter, ZoomIn, ZoomOut,
+            ZoomReset,
         };
 
         vec![
@@ -170,6 +171,11 @@ impl MenuBar {
                     MenuItemDef::separator(),
                     MenuItemDef::action("Toggle Help", Some("H"), ToggleHelp),
                     MenuItemDef::action("Toggle Debug", Some("F12"), ToggleDebug),
+                    MenuItemDef::action(
+                        "Toggle Nearest-Neighbor Zoom",
+                        Some("N"),
+                        ToggleNearestNeighbor,
+                    ),
                 ],
             },
             MenuDef {
@@ -187,6 +193,12 @@ impl MenuBar {
                         "Sort by Modified Date",
                         Some(&format_shortcut("M", true, false)),
                         SortByModified,
+                    ),
+                    MenuItemDef::separator(),
+                    MenuItemDef::action(
+                        "Only Current Image's Type (Toggle)",
+                        Some(&format_shortcut("F", true, false)),
+                        ToggleTypeFilter,
                     ),
                 ],
             },

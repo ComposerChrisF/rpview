@@ -148,6 +148,12 @@ impl Render for App {
             window.request_animation_frame();
         }
 
+        // Nearest-neighbor overlay: keep it matched to the view.
+        let nearest = self.settings.viewer_behavior.nearest_neighbor;
+        if self.viewer.update_nearest_overlay(nearest, window) {
+            window.request_animation_frame();
+        }
+
         // If still loading or processing filters, request another render to check again
         if self.viewer.is_loading || self.viewer.is_processing_filters {
             window.request_animation_frame();
@@ -453,6 +459,7 @@ impl Render for App {
                         image_dimensions,
                         viewport_size: self.viewer.viewport_size,
                         sort_mode: self.app_state.sort_mode,
+                        type_filter: self.app_state.type_filter,
                         overlay_transparency: self.settings.appearance.overlay_transparency,
                         font_size_scale: self.settings.appearance.font_size_scale,
                     });
@@ -688,6 +695,9 @@ impl Render for App {
             .on_action(cx.listener(|this, _: &SortByTypeToggle, window, cx| {
                 this.handle_sort_by_type_toggle(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ToggleTypeFilter, window, cx| {
+                this.handle_toggle_type_filter(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &ToggleGpuPipeline, window, cx| {
                 this.handle_toggle_gpu_pipeline(window, cx);
             }))
@@ -771,6 +781,9 @@ impl Render for App {
             }))
             .on_action(cx.listener(|this, _: &ToggleBackground, window, cx| {
                 this.handle_toggle_background(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleNearestNeighbor, window, cx| {
+                this.handle_toggle_nearest_neighbor(window, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| {
                 this.handle_toggle_settings(window, cx);

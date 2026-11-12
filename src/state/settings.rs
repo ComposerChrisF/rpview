@@ -20,6 +20,22 @@ pub struct AppSettings {
     pub external_tools: ExternalTools,
 }
 
+impl AppSettings {
+    /// Take from `current` the state the app writes outside the Settings
+    /// window, which the window's copy of the settings does not track: the
+    /// `B` background toggle and the floating windows' bounds and open flags.
+    /// Applied to the window's settings when it closes, so closing Settings
+    /// never reverts them (bug-0063).
+    pub fn keep_app_owned_state(&mut self, current: &AppSettings) {
+        let (mine, theirs) = (&mut self.appearance, &current.appearance);
+        mine.use_light_background = theirs.use_light_background;
+        mine.filter_window_bounds = theirs.filter_window_bounds;
+        mine.filter_window_open = theirs.filter_window_open;
+        mine.gpu_pipeline_window_bounds = theirs.gpu_pipeline_window_bounds;
+        mine.gpu_pipeline_window_open = theirs.gpu_pipeline_window_open;
+    }
+}
+
 /// Viewer behavior settings
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ViewerBehavior {
@@ -31,6 +47,10 @@ pub struct ViewerBehavior {
     pub state_cache_size: usize,
     /// Whether animated images auto-play when loaded
     pub animation_auto_play: bool,
+    /// Whether magnified images show hard pixel edges (nearest-neighbor)
+    /// instead of bilinear smoothing.  Toggled with N.
+    #[serde(default)]
+    pub nearest_neighbor: bool,
 }
 
 impl Default for ViewerBehavior {
@@ -40,6 +60,7 @@ impl Default for ViewerBehavior {
             remember_per_image_state: true,
             state_cache_size: 1000,
             animation_auto_play: true,
+            nearest_neighbor: false,
         }
     }
 }
@@ -464,6 +485,36 @@ mod tests {
     const DEFAULT_OVERLAY_TRANSPARENCY: u8 = 204;
     const DEFAULT_FONT_SIZE_SCALE: f32 = 1.0;
     const DEFAULT_MAX_IMAGE_DIMENSION: u32 = 17000;
+
+    #[test]
+    fn test_keep_app_owned_state_takes_app_fields_and_leaves_window_fields() {
+        let bounds = PersistedWindowBounds {
+            x: 1.0,
+            y: 2.0,
+            width: 3.0,
+            height: 4.0,
+        };
+        let mut current = AppSettings::default();
+        current.appearance.use_light_background = true;
+        current.appearance.filter_window_bounds = Some(bounds);
+        current.appearance.filter_window_open = true;
+        current.appearance.gpu_pipeline_window_bounds = Some(bounds);
+        current.appearance.gpu_pipeline_window_open = true;
+        current.appearance.font_size_scale = 2.0;
+        let mut edited = AppSettings::default();
+        edited.appearance.overlay_transparency = 7;
+
+        edited.keep_app_owned_state(&current);
+
+        assert!(edited.appearance.use_light_background);
+        assert_eq!(edited.appearance.filter_window_bounds, Some(bounds));
+        assert!(edited.appearance.filter_window_open);
+        assert_eq!(edited.appearance.gpu_pipeline_window_bounds, Some(bounds));
+        assert!(edited.appearance.gpu_pipeline_window_open);
+        // Fields the Settings window edits keep the window's values.
+        assert_eq!(edited.appearance.overlay_transparency, 7);
+        assert_eq!(edited.appearance.font_size_scale, DEFAULT_FONT_SIZE_SCALE);
+    }
 
     #[test]
     fn test_persisted_window_bounds_round_trip() {

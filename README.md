@@ -85,6 +85,7 @@ Windows/Linux it’s Ctrl.  The table below writes “Cmd” — substitute as n
 | `Shift+Cmd+A` | Sort alphabetically |
 | `Shift+Cmd+M` | Sort by modified date |
 | `Shift+Cmd+T` | Sort by type (toggles alpha / modified within type) |
+| `Shift+Cmd+F` | Only the current image’s type (toggle); the title’s sort label gains an `F` (`A` → `AF`) and the count covers that type only |
 | Drag & Drop | Open dropped files or folders |
 
 ### Zoom
@@ -179,6 +180,9 @@ time — useful if you’re done browsing and just want to work with one file.
 |-----|--------|
 | `T` | Toggle zoom/size indicator |
 | `B` | Toggle dark / light background |
+| `N` | Toggle nearest-neighbor zoom (hard pixel edges when magnified) |
+
+Nearest-neighbor zoom applies once an image is magnified past one screen pixel per image pixel.  It sharpens after zoom and pan settle, and is off for SVGs and while an animation plays.  The setting persists, and is also in Settings > Viewer Behavior.
 
 The background toggle is especially useful for transparent PNGs and SVGs — flip
 between dark and light to check edges and transparency.
@@ -188,7 +192,7 @@ between dark and light to check edges and transparency.
 | Key | Action |
 |-----|--------|
 | `H` / `?` / `F1` | Help overlay (all shortcuts) |
-| `F12` | Debug overlay |
+| `F12` | Debug overlay (includes the sort mode and type filter) |
 | `Cmd+,` | Settings |
 | `Cmd+W` | Close this window (quits if it was the last one) |
 | `Cmd+Q` | Quit, however many windows are open |
@@ -295,7 +299,7 @@ directly.
 ### What You Can Configure
 
 **Viewer Behavior** — Default zoom mode (fit-to-window or 100%), per-image
-state memory, animation auto-play, state cache size.
+state memory, animation auto-play, state cache size, nearest-neighbor zoom.
 
 **Performance** — Adjacent image preloading, filter processing threads,
 maximum image dimension limit.

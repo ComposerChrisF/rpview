@@ -14,6 +14,7 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-cmd-a", SortAlphabetical, None),
         KeyBinding::new("shift-cmd-m", SortByModified, None),
         KeyBinding::new("shift-cmd-t", SortByTypeToggle, None),
+        KeyBinding::new("shift-cmd-f", ToggleTypeFilter, None),
         KeyBinding::new("shift-cmd-g", ToggleGpuPipeline, None),
         // Zoom controls - base (normal speed)
         KeyBinding::new("=", ZoomIn, None), // = key (same as +)
@@ -70,6 +71,7 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("f12", ToggleDebug, None),
         KeyBinding::new("t", ToggleZoomIndicator, None),
         KeyBinding::new("b", ToggleBackground, None),
+        KeyBinding::new("n", ToggleNearestNeighbor, None),
         // Settings window
         KeyBinding::new("cmd-,", ToggleSettings, None),
         KeyBinding::new("escape", CloseSettings, Some("SettingsWindow")),
@@ -123,6 +125,8 @@ pub(crate) fn setup_key_bindings(cx: &mut gpui::App) {
         KeyBinding::new("shift-ctrl-m", SortByModified, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("shift-ctrl-t", SortByTypeToggle, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-ctrl-f", ToggleTypeFilter, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-0", ZoomResetAndCenter, None),
         #[cfg(not(target_os = "macos"))]
@@ -227,6 +231,7 @@ pub(crate) fn setup_menus(cx: &mut gpui::App) {
                 MenuItem::action("Toggle Debug", ToggleDebug),
                 MenuItem::action("Toggle Zoom Indicator", ToggleZoomIndicator),
                 MenuItem::action("Toggle Background", ToggleBackground),
+                MenuItem::action("Toggle Nearest-Neighbor Zoom", ToggleNearestNeighbor),
             ],
         },
         Menu {
@@ -238,6 +243,8 @@ pub(crate) fn setup_menus(cx: &mut gpui::App) {
                 MenuItem::action("Sort Alphabetically", SortAlphabetical),
                 MenuItem::action("Sort by Modified Date", SortByModified),
                 MenuItem::action("Sort by Type (Toggle A/M)", SortByTypeToggle),
+                MenuItem::separator(),
+                MenuItem::action("Only Current Image's Type (Toggle)", ToggleTypeFilter),
             ],
         },
         Menu {

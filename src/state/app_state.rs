@@ -59,6 +59,23 @@ pub enum ImageTypeGroup {
     Other,
 }
 
+impl ImageTypeGroup {
+    /// Display name, e.g. "JPEG" (covering both .jpg and .jpeg).
+    pub fn label(self) -> &'static str {
+        match self {
+            ImageTypeGroup::Bmp => "BMP",
+            ImageTypeGroup::Gif => "GIF",
+            ImageTypeGroup::Ico => "ICO",
+            ImageTypeGroup::Jpeg => "JPEG",
+            ImageTypeGroup::Png => "PNG",
+            ImageTypeGroup::Svg => "SVG",
+            ImageTypeGroup::Tiff => "TIFF",
+            ImageTypeGroup::Webp => "WEBP",
+            ImageTypeGroup::Other => "Other",
+        }
+    }
+}
+
 /// Classify a path into an ImageTypeGroup by its file extension (case-insensitive).
 pub fn image_type_group(path: &Path) -> ImageTypeGroup {
     let ext = path
@@ -81,8 +98,19 @@ pub fn image_type_group(path: &Path) -> ImageTypeGroup {
 /// Application-wide state
 #[derive(Debug, Clone)]
 pub struct AppState {
-    /// List of image file paths
+    /// The navigable image list: every image in `all_image_paths` when the
+    /// type filter is off, or only those of the filter's type when it is on.
+    /// `current_index`, navigation, and the window-title counter all work on
+    /// this list.
     pub image_paths: Vec<PathBuf>,
+
+    /// Every image in the current set, in sort order, ignoring the type filter.
+    /// `image_paths` is derived from it.  Replace both together through
+    /// `set_image_paths`, never by assigning `image_paths` directly.
+    pub all_image_paths: Vec<PathBuf>,
+
+    /// Type filter: `Some(group)` limits `image_paths` to that type.
+    pub type_filter: Option<ImageTypeGroup>,
 
     /// Current image index
     pub current_index: usize,
@@ -117,7 +145,9 @@ impl AppState {
         };
 
         Self {
+            all_image_paths: image_paths.clone(),
             image_paths,
+            type_filter: None,
             current_index,
             sort_mode: SortMode::default(),
             image_states: HashMap::new(),
@@ -138,7 +168,9 @@ impl AppState {
         cache_size: usize,
     ) -> Self {
         let mut state = Self {
+            all_image_paths: image_paths.clone(),
             image_paths,
+            type_filter: None,
             current_index: 0,
             sort_mode: default_sort_mode,
             image_states: HashMap::new(),
@@ -269,7 +301,14 @@ impl AppState {
             return None;
         }
         let removed = self.image_paths.remove(self.current_index);
+        self.all_image_paths.retain(|p| p != &removed);
         self.image_states.remove(&removed);
+        // The last image of the filtered type is gone: drop the filter rather
+        // than show an empty viewer while other images remain.
+        if self.image_paths.is_empty() && self.type_filter.is_some() {
+            self.type_filter = None;
+            self.image_paths = self.all_image_paths.clone();
+        }
         if !self.image_paths.is_empty() && self.current_index >= self.image_paths.len() {
             self.current_index = self.image_paths.len() - 1;
         }
@@ -284,30 +323,77 @@ impl AppState {
         }
     }
 
+    /// Replace the image set and show `paths[start_index]`.  Re-sorts by the
+    /// active sort mode.  A type filter that is on stays on, re-anchored to
+    /// the type of the image now shown.
+    pub fn set_image_paths(&mut self, paths: Vec<PathBuf>, start_index: usize) {
+        let start = paths.get(start_index).cloned();
+        if self.type_filter.is_some() {
+            self.type_filter = start.as_deref().map(image_type_group);
+        }
+        self.all_image_paths = paths;
+        self.image_paths.clone_from(&self.all_image_paths);
+        self.current_index = 0;
+        self.sort_images();
+        if let Some(path) = start
+            && let Some(idx) = self.image_paths.iter().position(|p| p == &path)
+        {
+            self.current_index = idx;
+        }
+    }
+
+    /// Toggle the type filter.  On, it limits navigation to images of the same
+    /// type as the one shown (JPG/JPEG and TIF/TIFF count as one type); off,
+    /// every image is navigable again.  The shown image stays shown.  With no
+    /// image shown there is no type to filter by, so it stays off.
+    pub fn toggle_type_filter(&mut self) {
+        self.type_filter = match self.type_filter {
+            Some(_) => None,
+            None => self.current_image().map(|p| image_type_group(p)),
+        };
+        self.apply_type_filter();
+    }
+
+    /// Rebuild `image_paths` from `all_image_paths` and the type filter,
+    /// keeping `current_index` on the image that was shown.
+    fn apply_type_filter(&mut self) {
+        let current_path = self.current_image().cloned();
+        self.image_paths = match self.type_filter {
+            Some(group) => self
+                .all_image_paths
+                .iter()
+                .filter(|p| image_type_group(p) == group)
+                .cloned()
+                .collect(),
+            None => self.all_image_paths.clone(),
+        };
+        self.current_index = current_path
+            .and_then(|path| self.image_paths.iter().position(|p| p == &path))
+            .unwrap_or(0);
+    }
+
     /// Sort the image list according to the current sort mode,
     /// preserving the currently-viewed image across the reorder.
     pub(crate) fn sort_images(&mut self) {
-        let current_path = self.image_paths.get(self.current_index).cloned();
-
+        let paths = &mut self.all_image_paths;
         match self.sort_mode {
             SortMode::Alphabetical => {
-                self.image_paths
-                    .sort_by_cached_key(|p| p.to_string_lossy().to_lowercase());
+                paths.sort_by_cached_key(|p| p.to_string_lossy().to_lowercase());
             }
             SortMode::ModifiedDate => {
                 use std::cmp::Reverse;
-                self.image_paths.sort_by_cached_key(|p| {
+                paths.sort_by_cached_key(|p| {
                     Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok())
                 });
             }
             SortMode::TypeAlpha => {
-                self.image_paths.sort_by_cached_key(|p| {
+                paths.sort_by_cached_key(|p| {
                     (image_type_group(p), p.to_string_lossy().to_lowercase())
                 });
             }
             SortMode::TypeModified => {
                 use std::cmp::Reverse;
-                self.image_paths.sort_by_cached_key(|p| {
+                paths.sort_by_cached_key(|p| {
                     (
                         image_type_group(p),
                         Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok()),
@@ -316,12 +402,9 @@ impl AppState {
             }
         }
 
-        // Restore current_index to point at the same image after reordering
-        if let Some(path) = current_path
-            && let Some(new_index) = self.image_paths.iter().position(|p| p == &path)
-        {
-            self.current_index = new_index;
-        }
+        // Derive the navigable list from the sorted set; this also restores
+        // current_index to the same image after reordering.
+        self.apply_type_filter();
     }
 }
 
@@ -952,6 +1035,146 @@ mod tests {
         assert_eq!(state.image_paths[0], gif_file); // only GIF
         assert_eq!(state.image_paths[1], png_new); // newest PNG
         assert_eq!(state.image_paths[2], png_old); // oldest PNG
+    }
+
+    // -- Type filter --------------------------------------------------------
+
+    fn names(paths: &[PathBuf]) -> Vec<String> {
+        paths
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect()
+    }
+
+    fn mixed_set() -> Vec<PathBuf> {
+        ["a.png", "b.jpg", "c.png", "d.JPEG", "e.gif"]
+            .iter()
+            .map(PathBuf::from)
+            .collect()
+    }
+
+    #[test]
+    fn test_type_filter_on_limits_to_current_type_and_keeps_current() {
+        let mut state = AppState::new(mixed_set());
+        state.current_index = 2; // c.png
+
+        state.toggle_type_filter();
+
+        assert_eq!(state.type_filter, Some(ImageTypeGroup::Png));
+        assert_eq!(names(&state.image_paths), ["a.png", "c.png"]);
+        assert_eq!(state.current_image(), Some(&PathBuf::from("c.png")));
+        assert_eq!(state.all_image_paths.len(), 5);
+    }
+
+    #[test]
+    fn test_type_filter_merges_jpg_and_jpeg() {
+        let mut state = AppState::new(mixed_set());
+        state.current_index = 1; // b.jpg
+
+        state.toggle_type_filter();
+
+        assert_eq!(names(&state.image_paths), ["b.jpg", "d.JPEG"]);
+    }
+
+    #[test]
+    fn test_type_filter_off_restores_all_and_keeps_current() {
+        let mut state = AppState::new(mixed_set());
+        state.current_index = 2; // c.png
+        state.toggle_type_filter();
+        state.next_image_with_wrap(true); // wraps to a.png within PNGs
+
+        state.toggle_type_filter();
+
+        assert_eq!(state.type_filter, None);
+        assert_eq!(state.image_paths.len(), 5);
+        assert_eq!(state.current_image(), Some(&PathBuf::from("a.png")));
+    }
+
+    #[test]
+    fn test_type_filter_navigation_skips_other_types() {
+        let mut state = AppState::new(mixed_set());
+        state.toggle_type_filter(); // a.png → PNG only
+
+        state.next_image_with_wrap(true);
+
+        assert_eq!(state.current_image(), Some(&PathBuf::from("c.png")));
+    }
+
+    #[test]
+    fn test_type_filter_with_no_image_stays_off() {
+        let mut state = AppState::new(Vec::new());
+
+        state.toggle_type_filter();
+
+        assert_eq!(state.type_filter, None);
+    }
+
+    #[test]
+    fn test_type_filter_survives_resort() {
+        let mut state = AppState::new(mixed_set());
+        state.current_index = 2; // c.png
+        state.toggle_type_filter();
+
+        state.set_sort_mode(SortMode::TypeAlpha);
+
+        assert_eq!(names(&state.image_paths), ["a.png", "c.png"]);
+        assert_eq!(state.current_image(), Some(&PathBuf::from("c.png")));
+        assert_eq!(state.all_image_paths.len(), 5);
+    }
+
+    #[test]
+    fn test_set_image_paths_reanchors_active_filter_to_new_image() {
+        let mut state = AppState::new(mixed_set());
+        state.toggle_type_filter(); // PNG
+
+        state.set_image_paths(
+            vec![
+                PathBuf::from("x.gif"),
+                PathBuf::from("y.png"),
+                PathBuf::from("z.gif"),
+            ],
+            2,
+        );
+
+        assert_eq!(state.type_filter, Some(ImageTypeGroup::Gif));
+        assert_eq!(names(&state.image_paths), ["x.gif", "z.gif"]);
+        assert_eq!(state.current_image(), Some(&PathBuf::from("z.gif")));
+    }
+
+    #[test]
+    fn test_set_image_paths_sorts_and_shows_start() {
+        let mut state = AppState::new(Vec::new());
+
+        state.set_image_paths(vec![PathBuf::from("b.png"), PathBuf::from("a.png")], 0);
+
+        assert_eq!(names(&state.image_paths), ["a.png", "b.png"]);
+        assert_eq!(state.current_image(), Some(&PathBuf::from("b.png")));
+    }
+
+    #[test]
+    fn test_remove_under_type_filter_removes_from_full_set() {
+        let mut state = AppState::new(mixed_set());
+        state.toggle_type_filter(); // a.png → PNG only
+
+        state.remove_current_image();
+
+        assert_eq!(names(&state.image_paths), ["c.png"]);
+        assert!(!state.all_image_paths.contains(&PathBuf::from("a.png")));
+        state.toggle_type_filter();
+        assert_eq!(state.image_paths.len(), 4);
+    }
+
+    #[test]
+    fn test_remove_last_of_filtered_type_drops_filter() {
+        let mut state = AppState::new(mixed_set());
+        state.current_index = 4; // e.gif, the only GIF
+        state.toggle_type_filter();
+
+        state.remove_current_image();
+
+        assert_eq!(state.type_filter, None);
+        assert_eq!(state.image_paths.len(), 4);
+        assert!(state.current_image().is_some());
     }
 
     // -- new_with_settings: start_path not found ------------------------------

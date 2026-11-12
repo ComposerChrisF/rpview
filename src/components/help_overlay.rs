@@ -95,6 +95,11 @@ impl HelpOverlay {
                 "Sort by type (toggles secondary A/M)".to_string(),
             )
             .into_any_element(),
+            self.render_shortcut(
+                format_shortcut("F", true, false),
+                "Only the current image's type (toggle)".to_string(),
+            )
+            .into_any_element(),
             // Zoom section
             self.render_section_header("Zoom".to_string())
                 .into_any_element(),
@@ -278,6 +283,11 @@ impl HelpOverlay {
                 .into_any_element(),
             self.render_shortcut("B".to_string(), "Toggle light/dark background".to_string())
                 .into_any_element(),
+            self.render_shortcut(
+                "N".to_string(),
+                "Toggle nearest-neighbor zoom (hard pixel edges)".to_string(),
+            )
+            .into_any_element(),
             self.render_shortcut(
                 format_shortcut(",", false, false),
                 "Open settings window".to_string(),

@@ -4,6 +4,7 @@ pub mod filters;
 pub mod frame_cache;
 pub mod gpu_presets;
 pub mod image_loader;
+pub mod nearest;
 pub mod settings_io;
 pub mod style;
 pub mod svg;

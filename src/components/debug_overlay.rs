@@ -1,4 +1,4 @@
-use crate::state::app_state::SortMode;
+use crate::state::app_state::{ImageTypeGroup, SortMode};
 use crate::utils::style::{Colors, Spacing, scaled_text_size};
 use gpui::*;
 use std::path::PathBuf;
@@ -15,6 +15,8 @@ pub struct DebugOverlayConfig {
     pub image_dimensions: Option<(u32, u32)>,
     pub viewport_size: Option<Size<Pixels>>,
     pub sort_mode: SortMode,
+    /// Type the navigable list is limited to, if the type filter is on
+    pub type_filter: Option<ImageTypeGroup>,
     /// Overlay transparency (0-255)
     pub overlay_transparency: u8,
     /// Font size scale multiplier
@@ -192,6 +194,15 @@ impl Render for DebugOverlay {
                                 SortMode::TypeModified => "TM (Type + Modified)",
                             }
                             .to_string(),
+                        ),
+                    )
+                    .child(
+                        self.render_info_line(
+                            "Type Filter",
+                            self.config
+                                .type_filter
+                                .map_or("Off", ImageTypeGroup::label)
+                                .to_string(),
                         ),
                     )
                     // Zoom & Pan info

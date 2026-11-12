@@ -11,6 +11,7 @@ use crate::utils::animation::AnimationData;
 use crate::utils::debug_eprintln;
 use crate::utils::filters;
 use crate::utils::image_loader;
+use crate::utils::nearest;
 use crate::utils::style::{Colors, Spacing, TextSize};
 use crate::utils::svg::SvgRerasterRegion;
 use crate::utils::zoom;
@@ -77,6 +78,184 @@ fn effective_image_size(
         return (frame.image.width(), frame.image.height());
     }
     (loaded.width, loaded.height)
+}
+
+/// Which pixels a nearest-neighbor overlay was rendered from.  A rendered
+/// buffer is named by its GPUI id; the raw source by path and frame.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum NearestSourceId {
+    Render(gpui::ImageId),
+    Raw { path: PathBuf, frame: Option<usize> },
+}
+
+/// What a nearest-neighbor overlay depends on besides pan: when any of it
+/// changes, the overlay no longer matches the image beneath and is hidden.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct NearestKey {
+    pub source: NearestSourceId,
+    pub display_size: (u32, u32),
+    pub zoom: f32,
+    pub scale_factor: f32,
+}
+
+/// The pixels on screen, borrowed from the viewer, for a nearest-neighbor
+/// overlay.  `id` names them cheaply; `into_pixels` gets what a worker reads.
+enum NearestSource<'a> {
+    Render(&'a Arc<gpui::RenderImage>),
+    Raw {
+        path: &'a PathBuf,
+        decoded: Option<&'a Arc<image::RgbaImage>>,
+    },
+    Frame {
+        path: &'a PathBuf,
+        index: usize,
+        image: &'a image::DynamicImage,
+    },
+}
+
+impl NearestSource<'_> {
+    fn id(&self) -> NearestSourceId {
+        match self {
+            Self::Render(r) => NearestSourceId::Render(r.id),
+            Self::Raw { path, .. } => NearestSourceId::Raw {
+                path: (*path).clone(),
+                frame: None,
+            },
+            Self::Frame { path, index, .. } => NearestSourceId::Raw {
+                path: (*path).clone(),
+                frame: Some(*index),
+            },
+        }
+    }
+
+    fn into_pixels(self) -> NearestPixels {
+        match self {
+            Self::Render(r) => NearestPixels::Render(r.clone()),
+            Self::Raw {
+                decoded: Some(d), ..
+            } => NearestPixels::Rgba(d.clone()),
+            Self::Raw {
+                path,
+                decoded: None,
+            } => NearestPixels::Decode(path.clone()),
+            Self::Frame { image, .. } => NearestPixels::Rgba(Arc::new(image.to_rgba8())),
+        }
+    }
+}
+
+/// Whether `overlay` covers every part of the image visible in `view`.
+fn nearest_covers(overlay: &NearestOverlay, view: &nearest::View) -> bool {
+    let (ox, oy) = overlay.image_origin;
+    let (ow, oh) = overlay.image_extent();
+    let (pan_x, pan_y) = view.pan;
+    let x0 = (-pan_x / view.zoom).max(0.0);
+    let x1 = ((view.viewport.0 - pan_x) / view.zoom).min(view.display_size.0 as f32);
+    let y0 = (-pan_y / view.zoom).max(0.0);
+    let y1 = ((view.viewport.1 - pan_y) / view.zoom).min(view.display_size.1 as f32);
+    // Allow one device pixel of rounding at each edge.
+    let slack = 1.0 / (view.zoom * view.scale_factor);
+    x1 <= x0
+        || y1 <= y0
+        || (ox <= x0 + slack && ox + ow >= x1 - slack && oy <= y0 + slack && oy + oh >= y1 - slack)
+}
+
+/// Worker body: render the overlay for `rect` of `view` from `pixels`.
+fn render_nearest_overlay(
+    pixels: NearestPixels,
+    view: nearest::View,
+    rect: nearest::DeviceRect,
+    key: NearestKey,
+) -> Option<NearestResult> {
+    let mut decoded = None;
+    let bgra = match pixels {
+        NearestPixels::Render(render) => {
+            let bytes = render.as_bytes(0)?;
+            let size = render.size(0);
+            let size = (size.width.0 as u32, size.height.0 as u32);
+            nearest::render(bytes, size, nearest::Layout::Bgra, &view, rect)
+        }
+        NearestPixels::Rgba(rgba) => nearest::render(
+            rgba.as_raw(),
+            rgba.dimensions(),
+            nearest::Layout::Rgba,
+            &view,
+            rect,
+        ),
+        NearestPixels::Decode(path) => {
+            let rgba = Arc::new(image_loader::load_image(&path).ok()?.to_rgba8());
+            let out = nearest::render(
+                rgba.as_raw(),
+                rgba.dimensions(),
+                nearest::Layout::Rgba,
+                &view,
+                rect,
+            );
+            decoded = Some((path, rgba));
+            out
+        }
+    };
+    let buffer = image::RgbaImage::from_raw(rect.width, rect.height, bgra)?;
+    let render = Arc::new(gpui::RenderImage::new(smallvec::SmallVec::from_elem(
+        image::Frame::new(buffer),
+        1,
+    )));
+    let image_origin = (
+        (rect.x as f32 / view.scale_factor - view.pan.0) / view.zoom,
+        (rect.y as f32 / view.scale_factor - view.pan.1) / view.zoom,
+    );
+    Some(NearestResult {
+        overlay: NearestOverlay {
+            key,
+            render,
+            image_origin,
+            device_size: (rect.width, rect.height),
+        },
+        decoded,
+    })
+}
+
+/// The pixels a nearest-neighbor worker reads.
+enum NearestPixels {
+    Render(Arc<gpui::RenderImage>),
+    Rgba(Arc<image::RgbaImage>),
+    /// Raw source not decoded yet: the worker decodes it, and hands the
+    /// result back for `decoded_rgba8` so the next render skips the decode.
+    Decode(PathBuf),
+}
+
+/// A nearest-neighbor overlay ready to draw over the image.
+pub(crate) struct NearestOverlay {
+    pub key: NearestKey,
+    pub render: Arc<gpui::RenderImage>,
+    /// Top-left corner in display-image coordinates (before zoom), so the
+    /// overlay moves with the image when it pans.
+    pub image_origin: (f32, f32),
+    /// Size in device pixels.
+    pub device_size: (u32, u32),
+}
+
+impl NearestOverlay {
+    /// The overlay's extent in display-image coordinates.
+    fn image_extent(&self) -> (f32, f32) {
+        let per_device = 1.0 / (self.key.scale_factor * self.key.zoom);
+        (
+            self.device_size.0 as f32 * per_device,
+            self.device_size.1 as f32 * per_device,
+        )
+    }
+}
+
+/// Result a nearest-neighbor worker sends back.
+struct NearestResult {
+    overlay: NearestOverlay,
+    /// Set when the worker decoded the raw source itself.
+    decoded: Option<(PathBuf, Arc<image::RgbaImage>)>,
+}
+
+/// In-flight nearest-neighbor render.  Dropping it abandons the result.
+pub(crate) struct NearestJob {
+    key: NearestKey,
+    rx: mpsc::Receiver<Option<NearestResult>>,
 }
 
 /// In-flight unified-GPU-pipeline job.  The wgpu dispatch itself can't be
@@ -289,6 +468,17 @@ pub struct ImageViewer {
 
     /// Timestamp of last zoom/pan change (for debouncing re-raster triggers)
     pub(crate) last_zoom_pan_change: Option<Instant>,
+
+    // --- Nearest-neighbor magnification (see utils::nearest) ---
+    /// Overlay drawn over the visible part of a magnified image.
+    pub(crate) nearest_overlay: Option<NearestOverlay>,
+    /// Background render of the next overlay.
+    pub(crate) nearest_job: Option<NearestJob>,
+    /// Device pixels per logical pixel, as of the last `update_nearest_overlay`.
+    pub(crate) nearest_scale_factor: f32,
+    /// Last-seen view and when it last changed, to start a render only once
+    /// zoom and pan settle.
+    pub(crate) nearest_last_view: Option<(nearest::View, Instant)>,
 }
 
 impl ImageViewer {
@@ -325,6 +515,10 @@ impl ImageViewer {
             is_svg_rerastering: false,
             svg_reraster_cancel: None,
             last_zoom_pan_change: None,
+            nearest_overlay: None,
+            nearest_job: None,
+            nearest_scale_factor: 1.0,
+            nearest_last_view: None,
         }
     }
 
@@ -1417,6 +1611,173 @@ impl ImageViewer {
         }
     }
 
+    // --- Nearest-neighbor magnification (see utils::nearest) ---
+
+    /// How long zoom and pan must stay still before a new overlay is rendered.
+    const NEAREST_SETTLE: std::time::Duration = std::time::Duration::from_millis(120);
+
+    /// The current view, or `None` before the viewport is known.
+    fn nearest_view(&self) -> Option<nearest::View> {
+        let viewport = self.viewport_size?;
+        Some(nearest::View {
+            display_size: self.display_dimensions()?,
+            zoom: self.image_state.zoom,
+            pan: self.image_state.pan,
+            viewport: (viewport.width.into(), viewport.height.into()),
+            scale_factor: self.nearest_scale_factor,
+        })
+    }
+
+    /// The pixels on screen, in the renderer's priority order (saved slot →
+    /// GPU pipeline → filtered → raw).  `None` for an SVG, which is
+    /// re-rasterized sharp instead, and while an animation plays, where an
+    /// overlay would trail the frame beneath it.
+    fn nearest_source(&self) -> Option<NearestSource<'_>> {
+        if let Some(slot) = self.active_slot {
+            let saved = self.saved_slots[(slot - 3) as usize].as_ref()?;
+            return Some(NearestSource::Render(&saved.render));
+        }
+        let loaded = self.current_image.as_ref()?;
+        if loaded.svg_tree.is_some() {
+            return None;
+        }
+        let animation = self.image_state.animation.as_ref();
+        if animation.is_some_and(|a| a.is_playing) {
+            return None;
+        }
+        let gpu = loaded
+            .gpu_pipeline_render
+            .as_ref()
+            .filter(|_| self.gpu_pipeline_enabled);
+        if let Some(render) = gpu.or(loaded.filtered_render.as_ref()) {
+            return Some(NearestSource::Render(render));
+        }
+        match animation {
+            Some(a) => Some(NearestSource::Frame {
+                path: &loaded.path,
+                index: a.current_frame,
+                image: &loaded
+                    .animation_data
+                    .as_ref()?
+                    .frames
+                    .get(a.current_frame)?
+                    .image,
+            }),
+            None => Some(NearestSource::Raw {
+                path: &loaded.path,
+                decoded: loaded.decoded_rgba8.as_ref(),
+            }),
+        }
+    }
+
+    /// The overlay to draw this frame, if one matches what is on screen.
+    fn nearest_overlay_to_draw(&self) -> Option<&NearestOverlay> {
+        let overlay = self.nearest_overlay.as_ref()?;
+        let view = self.nearest_view()?;
+        let current = NearestKey {
+            source: self.nearest_source()?.id(),
+            display_size: view.display_size,
+            zoom: view.zoom,
+            scale_factor: view.scale_factor,
+        };
+        (overlay.key == current).then_some(overlay)
+    }
+
+    /// Swap the drawn overlay, freeing the old one's texture in GPUI's atlas
+    /// (it is never evicted otherwise).
+    fn replace_nearest_overlay(&mut self, new: Option<NearestOverlay>, window: &mut Window) {
+        if let Some(old) = std::mem::replace(&mut self.nearest_overlay, new) {
+            let _ = window.drop_image(old.render);
+        }
+    }
+
+    /// Keep the nearest-neighbor overlay in step with the view.  Call once
+    /// per frame from the render loop; `enabled` is the user's setting.
+    /// Returns true while another frame is needed: zoom or pan is still
+    /// settling, or a render is in flight.
+    pub fn update_nearest_overlay(&mut self, enabled: bool, window: &mut Window) -> bool {
+        self.nearest_scale_factor = window.scale_factor();
+        let wanted = match (enabled, self.nearest_view()) {
+            (true, Some(view)) if nearest::magnifies(&view) => {
+                self.nearest_source().map(|s| (view, s.id()))
+            }
+            _ => None,
+        };
+        let Some((view, source)) = wanted else {
+            self.replace_nearest_overlay(None, window);
+            self.nearest_job = None;
+            self.nearest_last_view = None;
+            return false;
+        };
+        let key = NearestKey {
+            source,
+            display_size: view.display_size,
+            zoom: view.zoom,
+            scale_factor: view.scale_factor,
+        };
+
+        // Install a finished render if it still matches.
+        if let Some(job) = &self.nearest_job {
+            match job.rx.try_recv() {
+                Ok(result) => {
+                    self.nearest_job = None;
+                    if let Some(result) = result {
+                        if let Some((path, decoded)) = result.decoded
+                            && let Some(loaded) = self.current_image.as_mut()
+                            && loaded.path == path
+                            && loaded.decoded_rgba8.is_none()
+                        {
+                            loaded.decoded_rgba8 = Some(decoded);
+                        }
+                        if result.overlay.key == key {
+                            self.replace_nearest_overlay(Some(result.overlay), window);
+                        }
+                    }
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+                Err(mpsc::TryRecvError::Disconnected) => self.nearest_job = None,
+            }
+        }
+
+        if self.nearest_overlay.as_ref().is_some_and(|o| o.key != key) {
+            self.replace_nearest_overlay(None, window);
+        }
+        if self
+            .nearest_overlay
+            .as_ref()
+            .is_some_and(|o| nearest_covers(o, &view))
+        {
+            return self.nearest_job.is_some();
+        }
+
+        // Wait for zoom and pan to settle before rendering.
+        let settled = match self.nearest_last_view {
+            Some((last, since)) if last == view => since.elapsed() >= Self::NEAREST_SETTLE,
+            _ => {
+                self.nearest_last_view = Some((view, Instant::now()));
+                false
+            }
+        };
+        if !settled || self.nearest_job.as_ref().is_some_and(|j| j.key == key) {
+            return true;
+        }
+
+        let Some(rect) = nearest::plan_rect(&view, nearest::PAD_FRACTION) else {
+            return false;
+        };
+        let Some(pixels) = self.nearest_source().map(NearestSource::into_pixels) else {
+            return false;
+        };
+        let (tx, rx) = mpsc::channel();
+        let job_key = key.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(render_nearest_overlay(pixels, view, rect, job_key));
+        });
+        // Replacing a job abandons it: its send fails once it finishes.
+        self.nearest_job = Some(NearestJob { key, rx });
+        true
+    }
+
     // --- SVG dynamic re-rasterization methods ---
 
     /// Notify that zoom or pan changed, starting the debounce timer for SVG re-rasters.
@@ -2026,6 +2387,27 @@ impl ImageViewer {
                     .left(px(pan_x))
                     .top(px(pan_y)),
             );
+
+        // Nearest-neighbor overlay: the visible part pre-magnified to one
+        // texel per device pixel.  Placed on whole device pixels, which
+        // GPUI's layout keeps, so its bilinear sampler reproduces it exactly.
+        if let Some(overlay) = self.nearest_overlay_to_draw() {
+            let s = overlay.key.scale_factor;
+            let (ox, oy) = overlay.image_origin;
+            let left = ((ox * zoom_level + pan_x) * s).round() / s;
+            let top = ((oy * zoom_level + pan_y) * s).round() / s;
+            container = container.child(
+                img(gpui::ImageSource::Render(overlay.render.clone()))
+                    .id(ElementId::Name(
+                        format!("nearest-{}", overlay.render.id.0).into(),
+                    ))
+                    .w(px(overlay.device_size.0 as f32 / s))
+                    .h(px(overlay.device_size.1 as f32 / s))
+                    .absolute()
+                    .left(px(left))
+                    .top(px(top)),
+            );
+        }
 
         // Overlay sharp viewport-only SVG re-raster on top of the base image
         if let (Some(rr_path), Some(region)) = (&self.svg_reraster_path, &self.svg_reraster_region)

@@ -24,8 +24,8 @@ CONFIGURATION:\n  \
         {filename}  current image filename\n    \
         {index}     1-based position in the list\n    \
         {total}     total image count\n    \
-        {sm}        sort-mode short label\n    \
-        {sortmode}  sort-mode long label\n",
+        {sm}        sort-mode short label (F appended while the type filter is on)\n    \
+        {sortmode}  sort-mode long label (+type-filtered appended likewise)\n",
 )]
 pub struct Cli {
     /// Image files or directories to view
