@@ -161,14 +161,14 @@ pub fn render(
         }
         let src_row_start = sy as usize * src_w as usize * 4;
         let dst = &mut out[dst_start..dst_start + row_bytes];
-        for (px, src_col) in dst.chunks_exact_mut(4).zip(&cols) {
+        for (px, src_col) in dst.as_chunks_mut::<4>().0.iter_mut().zip(&cols) {
             let Some(sx) = *src_col else { continue };
             let i = src_row_start + sx as usize * 4;
             let p = &source[i..i + 4];
-            match layout {
-                Layout::Bgra => px.copy_from_slice(p),
-                Layout::Rgba => px.copy_from_slice(&[p[2], p[1], p[0], p[3]]),
-            }
+            *px = match layout {
+                Layout::Bgra => [p[0], p[1], p[2], p[3]],
+                Layout::Rgba => [p[2], p[1], p[0], p[3]],
+            };
         }
         previous = Some((sy, dst_start));
     }

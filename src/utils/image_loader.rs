@@ -150,7 +150,12 @@ pub fn load_image_async(
                 initial_cache_count
             );
 
-            for i in 0..initial_cache_count {
+            for (i, frame) in anim_data
+                .frames
+                .iter()
+                .enumerate()
+                .take(initial_cache_count)
+            {
                 if is_cancelled(&cancel_flag_clone) {
                     return;
                 }
@@ -174,7 +179,7 @@ pub fn load_image_async(
                     continue;
                 }
 
-                match anim_data.frames[i].image.save(&dest) {
+                match frame.image.save(&dest) {
                     Ok(_) => {
                         debug_eprintln!("[ASYNC LOAD] Cached frame {}", i);
                         initial_frame_paths.push(dest);

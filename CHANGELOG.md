@@ -5,11 +5,16 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.1] - 2026-11-13
+
+### Fixed
+- **Build under Rust 1.100.**  Clippy’s `needless_range_loop` flagged the two animation frame-caching loops (`src/components/image_viewer.rs`, `src/utils/image_loader.rs`), which now iterate `frames.iter().enumerate().take(initial_cache_count)`; `chunks_exact_to_as_chunks` flagged the pixel loop in `src/utils/nearest.rs`, which now uses `as_chunks_mut::<4>()`.  Behavior is unchanged.
+
 ## [0.30.0] - 2026-11-12
 
 ### Added
 - **Nearest-neighbor zoom (`N`).**  GPUI 0.2.2’s sprite sampler is hardcoded bilinear, so a zoomed-in image always looked smoothed.  With nearest-neighbor on, the viewer overlays the visible region magnified on the CPU to one texel per device pixel (`src/utils/nearest.rs`), rendered in the background once zoom and pan settle.  Also a toggle in Settings > Viewer Behavior, kept in sync with `N`.
-- **Type filter (`Shift+Cmd+F`).**  Limits navigation to images of the current image’s type, in addition to the sort.  The title's sort label gains an `F` suffix (`+type-filtered`), and the x/y count reflects the filtered list.  The F12 debug overlay shows a Type Filter row.  The README documents both features.
+- **Type filter (`Shift+Cmd+F`).**  Limits navigation to images of the current image’s type, in addition to the sort.  The title’s sort label gains an `F` suffix (`+type-filtered`), and the x/y count reflects the filtered list.  The F12 debug overlay shows a Type Filter row.  The README documents both features.
 
 ### Fixed
 - **Closing Settings no longer reverts app-owned state.**  The light/dark background and the Filter and GPU Pipeline window bounds and open flags were overwritten with the Settings window’s stale copy at close; `AppSettings::keep_app_owned_state` now carries them over.

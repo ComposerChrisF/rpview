@@ -871,7 +871,12 @@ impl ImageViewer {
                         "[LOAD] Caching first {} frames for immediate display...",
                         initial_cache_count
                     );
-                    for i in 0..initial_cache_count {
+                    for (i, frame) in anim_data
+                        .frames
+                        .iter()
+                        .enumerate()
+                        .take(initial_cache_count)
+                    {
                         let dest = match crate::utils::frame_cache::raw_frame_path(key, i) {
                             Ok(p) => p,
                             Err(_e) => {
@@ -889,7 +894,7 @@ impl ImageViewer {
                             frame_cache_paths.push(dest);
                             continue;
                         }
-                        match anim_data.frames[i].image.save(&dest) {
+                        match frame.image.save(&dest) {
                             Ok(_) => {
                                 debug_eprintln!("[LOAD] Cached frame {}", i);
                                 frame_cache_paths.push(dest);
