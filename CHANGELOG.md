@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.3] - 2026-11-13
+
+### Changed
+- **Manifest cleanup for Rust 1.100.**  `package.homepage` is removed from `Cargo.toml`: cargo 1.100’s `redundant_homepage` lint flags it because it named the same URL as `package.repository`.  Nothing in the repository reads the field.
+
 ## [0.30.2] - 2026-11-13
 
 ### Fixed

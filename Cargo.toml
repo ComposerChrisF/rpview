@@ -1,13 +1,12 @@
 [package]
 name = "rpview"
-version = "0.30.2"
+version = "0.30.3"
 edition = "2024"
 # Never published: personal tool; tracked bugs//plans/ would otherwise ship in a crate tarball (bug-reports.md rule 3 mirror clause, 2026-08-12).
 publish = false
 authors = ["rpview contributors"]
 description = "A fast, cross-platform image viewer built with GPUI"
 readme = "README.md"
-homepage = "https://github.com/ComposerChrisF/rpview"
 repository = "https://github.com/ComposerChrisF/rpview"
 license = "MIT OR Apache-2.0"
 keywords = ["image", "viewer", "gpui", "cross-platform"]
