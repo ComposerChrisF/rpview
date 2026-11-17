@@ -1033,7 +1033,3 @@ checksum = "ec5f41c76397b7da451efd19915684f727d7e1d516384ca6bd0ec43ec94de23c"
 dependencies = [
  "zune-core",
 ]
-
-[[patch.unused]]
-name = "ccf-gpui-widgets"
-version = "0.1.1"

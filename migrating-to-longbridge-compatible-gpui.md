@@ -148,6 +148,8 @@ Pulling GPUI from the Zed monorepo pulls a large subset of the Zed workspace as 
     ```toml
     [patch.crates-io]
     gpui = { git = "https://github.com/zed-industries/zed", rev = "14befe21..." }
+
+    [patch."https://github.com/ComposerChrisF/ccf-gpui-widgets"]
     ccf-gpui-widgets = { path = "../ccf-gpui-widgets" }
     ```
 

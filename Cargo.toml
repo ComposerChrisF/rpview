@@ -1,6 +1,6 @@
 [package]
 name = "rpview"
-version = "0.30.3"
+version = "0.30.4"
 edition = "2024"
 # Never published: personal tool; tracked bugs//plans/ would otherwise ship in a crate tarball (bug-reports.md rule 3 mirror clause, 2026-08-12).
 publish = false
@@ -16,7 +16,7 @@ categories = ["multimedia::images", "gui"]
 gpui = "0.2.2"
 clap = { version = "4.5", features = ["derive"] }
 image = { version = "0.25", features = ["png", "jpeg", "bmp", "gif", "tiff", "ico", "webp"] }
-ccf-gpui-widgets = { version = "0.1.0", features = ["file-picker"] }
+ccf-gpui-widgets = { version = "0.1.0", git = "https://github.com/ComposerChrisF/ccf-gpui-widgets", features = ["file-picker"] }
 rfd = "0.15"
 dirs = "5.0"
 serde = { version = "1.0", features = ["derive"] }

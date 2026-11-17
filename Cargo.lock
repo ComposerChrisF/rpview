@@ -834,6 +834,7 @@ dependencies = [
 [[package]]
 name = "ccf-gpui-widgets"
 version = "0.1.4"
+source = "git+https://github.com/ComposerChrisF/ccf-gpui-widgets#bd5bd4d3217ca4e32e4eb68827c23b49ddae6a4b"
 dependencies = [
  "dirs 5.0.1",
  "gpui",
@@ -4786,7 +4787,7 @@ dependencies = [
 
 [[package]]
 name = "rpview"
-version = "0.30.3"
+version = "0.30.4"
 dependencies = [
  "block2",
  "bytemuck",

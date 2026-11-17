@@ -5,6 +5,11 @@ All notable changes to RPView will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.4] - 2026-11-17
+
+### Fixed
+- **bug-0062: the committed `Cargo.lock` no longer depends on a local patch.**  `ccf-gpui-widgets` is now taken from its GitHub repository and pinned in `Cargo.lock` (commit `bd5bd4d`), so CI and fresh clones build the same widgets as the installed app.  CI’s clippy and test steps and the release build now pass `--locked`, so a drifted lockfile fails the build instead of being silently rewritten.  `tools/create-ico/Cargo.lock` loses a stale `[[patch.unused]]` entry.  A new `CLAUDE.md` documents how to move the pin and how to use a local override.
+
 ## [0.30.3] - 2026-11-13
 
 ### Changed
